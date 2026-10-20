@@ -1,6 +1,6 @@
 # Repository workspace: the lab, the framework crates and the example module packages.
-# Module crates depend on `rnr-core = "0.1"` like any published dependency; this workspace
-# (and every generated per-app bundle) patches it to the framework's copy.
+# Module crates depend on `rnr-core = "0.1"` or `rnrs = "0.1"` like any published dependency;
+# this workspace (and every generated per-app bundle) patches them to the framework's copies.
 [workspace]
 members = [
   "rust/rnr-core",
@@ -8,6 +8,7 @@ members = [
   "rust/rnr-web",
   "rust/rnr-build",
   "rust/rnr-log",
+  "rust/rnrs",
   "rust/bind-tests",
   "packages/counter/rust",
   "packages/meter/rust",
@@ -30,6 +31,7 @@ resolver = "2"
 
 [patch.crates-io]
 rnr-core = { path = "rust/rnr-core" }
+rnrs = { path = "rust/rnrs" }
 rnr-surface = { path = "packages/rnr-surface/rust" }
 
 [profile.release]

@@ -323,7 +323,10 @@ test('module crates must require an rnr-core version the framework provides', as
       );
     }
     with_('serde = "1"');
-    assert.throws(() => checkCoreRequirement(pkg), /must depend on rnr-core/);
+    assert.throws(
+      () => checkCoreRequirement(pkg),
+      /must depend on the framework: add rnrs = "0\.1" to \[dependencies\]/,
+    );
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

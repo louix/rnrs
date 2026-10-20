@@ -6,12 +6,12 @@ Experimental, 2026-10-19. Built from local tarballs only; nothing is published. 
 
 | Package | Contents |
 | --- | --- |
-| `@rnrs/runtime` (framework; `packages/rnr-runtime`, staged by `scripts/pack.mjs`) | The Android library (Kotlin TurboModule `RnrRuntime` with lifecycle hooks, CMake, and a Gradle task that builds the app's Rust bundle) and the iOS pod (`RnrRuntime.podspec`: Objective-C++ TurboModule with lifecycle hooks and a script phase that builds the bundle), sharing the generic JSI adapter and runtime scope (C++, `cpp/`). Autolinking config for both. The JS runtime and both backends, `initRnr` for the web, the spec types (`@rnrs/runtime/spec`). The framework Rust crates `rnr-core`, `rnr-android`, `rnr-web` and `rnr-log`. Depends on `@rnrs/cli` at the exact same version: the Gradle task and the Xcode script phase run it through the internal launcher `cli/run.mjs` (not a bin), which resolves `@rnrs/cli` from the runtime package and refuses another version. |
+| `@rnrs/runtime` (framework; `packages/rnr-runtime`, staged by `scripts/pack.mjs`) | The Android library (Kotlin TurboModule `RnrRuntime` with lifecycle hooks, CMake, and a Gradle task that builds the app's Rust bundle) and the iOS pod (`RnrRuntime.podspec`: Objective-C++ TurboModule with lifecycle hooks and a script phase that builds the bundle), sharing the generic JSI adapter and runtime scope (C++, `cpp/`). Autolinking config for both. The JS runtime and both backends, `initRnr` for the web, the spec types (`@rnrs/runtime/spec`). The framework Rust crates `rnr-core`, `rnr-android`, `rnr-web` and `rnr-log`, and `rnrs`, the crate module authors depend on (see below). Depends on `@rnrs/cli` at the exact same version: the Gradle task and the Xcode script phase run it through the internal launcher `cli/run.mjs` (not a bin), which resolves `@rnrs/cli` from the runtime package and refuses another version. |
 | `@rnrs/cli` (framework tooling; `packages/rnr-cli` plus the generator `tools/rnr-gen`, staged by `scripts/pack.mjs` into `generator/`) | The `rnrs` bin: the generator, the author commands (`init`, `generate`, `check`, `test`, `pack-js`) and the app commands (`bundle`, `build`, `lock`). No framework code of its own: it peer-depends on `@rnrs/runtime` at the exact same version and takes the spec and the framework Rust crates from the `@rnrs/runtime` that Node resolves from the CLI's location (for an app, its own `node_modules/@rnrs/runtime`). A missing or different-version runtime is an error naming the install command. |
 | Module package (author) | Peer dependency on `@rnrs/runtime`, dev dependencies on `@rnrs/cli` and `@rnrs/runtime` (written by `rnrs init`). `package.json` with `rustNative`, the TS spec, the Rust crate (`Cargo.toml`, `src/lib.rs`, the committed generated `src/rnr_interface.rs`), and the JS wrapper `rnr/{index,web}.ts` written by `rnrs pack-js` at pack time. No C++, Kotlin, JSI, wasm-bindgen or glue. |
 | App | Depends on `@rnrs/runtime` (which brings `@rnrs/cli`) and module packages. Until the packages are published, the tarball installs also list the `@rnrs/cli` tarball, so that npm does not look up the runtime's dependency on the registry. No native edits: autolinking adds the framework library, and its Gradle task builds the bundle. Web apps call `await initRnr(bundle)` once. |
 
-The Rust glue is never in a package. It is generated per app into the ignored `<app>/.rnr/<target>/bundle/`, a standalone crate with its own `[workspace]`. That crate's dependencies are generated from the selected modules: path dependencies on the installed module crates and the framework crates, plus `[patch.crates-io] rnr-core` pointing to the installed framework copy. Module crates declare `rnr-core = "0.1"` like a normal dependency.
+The Rust glue is never in a package. It is generated per app into the ignored `<app>/.rnr/<target>/bundle/`, a standalone crate with its own `[workspace]`. That crate's dependencies are generated from the selected modules: path dependencies on the installed module crates and the framework crates, plus `[patch.crates-io] rnr-core` pointing to the installed framework copy (and `rnrs`, only when a module crate or a crate it reaches by path depends on it: an unused patch is recorded in Cargo.lock as `[[patch.unused]]` and would invalidate existing app locks). Module crates declare `rnrs = "0.1"` (or, as the older examples do, `rnr-core = "0.1"`) like a normal dependency.
 
 ## Names: npm packages and temporary internal names
 
@@ -22,7 +22,7 @@ Everything else keeps its `rnrs` name for now. These are temporary internal name
 | Kind | Names kept |
 | --- | --- |
 | Repository directories | `packages/rnr-runtime`, `packages/rnr-surface`, `packages/rnr-cli`, `tools/rnr-gen`, `rust/rnr-*` |
-| Rust crates | `rnr-core`, `rnr-android`, `rnr-web`, `rnr-log`, `rnr-surface`, the generated `rnr-bundle`, module crates such as `rnr-blake3` |
+| Rust crates | `rnrs`, `rnr-core`, `rnr-android`, `rnr-web`, `rnr-log`, `rnr-surface`, the generated `rnr-bundle`, module crates such as `rnr-blake3` |
 | Native identifiers | Kotlin/Java packages `dev.rustjsilab.rnr` and `dev.rustjsilab.rnr.surface` (and their JNI symbols), the C ABI (`RnrAbi.h`, `rnr_surface_*`), pods `RnrRuntime` and `RnrSurface`, codegen names `RnrRuntimeSpec` and `RnrSurfaceSpec`, `librnr.so`, `librnr_bundle.a` |
 | JS identifiers | `initRnr`, `RnrSurfaceView` and the other exports |
 | Files and settings | the wrapper directory `rnr/`, `.rnr/`, `rust/src/rnr_interface.rs`, `rnr-<target>.Cargo.lock`, `RNR_*` environment variables, Gradle properties `rnr.node` and `rnr.locked`, the `package.json` fields `rustNative` and `rustNativeApp`, the `rnr-gen:` prefix of the repository-only generator commands |
@@ -53,8 +53,16 @@ Each app owns one lock per target: `<app>/rnr-android.Cargo.lock` and `<app>/rnr
 - **Portability:** cargo records path dependencies (module crates, framework crates) by name and version only, so a lock holds no machine paths. Tests check that the lock contains no app, repository, temp or home path, and that a relocated copy of an app builds `--locked` with the lock unchanged: unit tests, the Vite consumer, and the RN consumer through Gradle.
 - **What a lock does not give:** bit-reproducible artifacts. Output also depends on the Rust toolchain (1.90.0 tested), NDK, wasm-bindgen and build environment. The lock format follows the cargo version.
 - **Provenance:** `rnr-core` is not published, and its crates.io name is not reserved; publishing or reserving it is out of scope. Two checks keep an unrelated crate out:
-  - Bundles patch `rnr-core` to the framework copy, and after resolution `rnrs` checks that `rnr-core`, `rnr-android` and `rnr-web` resolved to this framework's own copies. Anything from a registry fails the build.
-  - `rnrs generate|check <dir>` and `pack-js` require the module crate's `rnr-core` requirement to be one the framework satisfies (`"0.1"`).
+  - Bundles patch `rnr-core` (and `rnrs`) to the framework copy, and after resolution `rnrs` checks that `rnr-core`, `rnr-android`, `rnr-web`, `rnr-log` and `rnrs` resolved to this framework's own copies. Anything from a registry fails the build. A crate that reaches `rnrs` only through a registry or git dependency is not supported; cargo's "no matching package" error for a framework crate is explained with the fix.
+  - `rnrs generate|check <dir>` and `pack-js` require the module crate's `rnrs` (or `rnr-core`) requirement to be one the framework satisfies (`"0.1"`).
+
+## The `rnrs` crate
+
+`rust/rnrs`, shipped in `@rnrs/runtime`: re-exports only. `rnrs::core` is `rnr-core` (plus `Native`, `CancelToken`, `TeardownScope`, `Retire` at the top level); the `surface` feature adds `rnrs::surface` (`rnr-surface`, from `@rnrs/surface`, which the app must then install as a direct dependency; enabling it otherwise is refused before cargo runs). Headless by default: a disabled optional dependency of a path or patched crate is neither resolved nor locked (only workspace members resolve all their features), so a module using `rnrs` alone needs no `@rnrs/surface` and no GPU crate. Because both are patched to the installed copies, a bundle has one `rnr-core` and one `rnr-surface` whichever way modules depend on them.
+
+The generated `rnr_interface.rs` refers to rnr-core through the crate's own dependency: `rnr_core::` for an unconditional `rnr-core` dependency (preferred, so existing crates are unchanged), otherwise `<name>::core::` for `rnrs` under its declared name (`package =` renames and `workspace = true` entries included). An optional or target-only declaration, a name such as `core` that cannot be a path root, or neither crate is an error naming the fix. The bundle's hidden glue uses `rnr_core` directly (the bundle depends on it).
+
+Cargo manifests are read with the pinned `smol-toml` (a dependency of `@rnrs/cli`); the dependency, workspace and feature logic on top of it models a stated subset of cargo's, compared with `cargo metadata` where cargo is available. Checked by `tools/rnr-gen/test/rnrs.test.mjs` and, with real cargo and the packed `@rnrs/runtime` and `@rnrs/cli` tarballs installed offline by npm, `tools/rnr-gen/test/rnrs-offline.test.mjs` (strictly, failing instead of skipping without cargo: `source scripts/rust-env.sh && npm run test:rnrs-offline` inside `nix develop`, which warms the cargo cache first): an `rnrs init` module with a renamed `rnrs` dependency generates, builds and passes `rnrs test` with no `@rnrs/surface` installed; its Android and web locks hold no surface or GPU crate and no unused patch; its `surface` feature is refused until `@rnrs/surface` is installed and then resolves from it.
 
 ## Android Studio sync
 
@@ -70,12 +78,12 @@ The [quickstart](quickstart.md#2-create-the-module-) has the full steps. In shor
 echo '{"name": "@demo/crc", "private": true}' > package.json
 npm exec --package=@rnrs/cli -- rnrs init     # one-off (here: --package=<both tarballs>); package.json fields, spec, rust/ crate, .gitignore
 npm install                                   # the devDependencies @rnrs/cli and @rnrs/runtime written by init (here: the tarballs)
-npx rnrs test                                 # generate, then cargo test with rnr-core patched to the installed copy
+npx rnrs test                                 # generate, then cargo test with the framework crates patched to the installed copies
 npx rnrs check                                # interface current, package.json usable by apps (after generate/test on a fresh clone)
 npm pack                                     # prepack: rnrs generate + rnrs pack-js
 ```
 
-`rnr-core` is not on crates.io. `rnrs test` patches it to `node_modules/@rnrs/runtime/rust/rnr-core`, and bundles do the same automatically. Checked by:
+`rnrs` and `rnr-core` are not on crates.io. `rnrs test` patches them to `node_modules/@rnrs/runtime/rust/`, and `rnr-surface` (for the `surface` feature) to the installed `@rnrs/surface`; bundles do the same automatically. Checked by:
 - `scripts/consumer/fresh-author.sh web|android`: a new `@demo/crc` package wrapping `crc32fast`, then a fresh Vite or RN app.
 - `scripts/consumer/author.sh`: the older hand-written `@demo/xor` package, web only.
 

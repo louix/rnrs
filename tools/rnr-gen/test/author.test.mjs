@@ -8,7 +8,6 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
-  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -192,7 +191,7 @@ test('check accepts other working layouts and rejects packages apps cannot use',
   });
 });
 
-test('rnrs test patches rnr-core to the framework, forwards arguments and the exit status', async () => {
+test('rnrs test patches the framework crates it uses, forwards arguments and the exit status', async () => {
   await withDir(async (root) => {
     const dir = path.join(root, 'p');
     assert.equal((await run(['init', dir, '--name', 'p'])).code, 0);
@@ -220,11 +219,14 @@ test('rnrs test patches rnr-core to the framework, forwards arguments and the ex
       '--manifest-path',
       path.join(dir, 'rust/Cargo.toml'),
     ]);
-    assert.equal(
-      args[4],
+    // The scaffold depends on rnrs: both framework crates are patched, nothing else.
+    assert.deepEqual(args.slice(3, 7), [
+      '--config',
       `patch.crates-io.rnr-core.path=${JSON.stringify(path.join(FRAMEWORK_RUST, 'rnr-core'))}`,
-    );
-    assert.deepEqual(args.slice(5), ['--release', '--', '--nocapture']);
+      '--config',
+      `patch.crates-io.rnrs.path=${JSON.stringify(path.join(FRAMEWORK_RUST, 'rnrs'))}`,
+    ]);
+    assert.deepEqual(args.slice(7), ['--release', '--', '--nocapture']);
     assert.equal(target, path.join(dir, '.rnr/target'));
     assert.ok(existsSync(path.join(dir, 'rust/src/rnr_interface.rs')));
   });
@@ -262,9 +264,13 @@ test('a spec outside the package is rejected without writing outside the scratch
     m.rustNative.spec = '../outside.spec.ts';
     writeFileSync(file, JSON.stringify(m));
     assert.equal((await run(['generate', dir])).code, 0);
-    const before = new Set(readdirSync(path.dirname(root)));
+    // The pack check's scratch copy is in the same tmpdir as root: `../outside.spec.ts` from it
+    // would be written here. (Other test files create temp dirs concurrently, so only this exact
+    // path is checked.)
+    const escaped = path.join(path.dirname(root), 'outside.spec.ts');
+    const existed = existsSync(escaped);
     const r = await run(['check', dir]);
-    assert.deepEqual(new Set(readdirSync(path.dirname(root))), before); // nothing written next to the scratch copies
+    assert.equal(existsSync(escaped), existed, 'nothing written next to the scratch copies');
     assert.equal(r.code, 1);
     assert.match(r.out, /\.\.\/outside\.spec\.ts is outside the package directory/);
   });

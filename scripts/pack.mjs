@@ -1,11 +1,11 @@
 // Builds npm tarballs (no publishing) for the framework and the module packages:
 //   @rnrs/runtime: staged from its canonical sources (packages/rnr-runtime incl. cpp/ and ios/,
-//                 rust/rnr-{core,android,web,log}) into one self-contained package.
+//                 rust/rnr-{core,android,web,log}, rust/rnrs) into one self-contained package.
 //   @rnrs/cli:     the rnrs CLI, staged from packages/rnr-cli and the generator (tools/rnr-gen).
 //   modules:      `rnrs pack-js` writes each package's JS wrapper, then `npm pack` (its
 //                 package.json `files` list) takes manifest, spec, Rust crate and wrapper.
 //   @rnrs/surface: framework rendering surface (Rust library package + Android view), `npm pack`.
-// Each tarball's file list is checked. Output: .generated/pack/*.tgz
+// Each tarball's file list is checked. Output: .generated/pack/*.tgz (or $RNR_PACK_OUT)
 // Usage (inside `nix develop`): node scripts/pack.mjs
 import { cpSync, existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -13,7 +13,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const OUT = path.join(ROOT, '.generated/pack');
+// RNR_PACK_OUT: another output directory (tests pack into a scratch directory).
+const OUT = process.env.RNR_PACK_OUT
+  ? path.resolve(process.env.RNR_PACK_OUT)
+  : path.join(ROOT, '.generated/pack');
 const STAGE = path.join(OUT, 'stage');
 const MODULES = [
   'counter',
@@ -49,7 +52,7 @@ copy('packages/rnr-runtime/android/src', 'android/src');
 copy('packages/rnr-runtime/cpp', 'cpp');
 copy('packages/rnr-runtime/ios', 'ios');
 copy('packages/rnr-runtime/RnrRuntime.podspec', 'RnrRuntime.podspec');
-for (const crate of ['rnr-core', 'rnr-android', 'rnr-web', 'rnr-log']) {
+for (const crate of ['rnr-core', 'rnr-android', 'rnr-web', 'rnr-log', 'rnrs']) {
   copy(`rust/${crate}/Cargo.toml`, `rust/${crate}/Cargo.toml`);
   copy(`rust/${crate}/src`, `rust/${crate}/src`);
 }
@@ -80,7 +83,7 @@ expectFiles(
     /^src\/[\w-]+\.ts$/,
     /^src\/specs\/NativeRnrRuntime\.ts$/,
     /^cli\/run\.mjs$/,
-    /^rust\/rnr-(core|android|web|log)\/(Cargo\.toml|src\/[\w/-]+\.rs)$/,
+    /^rust\/(rnr-(core|android|web|log)|rnrs)\/(Cargo\.toml|src\/[\w/-]+\.rs)$/,
     /^rust\/rnr-log\/(build\.rs|src\/apple_log\.c)$/,
     /^android\/(build\.gradle|CMakeLists\.txt)$/,
     /^android\/src\/main\/(java\/dev\/rustjsilab\/rnr\/\w+\.kt|jni\/\w+\.(cpp|h))$/,

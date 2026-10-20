@@ -38,6 +38,7 @@ import { implementedTargets } from './targets.mjs';
 import { formatDiagnostic, parseSpec } from './parse.mjs';
 import { emitGlue, emitInterface } from './emit-rust.mjs';
 import { emitTs } from './emit-ts.mjs';
+import { ManifestError, readManifest, sameCrate } from './cargo-manifest.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 // Two layouts: this repository (tools/rnr-gen; the framework is packages/rnr-runtime and rust/)
@@ -52,7 +53,7 @@ export const RUNTIME_DIR = PACKAGED
   ? packagedRuntime()
   : path.resolve(HERE, '../../packages/rnr-runtime');
 export const FRAMEWORK_SPEC = path.join(RUNTIME_DIR, 'src/spec.ts');
-/** Framework Rust crates (rnr-core, rnr-android, rnr-web, rnr-log). */
+/** Framework Rust crates (rnr-core, rnr-android, rnr-web, rnr-log, rnrs). */
 export const FRAMEWORK_RUST = PACKAGED
   ? path.join(RUNTIME_DIR, 'rust')
   : path.resolve(HERE, '../../rust');
@@ -172,8 +173,16 @@ export function loadPackage(dir) {
 }
 
 /** Crate names the framework provides or generates (rnr-bundle); no package may use them.
- *  Compared with `-` and `_` treated alike, as Cargo does for crate identifiers. */
-export const FRAMEWORK_CRATES = ['rnr-core', 'rnr-android', 'rnr-web', 'rnr-log', 'rnr-bundle'];
+ *  Compared with `-` and `_` treated alike, as Cargo does for crate identifiers. `rnrs` is
+ *  the author-facing facade (rust/rnrs). */
+export const FRAMEWORK_CRATES = [
+  'rnr-core',
+  'rnr-android',
+  'rnr-web',
+  'rnr-log',
+  'rnr-bundle',
+  'rnrs',
+];
 export const isFrameworkCrate = (name) =>
   FRAMEWORK_CRATES.some((f) => f.replace(/-/g, '_') === name.replace(/-/g, '_'));
 
@@ -228,9 +237,17 @@ export function plan(packages, { genDir = GEN_DIR } = {}) {
     ir.spec = path.relative(pkg.dir, pkg.spec).split(path.sep).join('/');
     const crateIdent = pkg.crate.replace(/-/g, '_');
     const out = path.join(GEN_DIR, crateIdent);
+    let core;
+    try {
+      core = interfaceCore(pkg);
+    } catch (error) {
+      if (!(error instanceof GenError)) throw error;
+      failures.push(error.message);
+      continue;
+    }
     outputs.push({
       file: path.join(pkg.cratePath, 'src/rnr_interface.rs'),
-      content: emitInterface(ir),
+      content: emitInterface(ir, { core }),
       committed: true,
       kind: 'interface',
     });
@@ -358,40 +375,107 @@ function stale(outputs) {
     .map((o) => path.relative(ROOT, o.file));
 }
 
-/** The framework's rnr-core version (what bundles patch `rnr-core` to). */
-function frameworkCoreVersion() {
-  return readFileSync(path.join(FRAMEWORK_RUST, 'rnr-core/Cargo.toml'), 'utf8').match(
+/** The version of framework crate `crate` (what bundles patch it to). */
+export function frameworkCrateVersion(crate) {
+  return readFileSync(path.join(FRAMEWORK_RUST, crate, 'Cargo.toml'), 'utf8').match(
     /^version\s*=\s*"([^"]+)"/m,
   )[1];
 }
+const shortVersion = (crate) => frameworkCrateVersion(crate).split('.').slice(0, 2).join('.');
 
-/** A module crate must require an rnr-core version this framework provides: bundles patch
- *  `rnr-core` to the framework copy, and an unsatisfiable requirement would make cargo look
- *  for the (unpublished, unreserved) name on crates.io. Plain or caret requirements only. */
-export function checkCoreRequirement(pkg) {
+/** Identifiers a renamed dependency cannot take: the generated interface writes
+ *  `use <ident>::...`, which these would shadow or not parse as. */
+const RESERVED_IDENTS = new Set([
+  'core',
+  'std',
+  'alloc',
+  'proc_macro',
+  'test',
+  'self',
+  'crate',
+  'super',
+  'Self',
+]);
+
+/** The module crate's dependency on the framework: an unconditional [dependencies] entry for
+ *  `rnr-core` (preferred, so existing crates generate unchanged output) or the `rnrs` facade,
+ *  under any `package =` rename or workspace inheritance. Returns {crate, decl, ident}; throws
+ *  an actionable GenError when there is none, or only a conditional (optional or
+ *  target-specific) one, which the generated interface could not use on every target. */
+export function frameworkDependency(pkg) {
   const file = path.join(pkg.cratePath, 'Cargo.toml');
-  const toml = readFileSync(file, 'utf8');
-  const m = toml.match(/^rnr-core\s*=\s*(?:"([^"]*)"|\{([^}]*)\})/m);
   const rel = path.relative(process.cwd(), file);
-  if (!m)
+  const hint = `add rnrs = "${shortVersion('rnrs')}" to [dependencies]`;
+  if (!existsSync(file)) throw new GenError(`${rel}: not found (the module crate's manifest)`);
+  let manifest;
+  try {
+    manifest = readManifest(file);
+  } catch (error) {
+    if (error instanceof ManifestError)
+      throw new GenError(`${error.message} (while looking for the module's rnrs dependency)`);
+    throw error;
+  }
+  const decls = manifest.deps.filter(
+    (d) =>
+      d.kind === 'normal' && (sameCrate(d.package, 'rnr-core') || sameCrate(d.package, 'rnrs')),
+  );
+  const unconditional = decls.filter((d) => d.target === null && !d.optional);
+  const decl =
+    unconditional.find((d) => sameCrate(d.package, 'rnr-core')) ??
+    unconditional.find((d) => sameCrate(d.package, 'rnrs'));
+  if (!decl) {
+    if (decls.length)
+      throw new GenError(
+        `${rel}: ${decls.map((d) => `${d.key}${d.key !== d.package ? ` (package ${d.package})` : ''} is ${d.optional ? 'optional' : `declared only for ${d.target}`}`).join('; ')}; ` +
+          `the generated interface uses it on every target, so declare it unconditionally: ${hint}`,
+      );
+    throw new GenError(`${rel}: the crate must depend on the framework: ${hint}`);
+  }
+  const ident = decl.key.replace(/-/g, '_');
+  if (RESERVED_IDENTS.has(ident))
     throw new GenError(
-      `${rel}: the crate must depend on rnr-core (rnr-core = "${frameworkCoreVersion().split('.').slice(0, 2).join('.')}")`,
+      `${rel}: the dependency on ${decl.package} is named ${decl.key}, which the generated interface cannot use as a path root; rename it (for example rnrs = { package = "rnrs", ... } or drop the rename)`,
     );
-  if (m[2] !== undefined && /\b(path|git|registry)\s*=/.test(m[2]) && !/\bversion\s*=/.test(m[2]))
-    return; // a local override (repository workspaces)
-  const req = m[1] ?? m[2].match(/\bversion\s*=\s*"([^"]*)"/)?.[1] ?? '';
-  const have = frameworkCoreVersion().split('.').map(Number);
-  const want = req.replace(/^\^/, '').trim().split('.');
-  const ok =
-    /^\^?\d+(\.\d+){0,2}$/.test(req.trim()) &&
-    Number(want[0]) === have[0] &&
-    (have[0] !== 0 || want[1] === undefined || Number(want[1]) === have[1]) &&
-    (want[1] === undefined || have[0] !== 0 || want[2] === undefined || Number(want[2]) <= have[2]);
-  if (!ok)
-    throw new GenError(
-      `${rel}: rnr-core requirement "${req}" is not satisfied by this framework's rnr-core ${have.join('.')}; ` +
-        `use rnr-core = "${have.slice(0, 2).join('.')}" (rnr-core is not published: cargo must resolve it to the framework copy, never to crates.io)`,
-    );
+  return { crate: sameCrate(decl.package, 'rnrs') ? 'rnrs' : 'rnr-core', decl, ident, manifest };
+}
+
+/** The path of rnr-core in the generated interface of `pkg`'s crate. */
+export function interfaceCore(pkg) {
+  const { crate, ident } = frameworkDependency(pkg);
+  return crate === 'rnrs' ? `${ident}::core` : ident;
+}
+
+/** A module crate must require a framework crate version this framework provides: bundles
+ *  patch `rnr-core` (and `rnrs`) to the framework copy, and an unsatisfiable requirement
+ *  would make cargo look for the (unpublished, unreserved) name on crates.io. Plain or caret
+ *  requirements only. */
+export function checkCoreRequirement(pkg) {
+  const { manifest } = frameworkDependency(pkg);
+  const rel = path.relative(process.cwd(), path.join(pkg.cratePath, 'Cargo.toml'));
+  // Every declaration (any kind, target or optional): any one cargo builds must resolve to the
+  // framework copy, or cargo would look for it on crates.io.
+  for (const decl of manifest.deps) {
+    const crate = ['rnr-core', 'rnrs'].find((c) => sameCrate(decl.package, c));
+    if (!crate) continue;
+    if (decl.version === null && (decl.path || decl.git)) continue; // a local override (repository workspaces)
+    const req = decl.version ?? '';
+    const have = frameworkCrateVersion(crate).split('.').map(Number);
+    const want = req.replace(/^\^/, '').trim().split('.');
+    const ok =
+      /^\^?\d+(\.\d+){0,2}$/.test(req.trim()) &&
+      Number(want[0]) === have[0] &&
+      (have[0] !== 0 || want[1] === undefined || Number(want[1]) === have[1]) &&
+      (want[1] === undefined ||
+        have[0] !== 0 ||
+        want[2] === undefined ||
+        Number(want[2]) <= have[2]);
+    const where = `${decl.kind === 'normal' ? '' : `${decl.kind}-`}dependency ${decl.key}${decl.key !== decl.package ? ` (package ${decl.package})` : ''}${decl.target ? ` for ${decl.target}` : ''}`;
+    if (!ok)
+      throw new GenError(
+        `${rel}: ${where}: ${crate} requirement "${req}" is not satisfied by this framework's ${crate} ${have.join('.')}; ` +
+          `use ${crate} = "${have.slice(0, 2).join('.')}" (${crate} is not published: cargo must resolve it to the framework copy, never to crates.io)`,
+      );
+  }
 }
 
 /** Writes a package's JS wrapper for publishing: `rnr/index.ts` (imports @rnrs/runtime) and
@@ -662,7 +746,7 @@ export async function main(argv) {
   } catch (error) {
     if (
       error instanceof GenError ||
-      ['BundleError', 'AuthorError'].includes(error?.constructor?.name) ||
+      ['BundleError', 'AuthorError', 'ManifestError'].includes(error?.constructor?.name) ||
       error?.message?.includes('rustNative')
     ) {
       console.error(error.message);

@@ -40,13 +40,14 @@ import {
   writeAtomic,
 } from './cli.mjs';
 import { emitGlue } from './emit-rust.mjs';
+import { activeDependencies, readManifest, sameCrate } from './cargo-manifest.mjs';
 
 export class BundleError extends Error {}
 
 const readJson = (file) => JSON.parse(readFileSync(file, 'utf8'));
 
 /** Node-style lookup of `name` from `fromDir` (no `exports` evaluation needed). */
-function resolvePackageDir(name, fromDir) {
+export function resolvePackageDir(name, fromDir) {
   let dir = fromDir;
   for (;;) {
     const candidate = path.join(dir, 'node_modules', name);
@@ -128,13 +129,14 @@ export function selectModules(appDir, target) {
     [...FRAMEWORK_CRATES, ...selected.map((p) => p.crate)].map((c) => c.replace(/-/g, '_')),
   );
   for (const pkg of selected) {
-    for (const dep of rnrCrateDependencies(path.join(pkg.cratePath, 'Cargo.toml'))) {
+    const needed = frameworkNeeds(pkg);
+    for (const [dep, how] of needed) {
       if (provided.has(dep.replace(/-/g, '_'))) continue;
       const hint = KNOWN_LIBRARIES[dep]
         ? `; add ${KNOWN_LIBRARIES[dep]} to the app's dependencies`
         : '';
       errors.push(
-        `${pkg.chain.join(' -> ')}: its crate depends on ${dep}, which no installed package provides (rnr-* crates are never taken from crates.io)${hint}`,
+        `${pkg.chain.join(' -> ')}: its crate ${how}, which no installed package provides (rnr-* crates are never taken from crates.io)${hint}`,
       );
     }
   }
@@ -156,31 +158,91 @@ export function selectModules(appDir, target) {
   return selected;
 }
 
-/** Library crates the framework ships in npm packages, for diagnostics. */
-const KNOWN_LIBRARIES = { 'rnr-surface': '@rnrs/surface' };
+/** Where the bundle takes the rnrs facade from (it is patched to this copy). */
+const RNRS_MANIFEST = () => path.resolve(FRAMEWORK_RUST, 'rnrs', 'Cargo.toml');
 
-/** Names of rnr-* crates a Cargo.toml depends on (normal, build and target-specific
- *  dependency tables; dev-dependencies are not part of the bundle). */
-export function rnrCrateDependencies(cargoToml) {
-  const deps = new Set();
-  let inDeps = false;
-  for (const line of readFileSync(cargoToml, 'utf8').split('\n')) {
-    const header = line.match(/^\s*\[([^\]]+)\]\s*$/);
-    if (header) {
-      const name = header[1].trim();
-      inDeps =
-        /(^|\.)(dependencies|build-dependencies)$/.test(name) && !name.endsWith('dev-dependencies');
-      const table = name.match(/(?:^|\.)(?:build-)?dependencies\.([A-Za-z0-9_-]+)$/);
-      if (table && /^rnr[-_]/.test(table[1])) deps.add(table[1]);
+/** What `pkg`'s crate enables with its active features (cargo's activation, see
+ *  activeDependencies): the bundle builds modules with their default features; `rnrs test` passes
+ *  `dev` and the cargo feature flags. rnrs is followed into the framework copy, so the library
+ *  crates its enabled features need are included. */
+function activation(pkg, options = {}) {
+  return activeDependencies(path.resolve(pkg.cratePath, 'Cargo.toml'), {
+    ...options,
+    frameworkManifest: (name) => (sameCrate(name, 'rnrs') ? RNRS_MANIFEST() : null),
+  });
+}
+
+/** Framework-namespace crates (rnr-*, rnrs) `pkg`'s crate needs with its active features,
+ *  directly or through crates it reaches by path, including library crates that enabled rnrs
+ *  features need: Map name -> reason. */
+export function frameworkNeeds(pkg, options = {}) {
+  const root = path.resolve(pkg.cratePath, 'Cargo.toml');
+  const { crates, enabled } = activation(pkg, options);
+  const through = (m) => (m.file === root ? '' : ` (through ${m.name ?? m.file})`);
+  const needed = new Map();
+  for (const { from, decl } of enabled) {
+    if (!isFrameworkNamespace(decl.package) || needed.has(decl.package)) continue;
+    if (from.file !== RNRS_MANIFEST()) {
+      needed.set(decl.package, `depends on ${decl.package}${through(from)}`);
       continue;
     }
-    if (!inDeps) continue;
-    const key = line.match(/^\s*([A-Za-z0-9_-]+)\s*=/);
-    if (key && /^rnr[-_]/.test(key[1])) deps.add(key[1]);
-    const renamed = line.match(/package\s*=\s*"(rnr[-_][A-Za-z0-9_-]+)"/);
-    if (renamed) deps.add(renamed[1]);
+    // Enabled inside rnrs: name the rnrs features that were asked for, and by whom.
+    const asked = crates
+      .get(RNRS_MANIFEST())
+      .by.find((b) => b.features.some((f) => f !== 'default'));
+    const features = asked ? [...new Set(asked.features.filter((f) => f !== 'default'))] : [];
+    needed.set(
+      decl.package,
+      `enables rnrs's ${features.map((f) => `"${f}"`).join(', ')} feature${features.length > 1 ? 's' : ''}${asked ? through(asked.from) : ''}, which needs ${decl.package}`,
+    );
   }
-  return [...deps];
+  return needed;
+}
+
+/** Library crates the framework ships in npm packages, for diagnostics. */
+export const KNOWN_LIBRARIES = { 'rnr-surface': '@rnrs/surface' };
+
+/** Crate names the framework reserves: rnr-* and the rnrs facade. */
+export const isFrameworkNamespace = (name) => /^rnr[-_]/.test(name) || sameCrate(name, 'rnrs');
+
+/** Library crates the rnrs facade's features pull in (rust/rnrs/Cargo.toml [features]). */
+const RNRS_FEATURE_CRATES = { surface: 'rnr-surface' };
+
+/** Framework-namespace packages a parsed manifest depends on (normal and build dependencies,
+ *  any target; dev-dependencies are not part of the bundle). */
+const frameworkNamespace = (manifest) =>
+  manifest.deps
+    .filter((d) => d.kind !== 'dev' && isFrameworkNamespace(d.package))
+    .map((d) => d.package);
+
+/** Names of framework-namespace crates (rnr-*, rnrs) a Cargo.toml depends on. */
+export function rnrCrateDependencies(cargoToml) {
+  return [...new Set(frameworkNamespace(readManifest(cargoToml)))];
+}
+
+/** Whether any selected crate, or a crate it reaches by path, enables the rnrs facade: only
+ *  then does the bundle patch it (an unused patch is recorded in Cargo.lock as
+ *  [[patch.unused]] and would invalidate existing app locks; a disabled optional rnrs is not
+ *  resolved, so it needs no patch). */
+export function usesRnrs(selected) {
+  return selected.some((pkg) =>
+    activation(pkg).enabled.some(({ decl }) => sameCrate(decl.package, 'rnrs')),
+  );
+}
+
+/** Explains cargo's failure to find a framework crate (a dependency through a registry crate,
+ *  which no scan of the app's packages can see, or an rnrs feature whose library package is
+ *  not installed): such names are never taken from crates.io. */
+export function explainMissing(stderr) {
+  const m = /no matching package named `([A-Za-z0-9_-]+)`/.exec(stderr);
+  if (!m || !isFrameworkNamespace(m[1])) return stderr;
+  const name = m[1];
+  const fix = sameCrate(name, 'rnrs')
+    ? "rnrs is provided by @rnrs/runtime and patched into the bundle only when one of the app's module crates (or a crate they reach through path dependencies) depends on it; a crate that reaches rnrs another way (a registry or git dependency) is not supported: depend on rnrs from the module crate itself"
+    : KNOWN_LIBRARIES[name]
+      ? `${name} comes from ${KNOWN_LIBRARIES[name]}: add it to the app's dependencies (it is needed, for example, by rnrs's "${Object.keys(RNRS_FEATURE_CRATES).find((f) => RNRS_FEATURE_CRATES[f] === name) ?? name}" feature)`
+      : `no installed package provides ${name}`;
+  return `${stderr.trimEnd()}\n${name} is a framework crate, never taken from crates.io: ${fix}.\n`;
 }
 
 /** Whether a package has native code that autolinking must link. */
@@ -280,6 +342,9 @@ export function generateBundle(appDir, target, outDir) {
   const install = managed
     ? `    rnr_log::install_for_bundle(${JSON.stringify(logging.filter)}, rnr_log::Privacy::${privacy});\n`
     : '';
+  const rnrs = usesRnrs(selected)
+    ? `rnrs = { path = ${toml(path.join(FRAMEWORK_RUST, 'rnrs'))} }\n`
+    : '';
   const cargo = `# @generated by rnrs bundle (${target}); do not edit. Rebuilt from the app's dependencies.
 [package]
 name = "rnr-bundle"
@@ -294,10 +359,10 @@ crate-type = [${native ? '"staticlib"' : '"cdylib"'}]
 [dependencies]
 ${deps.join('\n')}
 ${buildDeps}
-# Modules depend on rnr-core = "0.1"; resolve it to this framework copy${libraries.length ? ", and library packages' crates to their installed copies" : ''}.
+# Modules depend on rnr-core = "0.1"${rnrs ? ' or rnrs = "0.1"' : ''}; resolve ${rnrs ? 'them to the framework copies' : 'it to this framework copy'}${libraries.length ? ", and library packages' crates to their installed copies" : ''}.
 [patch.crates-io]
 rnr-core = { path = ${toml(path.join(FRAMEWORK_RUST, 'rnr-core'))} }
-${libraries.map((p) => `${p.crate} = { path = ${toml(p.cratePath)} }\n`).join('')}
+${rnrs}${libraries.map((p) => `${p.crate} = { path = ${toml(p.cratePath)} }\n`).join('')}
 # A standalone workspace: never part of an enclosing one.
 [workspace]
 
@@ -400,7 +465,7 @@ function resolve(manifest, cargo, { locked = false, env = process.env, ...option
           ? '. Install Rust with rustup (tested toolchain: 1.90.0), or set RNR_CARGO to a cargo executable.'
           : ''),
     );
-  if (result.status !== 0) return { ok: false, stderr: result.stderr };
+  if (result.status !== 0) return { ok: false, stderr: explainMissing(result.stderr) };
   checkProvenance(JSON.parse(result.stdout), options.libraries);
   return { ok: true, stderr: '' };
 }
@@ -429,7 +494,7 @@ export function checkProvenance(metadata, libraries = []) {
         'align that requirement with the installed library package rather than letting cargo fetch a crates.io package of the same name.',
     );
   const errors = [];
-  for (const name of ['rnr-core', 'rnr-android', 'rnr-web', 'rnr-log']) {
+  for (const name of ['rnr-core', 'rnr-android', 'rnr-web', 'rnr-log', 'rnrs']) {
     for (const pkg of metadata.packages.filter((p) => p.name === name)) {
       const expected = path.join(FRAMEWORK_RUST, name, 'Cargo.toml');
       if (pkg.source !== null || realpathSync(pkg.manifest_path) !== realpathSync(expected))
@@ -445,7 +510,9 @@ export function checkProvenance(metadata, libraries = []) {
     );
   // Nothing else in the rnr-* namespace may come from a registry or git either, whether or not
   // a package declared it (a module requiring rnr-surface without @rnrs/surface installed).
-  const foreign = metadata.packages.filter((p) => /^rnr[-_]/.test(p.name) && p.source !== null);
+  const foreign = metadata.packages.filter(
+    (p) => isFrameworkNamespace(p.name) && p.source !== null,
+  );
   if (foreign.length)
     throw new BundleError(
       foreign.map((p) => `${p.name} ${p.version} resolved from ${p.source}`).join('\n') +

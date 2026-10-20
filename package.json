@@ -10,6 +10,7 @@
     "start": "react-native start",
     "android": "react-native run-android",
     "test": "node --test scripts/*.test.mjs tools/rnr-gen/test/*.test.mjs",
+    "test:rnrs-offline": "cargo fetch --locked && RNR_REQUIRE_CARGO=1 node --test tools/rnr-gen/test/rnrs-offline.test.mjs",
     "typecheck": "node tools/rnr-gen/cli.mjs generate && tsc --noEmit && node scripts/typecheck-ios-fixture.mjs",
     "summarize": "node scripts/summarize.mjs",
     "rnr:gen": "node tools/rnr-gen/cli.mjs generate",
@@ -44,6 +45,7 @@
     "@types/react": "19.3.0",
     "oxfmt": "0.72.0",
     "oxlint": "1.87.0",
+    "smol-toml": "1.9.0",
     "typescript": "6.0.3"
   },
   "rustNativeApp": {

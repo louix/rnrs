@@ -11,6 +11,7 @@
     "generator"
   ],
   "dependencies": {
+    "smol-toml": "1.9.0",
     "typescript": "6.0.3"
   },
   "peerDependencies": {

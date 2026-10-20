@@ -18,12 +18,14 @@ import {
   FRAMEWORK_RUST,
   RUNTIME_DIR,
   checkCoreRequirement,
+  frameworkCrateVersion,
   isFrameworkCrate,
   loadPackage,
   plan,
   writeAtomic,
 } from './cli.mjs';
 import { KNOWN_TARGETS, declaredTargets } from './targets.mjs';
+import { KNOWN_LIBRARIES, frameworkNeeds, resolvePackageDir } from './bundle.mjs';
 
 export class AuthorError extends Error {}
 
@@ -67,12 +69,8 @@ export function scaffoldNames(name, { crate } = {}) {
   };
 }
 
-function coreRequirement() {
-  const version = readFileSync(path.join(FRAMEWORK_RUST, 'rnr-core/Cargo.toml'), 'utf8').match(
-    /^version\s*=\s*"([^"]+)"/m,
-  )[1];
-  return version.split('.').slice(0, 2).join('.');
-}
+/** The scaffold's requirement on the rnrs facade ("0.1" for 0.1.x). */
+const rnrsRequirement = () => frameworkCrateVersion('rnrs').split('.').slice(0, 2).join('.');
 
 /** The framework version; @rnrs/runtime and @rnrs/cli are released together. */
 const runtimeVersion = () => readJson(path.join(RUNTIME_DIR, 'package.json')).version;
@@ -132,7 +130,8 @@ edition = "2021"
 
 [dependencies]
 # Provided by @rnrs/runtime (not on crates.io): \`rnrs test\` and app builds resolve it there.
-rnr-core = "${coreRequirement()}"
+# Renderers add features = ["surface"] (and the app installs @rnrs/surface).
+rnrs = "${rnrsRequirement()}"
 `;
   const lib = `// The trait generated from ${n.spec} (by \`rnrs generate\`, \`rnrs test\` and \`npm pack\`).
 pub mod rnr_interface;
@@ -251,7 +250,7 @@ export function init(dir, { name, targets: targetList, crate } = {}) {
 }
 
 /** `rnrs test [dir] [cargo test args...]`: regenerates the interface, then runs the crate's
- *  `cargo test` with rnr-core patched to the installed framework copy. Returns cargo's exit
+ *  `cargo test` with the framework crates it uses patched to their installed copies. Returns cargo's exit
  *  status. The target directory is <package>/.rnr/target unless CARGO_TARGET_DIR is set. */
 export function testPackage(
   dir,
@@ -270,7 +269,27 @@ export function testPackage(
     );
   checkCoreRequirement(pkg);
   for (const o of plan([pkg]).filter((o) => o.committed)) writeAtomic(o.file, o.content);
-  const core = path.join(FRAMEWORK_RUST, 'rnr-core');
+  // The framework crates the crate uses with the features this cargo test activates (dev-
+  // dependencies included), patched to their installed copies like an app bundle does: only
+  // those it needs (an unused patch would be recorded in its Cargo.lock).
+  const patches = { 'rnr-core': path.join(FRAMEWORK_RUST, 'rnr-core') };
+  for (const [crate, how] of frameworkNeeds(pkg, { dev: true, ...cargoFeatureFlags(cargoArgs) })) {
+    const framework = path.join(FRAMEWORK_RUST, crate);
+    const library = KNOWN_LIBRARIES[crate];
+    if (isFrameworkCrate(crate) && existsSync(path.join(framework, 'Cargo.toml')))
+      patches[crate] = framework;
+    else if (library) {
+      const libDir = resolvePackageDir(library, dir);
+      if (!libDir)
+        throw new AuthorError(
+          `${pkg.manifestPath}: the crate ${how}, which comes from ${library}; install it next to the package (npm install --save-dev ${library}@${runtimeVersion()}) so rnrs test can resolve it`,
+        );
+      patches[crate] = loadPackage(libDir).cratePath;
+    } else
+      throw new AuthorError(
+        `${pkg.manifestPath}: the crate ${how}, which neither @rnrs/runtime nor a known library package provides (crates named rnr-* or rnrs are never taken from crates.io)`,
+      );
+  }
   const env = {
     ...process.env,
     CARGO_TARGET_DIR: process.env.CARGO_TARGET_DIR || path.join(dir, '.rnr/target'),
@@ -279,13 +298,31 @@ export function testPackage(
     'test',
     '--manifest-path',
     path.join(pkg.cratePath, 'Cargo.toml'),
-    '--config',
-    `patch.crates-io.rnr-core.path=${JSON.stringify(core.split(path.sep).join('/'))}`,
+    ...Object.entries(patches).flatMap(([crate, dir]) => [
+      '--config',
+      `patch.crates-io.${crate}.path=${JSON.stringify(dir.split(path.sep).join('/'))}`,
+    ]),
     ...cargoArgs,
   ];
   const result = spawnSync(cargo, args, { stdio: 'inherit', env });
   if (result.error) throw new AuthorError(cargoMissing(cargo, result.error));
   return result.status ?? 1;
+}
+
+/** The feature selection in `cargo test` arguments (before any `--`): --features/-F (repeatable,
+ *  comma or space separated), --all-features, --no-default-features. */
+export function cargoFeatureFlags(args) {
+  const out = { features: [], allFeatures: false, noDefault: false };
+  const end = args.indexOf('--');
+  const own = end < 0 ? args : args.slice(0, end);
+  for (let i = 0; i < own.length; i++) {
+    const a = own[i];
+    const value = /^(--features|-F)$/.test(a) ? own[++i] : /^(?:--features=|-F)(.+)$/.exec(a)?.[1];
+    if (value !== undefined) out.features.push(...value.split(/[ ,]+/).filter(Boolean));
+    else if (a === '--all-features') out.allFeatures = true;
+    else if (a === '--no-default-features') out.noDefault = true;
+  }
+  return out;
 }
 
 export const cargoMissing = (cargo, error) =>

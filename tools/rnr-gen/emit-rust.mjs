@@ -85,11 +85,13 @@ function traitMethods(methods, owner) {
   return out.join('\n\n');
 }
 
-export function emitInterface(ir) {
+/** `core`: the path of rnr-core in the module crate (`rnr_core`, `rnrs::core`, or a renamed
+ *  dependency's identifier; see interfaceCore in cli.mjs). */
+export function emitInterface(ir, { core = 'rnr_core' } = {}) {
   const parts = [
     header(ir, 'Public Rust interface of the module: implement these traits.'),
     '#![allow(dead_code)]\n',
-    '#[allow(unused_imports)]\nuse std::future::Future;\n\n#[allow(unused_imports)]\nuse rnr_core::bind::{MaybeSend, NativeObject};\n#[allow(unused_imports)]\nuse rnr_core::{CancelToken, Native};\n',
+    `#[allow(unused_imports)]\nuse std::future::Future;\n\n#[allow(unused_imports)]\nuse ${core}::bind::{MaybeSend, NativeObject};\n#[allow(unused_imports)]\nuse ${core}::{CancelToken, Native};\n`,
   ];
   for (const r of ir.records) {
     parts.push(
