@@ -4,7 +4,9 @@
 // (fixtures/consumer/ios/device.ts). Reports arrive as console.error lines: a release build
 // forwards them to os_log, and OS_ACTIVITY_DT_MODE mirrors os_log to the console devicectl
 // captures. The fixture app is uninstalled afterwards unless --keep is given.
-// Usage (on the Mac): node scripts/consumer/ios-device-test.mjs --device <id> --bundle-id <id> [--commit <hash>] [--keep] [out.json]
+// --simulator: --device is a booted simulator's UDID; installs the iphonesimulator build with
+// simctl instead (simulator evidence, labelled so in the report).
+// Usage (on the Mac): node scripts/consumer/ios-device-test.mjs --device <id> --bundle-id <id> [--simulator] [--commit <hash>] [--keep] [out.json]
 import { execFileSync, spawn } from 'node:child_process';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -18,7 +20,11 @@ const arg0 = (name) => {
   return i > 0 ? process.argv[i + 1] : undefined;
 };
 const CONSUMER = path.resolve(arg0('--consumer') ?? path.join(ROOT, '.generated/consumer-ios'));
-const APP = path.join(CONSUMER, 'build/Build/Products/Release-iphoneos/HelloWorld.app');
+const simulator = process.argv.includes('--simulator');
+const APP = path.join(
+  CONSUMER,
+  `build/Build/Products/Release-${simulator ? 'iphonesimulator' : 'iphoneos'}/HelloWorld.app`,
+);
 // --default: the default package (no RNR_TEST_HOOKS); the app then runs only the smoke.
 const defaultMode = process.argv.includes('--default');
 // --expect-console <regex> (repeatable): a device console line (os_log is mirrored there)
@@ -84,37 +90,59 @@ function collector() {
   };
 }
 
-const info = devicectl('device', 'info', 'details', '--device', device).result;
-const deviceInfo = {
-  model: info.hardwareProperties?.marketingName,
-  product: info.hardwareProperties?.productType,
-  os: info.deviceProperties?.osVersionNumber,
-  build: info.deviceProperties?.osBuildUpdate,
-};
-devicectl('device', 'install', 'app', '--device', device, APP);
+const simctl = (...args) => execFileSync('xcrun', ['simctl', ...args], { encoding: 'utf8' });
+function describeDevice() {
+  if (simulator) {
+    const sim = Object.entries(JSON.parse(simctl('list', 'devices', '-j')).devices)
+      .flatMap(([runtime, ds]) => ds.map((d) => ({ ...d, runtime })))
+      .find((d) => d.udid === device);
+    if (!sim) throw new Error(`no simulator ${device}`);
+    return { simulator: true, model: sim.name, product: sim.deviceTypeIdentifier, os: sim.runtime };
+  }
+  const info = devicectl('device', 'info', 'details', '--device', device).result;
+  return {
+    model: info.hardwareProperties?.marketingName,
+    product: info.hardwareProperties?.productType,
+    os: info.deviceProperties?.osVersionNumber,
+    build: info.deviceProperties?.osBuildUpdate,
+  };
+}
+const deviceInfo = describeDevice();
+if (simulator) simctl('install', device, APP);
+else devicectl('device', 'install', 'app', '--device', device, APP);
 const reports = collector();
 const log = [];
 const raw = [];
 let done = false;
 try {
   await new Promise((resolve, reject) => {
-    const child = spawn(
-      'xcrun',
-      [
-        'devicectl',
-        'device',
-        'process',
-        'launch',
-        '--device',
-        device,
-        '--console',
-        '--terminate-existing',
-        '--environment-variables',
-        JSON.stringify({ OS_ACTIVITY_DT_MODE: 'enable' }),
-        bundleId,
-      ],
-      { stdio: ['ignore', 'pipe', 'pipe'] },
-    );
+    // OS_ACTIVITY_DT_MODE mirrors os_log to the captured console (simctl passes SIMCTL_CHILD_*).
+    const child = simulator
+      ? spawn(
+          'xcrun',
+          ['simctl', 'launch', '--console-pty', '--terminate-running-process', device, bundleId],
+          {
+            stdio: ['ignore', 'pipe', 'pipe'],
+            env: { ...process.env, SIMCTL_CHILD_OS_ACTIVITY_DT_MODE: 'enable' },
+          },
+        )
+      : spawn(
+          'xcrun',
+          [
+            'devicectl',
+            'device',
+            'process',
+            'launch',
+            '--device',
+            device,
+            '--console',
+            '--terminate-existing',
+            '--environment-variables',
+            JSON.stringify({ OS_ACTIVITY_DT_MODE: 'enable' }),
+            bundleId,
+          ],
+          { stdio: ['ignore', 'pipe', 'pipe'] },
+        );
     const timer = setTimeout(() => {
       child.kill('SIGINT');
       resolve();
@@ -152,7 +180,8 @@ try {
 } finally {
   if (!keep) {
     try {
-      devicectl('device', 'uninstall', 'app', '--device', device, bundleId);
+      if (simulator) simctl('uninstall', device, bundleId);
+      else devicectl('device', 'uninstall', 'app', '--device', device, bundleId);
     } catch {
       /* best effort */
     }

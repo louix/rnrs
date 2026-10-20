@@ -27,6 +27,11 @@
 #   RNR_IOS_FIXTURE=bevy                      the Bevy example (fixtures/bevy-consumer: App.tsx, smoke.ts) with
 #                                             @rnrs/surface and @rnrs/example-bevy3d; needs RUSTUP_TOOLCHAIN=1.97.1
 #                                             (Bevy 0.20 MSRV); run by scripts/consumer/ios-bevy-sim-test.mjs
+#   RNR_IOS_FIXTURE=smoke                     a JS smoke fixture: RNR_IOS_SMOKE_DIR's smoke.ts (repo-relative
+#                                             directory exporting runSmoke(); e.g. fixtures/scheduler-probe) under
+#                                             fixtures/consumer/ios/SmokeApp.tsx, with @rnrs/<m> for each m in
+#                                             RNR_IOS_SMOKE_MODULES (default example-counter); run by
+#                                             scripts/consumer/ios-smoke-sim-test.mjs
 #   RNR_IOS_SKIP_RELOCATED=1                  lab repeat runs only (e.g. a C1 S3 rerun on a disk budget): skip
 #                                             the relocated --locked copy below and say so; the
 #                                             default runs every packaging check
@@ -47,7 +52,7 @@ C="${RNR_IOS_OUT:-$ROOT/.generated/consumer-ios}"
 APP="$C/rn-app"
 REF="$C/rn-template"
 TEMPLATE="$C/react-native-community-template-0.88.0.tgz"
-TEMPLATE_SHA256=58a0fd5b3b420ab491d1cde76cb935e988c43b83a93428d80becd351b5bd3888
+TEMPLATE_SHA256=896707c75d6b0b47aa97041aa605ed45c3329f9204ad6f67064db352c58de19a
 SDKS="${RNR_IOS_SDKS:-iphoneos iphonesimulator}"
 mkdir -p "$C"
 [ -f "$TEMPLATE" ] || (cd "$C" && npm pack @react-native-community/template@0.88.0 >/dev/null)
@@ -83,6 +88,12 @@ elif [ "${RNR_IOS_FIXTURE:-}" = touch-probe ]; then
 elif [ "${RNR_IOS_FIXTURE:-}" = bevy ]; then
   cp "$ROOT/fixtures/bevy-consumer/App.tsx" "$ROOT/fixtures/bevy-consumer/smoke.ts" "$APP/"
   (cd "$APP" && npm install --no-audit --no-fund "$P/rnrs-cli-0.1.0.tgz" "$P/rnrs-runtime-0.1.0.tgz" "$P/rnrs-surface-0.1.0.tgz" "$P/rnrs-example-bevy3d-0.1.0.tgz")
+elif [ "${RNR_IOS_FIXTURE:-}" = smoke ]; then
+  cp "$ROOT/${RNR_IOS_SMOKE_DIR:?set RNR_IOS_SMOKE_DIR with RNR_IOS_FIXTURE=smoke}/smoke.ts" "$APP/smoke.ts"
+  cp "$ROOT/fixtures/consumer/ios/SmokeApp.tsx" "$APP/App.tsx"
+  smoke_pkgs=()
+  for m in ${RNR_IOS_SMOKE_MODULES:-example-counter}; do smoke_pkgs+=("$P/rnrs-$m-0.1.0.tgz"); done
+  (cd "$APP" && npm install --no-audit --no-fund "$P/rnrs-cli-0.1.0.tgz" "$P/rnrs-runtime-0.1.0.tgz" "${smoke_pkgs[@]}")
 elif [ "${RNR_IOS_FIXTURE:-}" = modules ]; then
   node "$ROOT/scripts/consumer/ios-fixture.mjs" --modules "$APP"
   (cd "$APP" && npm install --no-audit --no-fund "$P/rnrs-cli-0.1.0.tgz" "$P/rnrs-runtime-0.1.0.tgz" "$P/rnrs-example-http-0.1.0.tgz" "$P/rnrs-example-kv-0.1.0.tgz")
@@ -101,7 +112,8 @@ export RUSTUP_TOOLCHAIN="${RUSTUP_TOOLCHAIN:-1.90.0}"
 rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal --target aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios >/dev/null
 
 # React Native's supported prebuilt core and dependencies (pod install environment, not an
-# app edit; also Expo's default). Adopted for 0.83.1, whose source-built fmt 11.0.2 Xcode 26.4+
+# app edit; the Expo SDK 58 Podfile sets the same two variables unless
+# ios.buildReactNativeFromSource). Adopted for 0.83.1, whose source-built fmt 11.0.2 Xcode 26.4+
 # clang rejects (facebook/react-native#55601, fixed in 0.84); 0.88 source builds are untested.
 export RCT_USE_RN_DEP="${RCT_USE_RN_DEP:-1}" RCT_USE_PREBUILT_RNCORE="${RCT_USE_PREBUILT_RNCORE:-1}"
 # The device test drives the framework's native test hooks; the default package omits them.

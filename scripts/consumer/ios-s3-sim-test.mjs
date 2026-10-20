@@ -6,6 +6,9 @@
 // network) for commands and posts reports. The app is launched with CA_DEBUG_TRANSACTIONS=1
 // and Main Thread Checker injected (whether it actually loaded is recorded from vmmap, not
 // assumed). Unified-log lines of the app process are streamed to a file.
+// The read-back and retirement gates read rnr_surface info logs: build the app with
+// RNR_APP_LOGGING='{"filter":"warn,rnr_surface=info,rnr_vello2d=info","iosPrivacy":"public"}'
+// (ios-app.sh), or those gates fail for lack of lines.
 //
 // Sequence (--mode full): cold launch; baseline; 20 background/foreground cycles (Settings to the
 // foreground and back, the app process kept); 2-minute session; resize twice; unmount and
@@ -341,7 +344,8 @@ try {
   } else if (VARIANT !== 's3') {
     check('a swapped bundle has its provenance.json', false, `no provenance.json next to ${APP}`);
   }
-  // Cold launch.
+  // Install the app under test (as the touch and Bevy runners do), then cold launch.
+  simctl('install', DEVICE, APP);
   const { pid, first } = await coldLaunch(readyFor(), 'ready after cold launch');
   step('cold launch', { pid, snapshot: first });
   let vm = '';

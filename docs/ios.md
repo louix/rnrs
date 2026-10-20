@@ -11,7 +11,8 @@ Experimental, 2026-10-19. iOS uses the same runtime as Android: the generic JSI 
 | `packages/rnr-runtime/RnrRuntime.podspec` | Autolinked pod: the sources above, `install_modules_dependencies`, the bundle script phase, and the app-target link flag for the bundle. |
 | `packages/rnr-runtime/ios/build-rust-bundle.sh` | Script phase: `rnrs build --target ios --sdk $PLATFORM_NAME --arch $ARCHS`. |
 | `packages/rnr-runtime/src/jsi-backend.ts` | The JS backend, shared by Android and iOS (was `android-backend.ts`). |
-| `scripts/consumer/ios-app.sh`, `scripts/consumer/ios-device-test.mjs`, `fixtures/consumer/ios/` | Clean consumer build and the device test. |
+| `scripts/consumer/ios-app.sh`, `scripts/consumer/ios-device-test.mjs`, `fixtures/consumer/ios/` | Clean consumer build and the device test (`--simulator` runs it on a simulator). |
+| `scripts/consumer/expo-app.sh`, `scripts/consumer/ios-smoke-sim-test.mjs`, `fixtures/expo-consumer/` | Fresh Expo SDK 58 consumer, and the simulator runner for it and for `RNR_IOS_FIXTURE=smoke` builds. |
 
 ## Build integration
 
@@ -67,11 +68,35 @@ The 10 s timeout does not affect correctness: invalidation only takes the host l
 
 ### Not exercised
 
-Backgrounding, `UIScene` disconnection, `RCTHost` deallocation (it invalidates through the same `RCTInstance -invalidate`, but the template app never releases its host), process death, and debug builds with Metro. iOS has no app-level equivalent of the Android lab's `ReactHost.destroy()` check.
+Backgrounding on a device (the simulator runs are [below](#react-native-0880-simulator)), `UIScene` disconnection, `RCTHost` deallocation (it invalidates through the same `RCTInstance -invalidate`, but the template app never releases its host), process death, and debug builds with Metro. iOS has no app-level equivalent of the Android lab's `ReactHost.destroy()` check.
+
+## React Native 0.88.0 (simulator)
+
+Rerun at commit `c34c7ec` on React Native 0.88.0 (Hermes release build, prebuilt core), on an iPhone 17 simulator (iOS 26.5, Xcode 26.6, arm64). These are simulator results; the physical-device results above are from 0.83.1. On the iPhone 12 Pro, the signed 0.88.0 build passed, but its install was refused by the free developer profile's three-app limit.
+
+- **Source order.** The 0.88.0 sources keep the order above: `RCTHost -_reloadWithShouldRestartSurfaces:` calls `-invalidate` on the old instance, which only enqueues the invalidation on its JS thread, before creating the next one (`RCTHost.mm:628-631`; `-dealloc` at 476-478). `RCTInstance -invalidate` enqueues the TurboModule invalidation on the JS thread (`RCTInstance.mm:222-242`). `RCTTurboModuleManager` uses the shared `com.meta.react.turbomodulemanager.queue` (`:233`) and waits up to 10 s (`:996`).
+- **Clean template consumer** (`ios-app.sh`). Unsigned `iphoneos` and `iphonesimulator` builds pass, the native trees equal the template's, and the relocated `--locked` build passes. `ios-device-test.mjs --simulator` passes 12/12 checks:
+  - six runtimes (initial plus five reloads);
+  - 55/55 shared suites;
+  - each old scope invalidated once, on the TurboModule manager's queue; that enqueued invalidation was observed to run after the next runtime started;
+  - 223/223 finalizers off the JS thread.
+- **Dropped drain wakes** (`RNR_IOS_FIXTURE=smoke RNR_IOS_SMOKE_DIR=fixtures/scheduler-probe`, see [ownership](ownership.md)). Every assertion holds on 3/3 cold launches:
+  - after a throwing scheduler task: 1 drop detected, 2 posts, 1 run, and the pending and a later `addLater` settle;
+  - while JS is blocked for 10 s: 1 post, 0 runs, no drop, then the call settles.
+
+  Pre-fix control, on the same simulator: runtime and fixtures at `1f4d57b` (before `5e1df35`) with the probe from `50edb96` (before `91e04b7` added the exactly-once error-message check) and this harness. The drop recovery, the later `addLater` and the 10 s block all stayed pending. That tree was assembled only for the run (its result JSON records the throwaway commit `49001ac`, which is not in history).
+- **`SceneDelegate`.** The 0.88 template starts React Native from a `UIWindowSceneDelegate`. The surface view still follows `UIApplication` active-state notifications, which UIKit posts for the template's single scene. The S3 harness (`ios-s3-sim-test.mjs --mode full`, built with `rnr_surface` info logging) passes 17/17 checks:
+  - 20 background/foreground cycles in one process, with 20 resign-active and 20 become-active, revoked each time;
+  - resize, remount, and five reloads with the surface attached;
+  - read-back YES after all 27 binds; longest window retirement 5.7 ms;
+  - no Main Thread Checker reports (loaded), UIKit off-main or Core Animation warnings.
+
+  Multiple scenes (iPad multi-window) are not tested.
+- **Expo SDK 58** (`expo-app.sh`: `expo-template-blank-typescript@58.0.25`, expo 58.0.16, React Native 0.88.0, React 19.3.0). Default autolinking lists `@rnrs/runtime` for both platforms and adds the `RnrRuntime` pod. The generated `ios/` and `android/` trees equal a prebuild of the same template without the packages. Expo's generated Podfile selects React Native's prebuilt core itself. The unsigned Release simulator build passes, and two cold launches run the counter's sync and async calls. Android is checked at prebuild only (autolinking and the generated tree), not built or run by the script. Prebuild picks the bundle identifier itself; set `ios.bundleIdentifier` in `app.json` for a real app.
 
 ## Limits
 
-- One device, one iOS version, one Xcode, one React Native version. Arm64 device only. Simulator slices (`aarch64-apple-ios-sim`, `x86_64-apple-ios`) are built but not run.
+- Device results are from one iPhone, one iOS version and one Xcode on React Native 0.83.1. React Native 0.88.0 is simulator-tested only (above). Arm64 only, on both device and simulator.
 - Release builds only. Reload is driven by the `reloadForTesting` test hook, because release builds have no JS-reachable reload. It calls React Native's `RCTTriggerReloadCommandListeners`, which is process-wide: it reloads every registered `RCTHost` in the process, not only the caller's. The test app has one.
 - `rnr-android`, the shared native backend crate, keeps its historical name so that existing Android lock files stay valid.
 - App setup the framework does not do: signing identity and bundle id (passed to `xcodebuild` here), and Info.plist permission strings if a module's Rust code uses platform APIs that require them (none of the tested modules do).
@@ -81,7 +106,7 @@ Backgrounding, `UIScene` disconnection, `RCTHost` deallocation (it invalidates t
 
 - The installer is the bridgeless TurboModule API, `RCTTurboModuleWithJSIBindings` (`installJSIBindingsWithRuntime:callInvoker:`) called by `RCTTurboModuleManager`. No `RCTCxxBridge` or other legacy-bridge API is used.
 - The glue is Objective-C++, not Swift. Swift's opt-in main-actor-by-default isolation therefore does not apply. If Swift glue is ever added, invalidation must stay explicitly nonisolated and thread-safe: React Native calls it on the TurboModule manager's queue, not the main thread.
-- Newer React Native versions document `UIScene`/`SceneDelegate` app integration and experimental Swift Package Manager support. The 0.88 template uses a `SceneDelegate`; surface attach/detach under it is not yet re-tested. Swift Package Manager is unsupported: the pod is CocoaPods-only, for React Native 0.88.0.
+- Swift Package Manager is unsupported: the pod is CocoaPods-only, for React Native 0.88.0. For `SceneDelegate` apps, see [above](#react-native-0880-simulator); a multi-scene app is untested.
 
 ## Reproduce
 
@@ -94,6 +119,17 @@ node scripts/consumer/ios-device-test.mjs --device <devicectl id> --bundle-id <u
 RNR_IOS_FIXTURE=modules RNR_IOS_LOCAL_NETWORK_USAGE="Reaches the test servers on the developer Mac." RNR_IOS_OUT=$PWD/.generated/consumer-ios-modules \
   RNR_IOS_DEVICE=<UDID> RNR_IOS_TEAM=<team id> RNR_IOS_BUNDLE_ID=<unique id> bash scripts/consumer/ios-app.sh
 node scripts/consumer/ios-modules-test.mjs --device <devicectl id> --bundle-id <unique id> --keep results/rnr-ios-modules/run.json
+# simulator (booted, <sim udid>): the lifecycle test, the surface harness, a JS smoke fixture, Expo
+RNR_IOS_SDKS=iphonesimulator RNR_IOS_SIM_ARCHS=arm64 bash scripts/consumer/ios-app.sh
+node scripts/consumer/ios-device-test.mjs --simulator --device <sim udid> --bundle-id org.reactjs.native.example.HelloWorld results/rnr-ios/sim.json
+RNR_IOS_FIXTURE=surface-s3 RNR_APP_LOGGING='{"filter":"warn,rnr_surface=info,rnr_vello2d=info","iosPrivacy":"public"}' RNR_IOS_SDKS=iphonesimulator \
+  RNR_IOS_SIM_ARCHS=arm64 RNR_IOS_SKIP_RELOCATED=1 RNR_IOS_OUT=$PWD/.generated/consumer-ios-s3 bash scripts/consumer/ios-app.sh
+node scripts/consumer/ios-s3-sim-test.mjs --app .generated/consumer-ios-s3/build/Build/Products/Release-iphonesimulator/HelloWorld.app \
+  --device <sim udid> --bundle-id org.reactjs.native.example.HelloWorld --commit <sha> --out results/rnr-ios/s3-sim.json
+RNR_IOS_FIXTURE=smoke RNR_IOS_SMOKE_DIR=fixtures/scheduler-probe RNR_IOS_SDKS=iphonesimulator RNR_IOS_SIM_ARCHS=arm64 RNR_IOS_SKIP_RELOCATED=1 \
+  RNR_IOS_OUT=$PWD/.generated/consumer-ios-probe bash scripts/consumer/ios-app.sh
+node scripts/consumer/ios-smoke-sim-test.mjs --device <sim udid> --consumer .generated/consumer-ios-probe results/rnr-ios/probe.json
+bash scripts/consumer/expo-app.sh && node scripts/consumer/ios-smoke-sim-test.mjs --device <sim udid> results/rnr-ios/expo.json
 ```
 
 The runner installs the app, launches it with `OS_ACTIVITY_DT_MODE` so os_log (where release builds forward `console.error`) reaches the captured console, checks the reports, and uninstalls the app unless `--keep` is given. The phone must stay unlocked during the run.
