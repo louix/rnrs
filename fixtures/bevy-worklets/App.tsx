@@ -1,6 +1,6 @@
 // Android-only bounded input fixture. UI gestures capture an existing boxed Scene handle.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, Text, View, type HostInstance } from 'react-native';
 import {
   GestureDetector,
   GestureHandlerRootView,
@@ -16,7 +16,7 @@ enableWorklets(Worklets);
 const report = (tag: string, value: unknown) => console.log(tag + ' ' + JSON.stringify(value));
 
 function Button({ id, onPress }: { id: string; onPress: () => void }) {
-  const ref = useRef<View>(null);
+  const ref = useRef<HostInstance>(null);
   return (
     <Pressable
       ref={ref}

@@ -1,7 +1,7 @@
 # Bevy on the browser WebGPU surface (bounded prototype)
 
 `@rnrs/example-bevy3d` (Bevy 0.20.0, wgpu 30.0.1 `webgpu` only) on `@rnrs/surface`'s WebGPU
-presentation, rendered with React Native Web 0.21.2 / React DOM 19.2.0. Rust owns the scene and its simulation; the
+presentation, rendered with React Native Web 0.21.4 / React DOM 19.3.0. Rust owns the scene and its simulation; the
 browser host's requestAnimationFrame drives one Bevy update and one canvas submit per frame.
 No thread, no pixels across the bridge, no CPU copy, no Canvas 2D or WebGL fallback. Design and
 limits: [docs/bevy3d.md](../../docs/bevy3d.md#browser-webgpu).

@@ -25,7 +25,7 @@ export interface Config {
   hermes: 'phase' | 'tick';
 }
 
-export function parseConfig(url: string | null): Config | null {
+export function parseConfig(url: string | null | undefined): Config | null {
   if (!url || !url.startsWith('rnrgame://contention')) return null;
   const q = new Map<string, string>();
   const i = url.indexOf('?');

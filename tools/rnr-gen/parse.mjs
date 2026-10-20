@@ -89,9 +89,8 @@ export function parseSpec(specPath, { frameworkSpec, root }) {
     module: ts.ModuleKind.ESNext,
     moduleResolution: ts.ModuleResolutionKind.Bundler,
     lib: ['lib.es2022.d.ts'],
-    baseUrl: path.dirname(specPath),
-    // The spec import resolves to this generator's own framework spec, whether or not
-    // @rnrs/runtime is installed next to the spec.
+    // The spec import resolves to this generator's own framework spec (an absolute path, so no
+    // baseUrl), whether or not @rnrs/runtime is installed next to the spec.
     paths: { '@rnrs/runtime/spec': [frameworkSpec] },
   };
   const program = ts.createProgram([specPath], options);

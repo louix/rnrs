@@ -6,10 +6,11 @@
 //   thread the first time JS requires `RnrRuntime`; it binds `globalThis.__rnrRuntime` to
 //   this instance's scope.
 // - invalidate tears down every adapter of the scope without touching JSI. On React Native
-//   0.83.1 (bridgeless) RCTInstance -invalidate runs it from a block on the JS thread:
-//   RCTTurboModuleManager -invalidate dispatches it to this module's method queue and blocks
-//   the JS thread until it returns (10 s timeout), before the ReactInstance (runtime
-//   scheduler, then runtime) is destroyed on the JS thread. See docs/ios.md.
+//   0.83.1 (bridgeless; the 0.88.0 source keeps this order) RCTInstance -invalidate runs it
+//   from a block on the JS thread: RCTTurboModuleManager -invalidate dispatches it to this
+//   module's method queue and blocks the JS thread until it returns (10 s timeout), before
+//   the ReactInstance (runtime scheduler, then runtime) is destroyed on the JS thread. See
+//   docs/ios.md.
 //
 // Correctness does not depend on that ordering: the scope is shared, registration and
 // invalidation linearize on its lock, and an installer that runs after invalidation finds

@@ -34,6 +34,9 @@ export interface LifecycleStats {
   drainsPosted: number;
   drainsRun: number;
   drainsSkipped: number;
+  /** Posted drain tasks destroyed without running (React Native's scheduler cleared its
+   *  queue); the host posts again (rnr-core Host::monitor_delivery). */
+  drainsDropped: number;
   /** Device wall clock (ms) of the latest scope invalidation. */
   lastInvalidateAtMs: number;
   /** Runtimes that installed the bindings in this process (survives reloads). */

@@ -44,12 +44,21 @@ const busyWait = (ms: number) => {
 };
 
 async function report(record: object) {
-  const response = await fetch(COLLECTOR, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(record),
-  });
-  if (!response.ok) throw new Error(`collector returned ${response.status}`);
+  try {
+    const response = await fetch(COLLECTOR, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(record),
+    });
+    if (!response.ok) throw new Error(`collector returned ${response.status}`);
+  } catch (error) {
+    // Logged so a lost report is distinguishable from a step that never finished (the
+    // runner keeps logcat on failure).
+    console.log(
+      'RNR_REPORT_FAILED ' + JSON.stringify({ type: (record as any).type, error: String(error) }),
+    );
+    throw error;
+  }
 }
 
 interface Step {
@@ -180,21 +189,41 @@ async function runStep(step: Step, update: (message: string) => void): Promise<b
       retained.push(counter);
       const started = Date.now();
       const promise = counter.addLater(1, step.ms, false);
+      // Bounded wait lines (15 s, 60 s; the runner foregrounds at ~6.5 s): if the operation
+      // never settles, they show whether Rust work is pending (stats.pending), the outcome
+      // is queued (stats.queued) with a drain outstanding or lost (lifecycle drain
+      // counters), or nothing is logged because the JS thread is stuck.
+      const waits = [15_000, 60_000].map((ms) =>
+        setTimeout(
+          () =>
+            console.log(
+              'RNR_BG_WAIT ' +
+                JSON.stringify({ elapsedMs: Date.now() - started, ...snapshot(main) }),
+            ),
+          ms,
+        ),
+      );
       await report({ type: 'bg-armed', ...snapshot(main), generation: main.generation });
       let outcome: string;
       try {
         outcome = `resolved ${await promise}`;
       } catch (e: any) {
         outcome = `rejected ${e.code}`;
+      } finally {
+        waits.forEach(clearTimeout);
       }
-      await report({
+      const result = {
         type: 'bg-result',
         outcome,
         elapsedMs: Date.now() - started,
         at: Date.now(),
         ...snapshot(main),
         generation: main.generation,
-      });
+      };
+      // In logcat before the report is sent while the app is backgrounded: if bg-result
+      // never reaches the runner, this shows whether the operation settled.
+      console.log('RNR_BG_RESULT ' + JSON.stringify(result));
+      await report(result);
       return true;
     }
     case 'http-arm': {

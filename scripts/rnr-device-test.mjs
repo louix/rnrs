@@ -606,6 +606,21 @@ try {
   expect(result.errors.length === 0, `app reported ${result.errors.length} step errors`);
 } catch (error) {
   failures.push(String(error?.stack ?? error));
+  // Keep the evidence of a failed run (the success path records these above).
+  for (const [key, args] of [
+    ['rnrLog', ['logcat', '-d', '-s', 'rnr:*', 'ReactNativeJS:*', 'AndroidRuntime:*']],
+    ['crashLog', ['logcat', '-d', '-b', 'crash']],
+    // The app reports through these ports; a run that lost them cannot deliver records.
+    ['adbReverse', ['reverse', '--list']],
+    ['adbState', ['get-state']],
+  ]) {
+    try {
+      result[key] ??= adb(...args);
+    } catch (e) {
+      result[key] = `unavailable: ${e}`;
+    }
+  }
+  result.records = records;
 } finally {
   server.close();
   httpServer.closeAllConnections();

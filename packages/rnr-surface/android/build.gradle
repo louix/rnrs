@@ -12,7 +12,7 @@ def ext(name, fallback) {
 
 android {
   namespace "dev.rustjsilab.rnr.surface"
-  compileSdk ext("compileSdkVersion", 36)
+  compileSdk ext("compileSdkVersion", 37)
   if (rootProject.ext.has("buildToolsVersion")) buildToolsVersion rootProject.ext.buildToolsVersion
   defaultConfig {
     minSdkVersion ext("minSdkVersion", 24)

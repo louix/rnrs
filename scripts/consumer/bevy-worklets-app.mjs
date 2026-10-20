@@ -21,8 +21,8 @@ const status = capture('git', ['status', '--porcelain=v1', '--untracked-files=al
 if (status) throw new Error('commit source before building this evidence fixture');
 mkdirSync(out, { recursive: true });
 run('node', ['scripts/pack.mjs']);
-const template = path.join(out, 'react-native-community-template-0.83.1.tgz');
-if (!existsSync(template)) run('npm', ['pack', '@react-native-community/template@0.83.1'], out);
+const template = path.join(out, 'react-native-community-template-0.88.0.tgz');
+if (!existsSync(template)) run('npm', ['pack', '@react-native-community/template@0.88.0'], out);
 const unpack = path.join(out, 'bevy-worklets-template');
 mkdirSync(unpack, { recursive: true });
 run('tar', ['-xzf', template, '-C', unpack]);
@@ -35,8 +35,8 @@ writeFileSync(
   readFileSync(gradle, 'utf8').replace('minSdkVersion = 24', 'minSdkVersion = 26'),
 );
 const pins = [
-  'react-native-worklets@0.12.2',
-  'react-native-reanimated@4.6.0',
+  'react-native-worklets@0.13.0',
+  'react-native-reanimated@4.7.1',
   'react-native-gesture-handler@3.3.0',
 ];
 run(

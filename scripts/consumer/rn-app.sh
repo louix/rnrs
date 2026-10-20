@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Clean React Native consumer (inside `nix develop`): the pristine RN 0.83.1 community
+# Clean React Native consumer (inside `nix develop`): the pristine RN 0.88.0 community
 # template, plus only JS changes (App.tsx, smoke.ts, the vectors JSON) and `npm install` of
 # the packed tarballs. No native file of the app is edited; this script verifies that its
 # android/ and ios/ trees are byte-identical to the template after the build.
@@ -16,9 +16,9 @@ NAME="${NAME:-rn-app}"
 C="$ROOT/.generated/consumer"
 APP="$C/$NAME"
 REF="$C/$NAME-template"
-TEMPLATE="$C/react-native-community-template-0.83.1.tgz"
+TEMPLATE="$C/react-native-community-template-0.88.0.tgz"
 mkdir -p "$C"
-[ -f "$TEMPLATE" ] || (cd "$C" && npm pack @react-native-community/template@0.83.1 >/dev/null)
+[ -f "$TEMPLATE" ] || (cd "$C" && npm pack @react-native-community/template@0.88.0 >/dev/null)
 echo "template sha256: $(sha256sum "$TEMPLATE" | cut -d' ' -f1)"
 # Provenance of the sources packed below (recorded in the build record): the commit and the
 # full working-tree state, including staged and untracked files.
@@ -115,7 +115,7 @@ grep -q "rnr-android.Cargo.lock is missing" "$C/$NAME-locked-missing.log"
 echo "relocated consumer built with -Prnr.locked=true; a missing lock was refused"
 # Recorded for the smoke result (scripts/consumer/rn-smoke.mjs adds it to its JSON).
 cat > "$C/$NAME.build.json" <<JSON
-{"template": "@react-native-community/template@0.83.1", "templateSha256": "$(sha256sum "$TEMPLATE" | cut -d' ' -f1)",
+{"template": "@react-native-community/template@0.88.0", "templateSha256": "$(sha256sum "$TEMPLATE" | cut -d' ' -f1)",
  "nativeTreesIdenticalToTemplate": $([ -n "$ANDROID_DIFF" ] && echo '["ios"]' || echo '["android", "ios"]'), "extraNativeOrRustSources": [], "modules": "$MODULES",
  "lockCreated": true, "relocatedLockedBuild": "ok", "missingLockRefused": true, "cmakeWithoutBundleWarns": true}
 JSON

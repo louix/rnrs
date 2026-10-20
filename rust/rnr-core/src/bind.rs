@@ -713,6 +713,15 @@ impl<N: Notify + MaybeSend + 'static> Adapter<N> {
         self.host.cancel(id)
     }
 
+    /// Opts this generation's host into posting lost wakes again (`Host::monitor_delivery`).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn monitor_delivery(&self, timer: &'static dyn crate::Timer)
+    where
+        N: Send,
+    {
+        self.host.monitor_delivery(timer);
+    }
+
     /// Stops admission and cancels work (`Host::teardown`), then retires the resources the
     /// module registered with this generation's `TeardownScope`. Idempotent; never blocks
     /// (`Retire` implementations only close and notify).

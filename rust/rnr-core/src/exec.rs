@@ -14,7 +14,9 @@ mod tokio_adapter {
     /// Spawns onto a Tokio runtime, so Tokio timers and I/O work inside operations.
     ///
     /// `external` borrows an application-owned runtime through its handle and never shuts
-    /// it down. `owned` creates a runtime owned by the bindings; it is shut down without
+    /// it down; that runtime must have its time driver enabled (`enable_time`/`enable_all`)
+    /// if the spawner is used as a host's delivery-monitor `Timer`, or the monitor's sleep
+    /// panics and that host's monitor stops. `owned` creates a runtime owned by the bindings; it is shut down without
     /// blocking (`shutdown_background`) when the last spawner clone is dropped. Tasks
     /// dropped by shutdown report `OpError::Lost` through their tickets.
     #[derive(Clone)]
@@ -55,6 +57,17 @@ mod tokio_adapter {
     impl Spawn for TokioSpawner {
         fn spawn(&self, task: Pin<Box<dyn Future<Output = ()> + Send + 'static>>) {
             drop(self.handle.spawn(task));
+        }
+    }
+
+    /// The delivery monitor's timer (`Host::monitor_delivery`). An `external` runtime must
+    /// have its time driver enabled; `owned` runtimes do (`enable_all`).
+    impl crate::host::Timer for TokioSpawner {
+        fn after(&self, delay: std::time::Duration, task: Box<dyn FnOnce() + Send>) {
+            drop(self.handle.spawn(async move {
+                tokio::time::sleep(delay).await;
+                task();
+            }));
         }
     }
 }

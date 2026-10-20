@@ -19,10 +19,11 @@ import com.facebook.react.turbomodule.core.interfaces.TurboModuleWithJSIBindings
  *   requires `RnrRuntime`; the native installer binds `globalThis.__rnrRuntime` to this
  *   instance's runtime scope.
  * - [invalidate] tears down every adapter of the scope without touching JSI. On React Native
- *   0.83.1 Android (bridgeless) it is called by `ReactInstance.destroy()` on a background
- *   thread after the JS queue thread has been quit and joined and before the runtime is
- *   released; see docs/prototype.md. Correctness of the scope's ownership does not depend on
- *   that ordering: [RuntimeScopeOwner] serializes both calls.
+ *   0.83.1 Android (bridgeless; the 0.88.0 source keeps this order) it is called by
+ *   `ReactInstance.destroy()` on a background thread after the JS queue thread has been quit
+ *   and joined and before the runtime is released; see docs/prototype.md. Correctness of the
+ *   scope's ownership does not depend on that ordering: [RuntimeScopeOwner] serializes both
+ *   calls.
  */
 @ReactModule(name = RnrRuntimeModule.NAME)
 class RnrRuntimeModule(context: ReactApplicationContext) :

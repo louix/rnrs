@@ -81,7 +81,7 @@ Backgrounding, `UIScene` disconnection, `RCTHost` deallocation (it invalidates t
 
 - The installer is the bridgeless TurboModule API, `RCTTurboModuleWithJSIBindings` (`installJSIBindingsWithRuntime:callInvoker:`) called by `RCTTurboModuleManager`. No `RCTCxxBridge` or other legacy-bridge API is used.
 - The glue is Objective-C++, not Swift. Swift's opt-in main-actor-by-default isolation therefore does not apply. If Swift glue is ever added, invalidation must stay explicitly nonisolated and thread-safe: React Native calls it on the TurboModule manager's queue, not the main thread.
-- Newer React Native versions document `UIScene`/`SceneDelegate` app integration and experimental Swift Package Manager support. Neither is supported or tested here: the pod is CocoaPods-only, pinned to React Native 0.83.1.
+- Newer React Native versions document `UIScene`/`SceneDelegate` app integration and experimental Swift Package Manager support. The 0.88 template uses a `SceneDelegate`; surface attach/detach under it is not yet re-tested. Swift Package Manager is unsupported: the pod is CocoaPods-only, for React Native 0.88.0.
 
 ## Reproduce
 

@@ -8,14 +8,14 @@
     "@rnrs/example-vello2d": "file:vendor/rnrs-example-vello2d-0.1.0.tgz",
     "@rnrs/runtime": "file:vendor/rnrs-runtime-0.1.0.tgz",
     "@rnrs/surface": "file:vendor/rnrs-surface-0.1.0.tgz",
-    "react": "19.2.0",
-    "react-dom": "19.2.0",
-    "react-native-web": "0.21.2"
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-native-web": "0.21.4"
   },
   "devDependencies": {
-    "@types/react": "19.2.0",
-    "@types/react-dom": "19.2.0",
-    "react-native": "0.83.1",
-    "typescript": "5.9.3"
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "react-native": "0.88.0",
+    "typescript": "6.0.3"
   }
 }

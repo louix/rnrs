@@ -108,7 +108,7 @@ export async function runSmoke(): Promise<SmokeResult> {
         fail('nothing deleted');
       } catch (e: any) {
         if (!String(e.message).startsWith('busy:')) throw e;
-        await new Promise((resolve) => setTimeout(resolve, 50)); // a closed handle's release is in progress
+        await new Promise<void>((resolve) => setTimeout(resolve, 50)); // a closed handle's release is in progress
       }
     }
     fail('database stayed busy');

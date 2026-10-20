@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Worklets lab app (inside `nix develop`; docs/research/worklets-poc-plan.md). A throwaway RN
-# 0.83.1 community-template app with JS-only changes (fixtures/worklets-lab: App.tsx,
+# 0.88.0 community-template app with JS-only changes (fixtures/worklets-lab: App.tsx,
 # GestureLab.tsx, smoke.ts, babel.config.js), the packed @rnrs/runtime and lab probe module, and the pinned
-# react-native-worklets 0.12.2, react-native-reanimated 4.6.0 and react-native-gesture-handler
+# react-native-worklets 0.13.0, react-native-reanimated 4.7.1 and react-native-gesture-handler
 # 3.3.0 (exact versions, verified after install). Built with the native test hooks
 # (RNR_TEST_HOOKS=1). The app's android/ and ios/ trees must stay byte-identical to the
 # template's. @rnrs/runtime itself has no dependency on any of these packages.
@@ -13,10 +13,10 @@ NAME=worklets-lab
 C="$ROOT/.generated/consumer"
 APP="$C/$NAME"
 REF="$C/$NAME-template"
-TEMPLATE="$C/react-native-community-template-0.83.1.tgz"
-PINS=(react-native-worklets@0.12.2 react-native-reanimated@4.6.0 react-native-gesture-handler@3.3.0)
+TEMPLATE="$C/react-native-community-template-0.88.0.tgz"
+PINS=(react-native-worklets@0.13.0 react-native-reanimated@4.7.1 react-native-gesture-handler@3.3.0)
 mkdir -p "$C"
-[ -f "$TEMPLATE" ] || (cd "$C" && npm pack @react-native-community/template@0.83.1 >/dev/null)
+[ -f "$TEMPLATE" ] || (cd "$C" && npm pack @react-native-community/template@0.88.0 >/dev/null)
 echo "template sha256: $(sha256sum "$TEMPLATE" | cut -d' ' -f1)"
 node "$ROOT/scripts/pack.mjs"
 
@@ -60,7 +60,7 @@ unzip -p "$APP/android/app/build/outputs/apk/release/app-release.apk" lib/arm64-
 grep -a -q "routeProbeForTesting" "$C/librnr-$NAME.so" || { echo "librnr.so lacks the test hooks" >&2; exit 1; }
 versions=$(cd "$APP" && node -p "JSON.stringify(Object.fromEntries(['react-native','react-native-worklets','react-native-reanimated','react-native-gesture-handler'].map(n=>[n,require('./node_modules/'+n+'/package.json').version])))")
 cat > "$C/$NAME.build.json" <<JSON
-{"template": "@react-native-community/template@0.83.1", "templateSha256": "$(sha256sum "$TEMPLATE" | cut -d' ' -f1)",
+{"template": "@react-native-community/template@0.88.0", "templateSha256": "$(sha256sum "$TEMPLATE" | cut -d' ' -f1)",
  "nativeTreesIdenticalToTemplate": ["android", "ios"], "testHooks": true, "versions": $versions}
 JSON
 echo "APK: $APP/android/app/build/outputs/apk/release/app-release.apk"

@@ -12,7 +12,7 @@
 // synchronous stats() calls and logs `RNR_STALL {ms, before, after}` (scripts/consumer/
 // bevy-touch-device.mjs drags during it). The surface's window rect is logged as `RNR_SURFACE`.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, Pressable, SafeAreaView, Text, View } from 'react-native';
+import { Platform, Pressable, SafeAreaView, Text, View, type HostInstance } from 'react-native';
 import { SurfaceView } from '@rnrs/surface';
 import { bevy3DModule } from '@rnrs/example-bevy3d';
 import { runSmoke, type Layout } from './smoke';
@@ -40,7 +40,7 @@ const COLORS: [number, number, number][] = [
 // Logs `RNR_BUTTON {id, x, y, w, h}` (layout units, relative to the root view) so the device
 // driver can tap the overlay: uiautomator cannot dump a continuously animating window.
 function Button({ id, label, onPress }: { id: string; label: string; onPress: () => void }) {
-  const ref = useRef<View>(null);
+  const ref = useRef<HostInstance>(null);
   const reportLayout = () =>
     ref.current?.measureInWindow((x, y, w, h) => report('RNR_BUTTON', { id, x, y, w, h }));
   return (
@@ -69,7 +69,7 @@ export default function App() {
   const [color, setColor] = useState(0);
   const [speed, setSpeed] = useState(1);
   const [line, setLine] = useState('');
-  const surfaceRef = useRef<View>(null);
+  const surfaceRef = useRef<HostInstance>(null);
   const reportSurface = () =>
     surfaceRef.current?.measureInWindow((x, y, w, h) => report('RNR_SURFACE', { x, y, w, h }));
   const stall = () => {

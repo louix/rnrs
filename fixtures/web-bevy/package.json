@@ -4,8 +4,8 @@
   "private": true,
   "description": "Browser runtime dependencies of the web Bevy fixture (React DOM and React Native Web, as fixtures/web-paddle pins them). The Rust bundle's app manifest is bundle/package.json.",
   "dependencies": {
-    "react": "19.2.0",
-    "react-dom": "19.2.0",
-    "react-native-web": "0.21.2"
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-native-web": "0.21.4"
   }
 }

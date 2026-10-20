@@ -1,6 +1,6 @@
 # Packaging: framework package, author packages, per-app Rust bundles
 
-Experimental, 2026-10-19. Built from local tarballs only; nothing is published. Supported targets are Android (RN 0.83.1 bridgeless, tested on one Pixel 2 XL), iOS (RN 0.83.1 bridgeless, tested on one iPhone 12 Pro; see [iOS](ios.md)) and the browser (tested in headless Chromium). Targets are separated into known names and implemented ones; all three known names (`android`, `ios`, `web`) are now implemented, and the check remains so that a future name cannot be declared before its backend exists.
+Experimental, 2026-10-19. Built from local tarballs only; nothing is published. Targets are Android and iOS on RN 0.88.0 bridgeless (being validated; earlier device results are from 0.83.1 on one Pixel 2 XL and one iPhone 12 Pro; see [status](status.md) and [iOS](ios.md)) and the browser (tested in headless Chromium). Targets are separated into known names and implemented ones; all three known names (`android`, `ios`, `web`) are now implemented, and the check remains so that a future name cannot be declared before its backend exists.
 
 ## Who owns what
 
@@ -82,9 +82,9 @@ npm pack                                     # prepack: rnrs generate + rnrs pac
 ## Clean consumers
 
 - **React Native (`scripts/consumer/rn-app.sh`, then `rn-smoke.mjs`).**
-  - The app is the pristine `@react-native-community/template@0.83.1` (tarball sha256 checked), plus `App.tsx`, `smoke.ts`, the vectors JSON and `npm install` of the tarballs: `@rnrs/cli` and `@rnrs/runtime`, plus the selected modules (by default `@rnrs/example-blake3` and `@rnrs/example-counter`).
+  - The app is the pristine `@react-native-community/template@0.88.0` (tarball sha256 checked), plus `App.tsx`, `smoke.ts`, the vectors JSON and `npm install` of the tarballs: `@rnrs/cli` and `@rnrs/runtime`, plus the selected modules (by default `@rnrs/example-blake3` and `@rnrs/example-counter`).
   - After `assembleRelease`, the script requires `android/` and `ios/` to be byte-identical to the template, and no Rust or native sources elsewhere in the app.
-  - The Nix SDK only has build-tools 36, so the build passes a Gradle `--init-script` (`nix-sdk.init.gradle`) that sets library modules' `buildToolsVersion`. This is a property of the build environment, not an app edit.
+  - The Nix SDK only has build-tools 37.0.0, so the build passes a Gradle `--init-script` (`nix-sdk.init.gradle`) that sets library modules' `buildToolsVersion`. This is a property of the build environment, not an app edit.
   - The smoke installs the APK, reads `RNR_SMOKE` from logcat, and uninstalls the fixture app (`com.helloworld`).
 - **Vite (`scripts/consumer/web-app.sh`).** The app holds only `index.html`, `main.ts`, `smoke.ts` and the vectors. The build steps are `rnrs build --target web`, then `vite build` (6.4.4), then headless Chromium via `scripts/web-test.mjs` with `RNR_WEB_ROOT`. It checks that using a module before `initRnr` throws an actionable error.
 

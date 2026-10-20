@@ -16,6 +16,7 @@
 //   or the destructor fallback) is idempotent and never blocks.
 #include "RnrJsi.h"
 #include "RnrAbi.h"
+#include "RnrDelivery.h"
 #include "RnrRuntimeIdentityJsi.h"
 #include "RnrWorklets.h"
 #include "Utf8Encoder.h"
@@ -473,35 +474,52 @@ void Adapter::drain(jsi::Runtime& rt) {
   }
 }
 
-// Owned by Rust's notifier; freed through release() exactly once.
+// Owned by Rust's notifier; freed through release() exactly once. `current` is the latest
+// post's delivery state: replaced by notify and read by deliveryOf, both called by Rust
+// with its host lock held (so they never race each other).
 struct NotifyContext {
   std::shared_ptr<react::CallInvoker> invoker;
   std::weak_ptr<Adapter> adapter;
+  std::shared_ptr<DeliveryState> current;
 };
 
-// Called by Rust (from any thread): must not unwind.
+// Called by Rust (from any thread, under its host lock): must not unwind.
 void notifyFromAnyThread(void* raw) noexcept {
   auto* ctx = static_cast<NotifyContext*>(raw);
   // Only a weak reference crosses threads; the adapter is locked on the JS thread.
   noteDrainPosted();
   try {
-  ctx->invoker->invokeAsync([weak = ctx->adapter](jsi::Runtime& rt) {
-    // No exception may cross into the scheduler.
-    try {
-      // Checked here, on the JS thread, not only before enqueueing.
-      auto adapter = weak.lock();
-      bool open = adapter && adapter->alive.load() && !adapter->scope->invalidated();
-      noteDrainRun(open);
-      if (open) adapter->drain(rt);
-    } catch (const std::exception& e) {
-      platform::log(platform::LogLevel::Error, "drain failed: %s", e.what());
-    } catch (...) {
-      platform::log(platform::LogLevel::Error, "drain failed with a non-standard exception");
-    }
-  });
+    // The closure owns the guard (every std::function copy shares it); this context keeps
+    // only the state. A closure the scheduler destroys unrun marks it Dropped (RnrDelivery.h).
+    auto post = makeDrainPost();
+    ctx->current = post.state;
+    ctx->invoker->invokeAsync([weak = ctx->adapter, guard = std::move(post.guard)](jsi::Runtime& rt) {
+      guard->run([&] {
+        // No exception may cross into the scheduler.
+        try {
+          // Checked here, on the JS thread, not only before enqueueing.
+          auto adapter = weak.lock();
+          bool open = adapter && adapter->alive.load() && !adapter->scope->invalidated();
+          noteDrainRun(open);
+          if (open) adapter->drain(rt);
+        } catch (const std::exception& e) {
+          platform::log(platform::LogLevel::Error, "drain failed: %s", e.what());
+        } catch (...) {
+          platform::log(platform::LogLevel::Error, "drain failed with a non-standard exception");
+        }
+      });
+    });
   } catch (...) {
+    // The previous state (if any) stays current; the host's monitor sees it and posts again.
     platform::log(platform::LogLevel::Error, "posting a drain failed");
   }
+}
+
+// Called by Rust under its host lock: only reads an atomic. No post yet reads as Done (the
+// host only asks while a wake is posted, so that means the post itself failed).
+uint8_t deliveryOf(void* raw) noexcept {
+  auto* ctx = static_cast<NotifyContext*>(raw);
+  return ctx->current ? ctx->current->load() : kDeliveryDone;
 }
 
 void releaseContext(void* raw) noexcept { delete static_cast<NotifyContext*>(raw); }
@@ -529,7 +547,7 @@ jsi::Object installModuleAdapter(
   adapter->module = module;
   adapter->runtime.emplace(bindRuntime(rt));
   auto* ctx = new NotifyContext{std::move(invoker), adapter};
-  adapter->rust = rnr_adapter_new(module, static_cast<uint32_t>(maxInFlight), notifyFromAnyThread, releaseContext, ctx, error, sizeof error);
+  adapter->rust = rnr_adapter_new(module, static_cast<uint32_t>(maxInFlight), notifyFromAnyThread, deliveryOf, releaseContext, ctx, error, sizeof error);
   if (!adapter->rust) throw jsi::JSError(rt, makeError(rt, 2, error));  // release() already freed ctx
   adapter->generation = rnr_adapter_generation(adapter->rust);
   // The scope observes the adapter weakly; the host functions below own it. If the scope

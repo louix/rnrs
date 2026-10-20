@@ -21,7 +21,7 @@ impl rnr_interface::XorModule for Module {
 xorModule().xor(bytes.buffer, 7);
 ```
 
-**Experimental, unpublished.** Packages are local tarballs. Only React Native 0.83.1 is tested. Functional tests: Pixel 2 XL (Android 11), Pixel 8a (GrapheneOS, Android 17; regression smokes), iPhone 12 Pro, headless Chromium. Benchmarks: Pixel 2 XL and iPhone 12 Pro only. Not for production.
+**Experimental, unpublished.** Packages are local tarballs. Baseline: React Native 0.88.0 (Expo SDK 58 pins); Android is validated on it, iOS and Expo validation is in progress ([status](docs/status.md)). Functional tests: Pixel 2 XL (Android 11), Pixel 8a (GrapheneOS, Android 17; regression smokes), iPhone 12 Pro, headless Chromium. Benchmarks: Pixel 2 XL and iPhone 12 Pro only. Not for production.
 
 - [Quickstart](docs/quickstart.md)
 - [Status and limits](docs/status.md)

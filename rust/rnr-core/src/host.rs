@@ -3,7 +3,8 @@ use std::fmt;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, Weak};
+use std::time::Duration;
 
 use crate::budget::{Budget, BudgetStats};
 use crate::cancel::{lock, CancelToken};
@@ -15,7 +16,43 @@ use crate::cancel::{lock, CancelToken};
 /// `Host::teardown` returns.
 pub trait Notify {
     fn notify(&self);
+
+    /// What became of the latest wake `notify` posted, if the platform can observe it.
+    /// Called with the host lock held: it must only read state (no blocking, no call back
+    /// into the host). Default: not observable, so the host never posts a wake again.
+    fn delivery(&self) -> Delivery {
+        Delivery::Unobserved
+    }
 }
+
+/// The fate of the latest posted wake (`Notify::delivery`). Only `Dropped`, and `Done` while
+/// the outcome queue was not emptied, make a monitored host post again; `Queued` and
+/// `Running` never do (the JS thread may just be busy).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Delivery {
+    /// The platform cannot tell.
+    Unobserved,
+    /// Posted, not started.
+    Queued,
+    /// The drain callback is executing.
+    Running,
+    /// The drain callback returned (normally or after catching an error).
+    Done,
+    /// The callback was destroyed without running (for example React Native 0.88's
+    /// RuntimeScheduler clears its queue when another task throws).
+    Dropped,
+}
+
+/// Delayed callbacks for the delivery monitor (`Host::monitor_delivery`). A backend opts in
+/// by providing one; hosts without it never post a wake again.
+pub trait Timer: Send + Sync {
+    fn after(&self, delay: Duration, task: Box<dyn FnOnce() + Send>);
+}
+
+/// First monitor check after a wake is posted, and the first re-post backoff.
+pub const DELIVERY_CHECK_FIRST: Duration = Duration::from_millis(250);
+/// Upper bound of the monitor's check interval and re-post backoff.
+pub const DELIVERY_CHECK_MAX: Duration = Duration::from_secs(4);
 
 /// A multithreaded executor. Futures must be `Send`.
 pub trait Spawn {
@@ -96,6 +133,9 @@ pub struct HostStats {
     /// Results that arrived after cancellation or teardown and were dropped unconverted.
     pub discarded: u64,
     pub lost: u64,
+    /// Wakes posted again because the previous one was dropped, or its drain returned
+    /// without emptying the queue.
+    pub redelivered: u64,
 }
 
 /// Operation registry for one JS runtime instance (one adapter generation).
@@ -128,10 +168,23 @@ struct State<R, N> {
     slots: HashMap<u64, u8>,
     outcomes: VecDeque<Outcome<R>>,
     notify: Option<N>,
+    /// A wake was posted and no drain has yet observed the outcome queue empty. Cleared by
+    /// that drain call under this lock, so a push either sees it cleared and posts, or lands
+    /// before the drain's observation and is drained by it.
+    posted: bool,
+    /// Schedules one delivery-monitor check after a delay (`Host::monitor_delivery`).
+    monitor: Option<Arc<dyn Fn(Duration) + Send + Sync>>,
+    /// A monitor check is scheduled; at most one per host.
+    monitor_armed: bool,
+    /// Delay before the next monitor check.
+    check_after: Duration,
+    /// Consecutive re-posts without the queue being emptied (backoff exponent).
+    failures: u32,
     admitted: u64,
     delivered: u64,
     discarded: u64,
     lost: u64,
+    redelivered: u64,
 }
 
 static NEXT_GENERATION: AtomicU64 = AtomicU64::new(1);
@@ -165,10 +218,16 @@ impl<R, N: Notify> Host<R, N> {
                     slots: HashMap::new(),
                     outcomes: VecDeque::new(),
                     notify: Some(notify),
+                    posted: false,
+                    monitor: None,
+                    monitor_armed: false,
+                    check_after: DELIVERY_CHECK_FIRST,
+                    failures: 0,
                     admitted: 0,
                     delivered: 0,
                     discarded: 0,
                     lost: 0,
+                    redelivered: 0,
                 }),
             }),
         }
@@ -258,6 +317,14 @@ impl<R, N: Notify> Host<R, N> {
         for outcome in &drained {
             state.release(outcome.id, QUEUED);
         }
+        if state.outcomes.is_empty() {
+            // The acknowledgement: this drain observed the queue empty, under the lock.
+            state.posted = false;
+            state.failures = 0;
+            // A check still scheduled from this wake must not carry its grown interval
+            // into the next wake (it reschedules with this value).
+            state.check_after = DELIVERY_CHECK_FIRST;
+        }
         drained
     }
 
@@ -309,7 +376,56 @@ impl<R, N: Notify> Host<R, N> {
             delivered: state.delivered,
             discarded: state.discarded,
             lost: state.lost,
+            redelivered: state.redelivered,
         }
+    }
+}
+
+impl<R: Send + 'static, N: Notify + Send + 'static> Host<R, N> {
+    /// Opts this host into posting lost wakes again. While a posted wake is not
+    /// acknowledged (no drain has observed the queue empty), one monitor check at a time
+    /// runs on `timer`. A `Queued` or `Running` wake is left alone; a `Dropped` wake, or a
+    /// `Done` drain that left outcomes queued, is posted again with backoff (250 ms doubling
+    /// to 4 s). So at most one wake is outstanding, nothing is scheduled while nothing is
+    /// posted, and checks stop at teardown. The monitor holds the host weakly.
+    pub fn monitor_delivery(&self, timer: &'static dyn Timer) {
+        let weak = Arc::downgrade(&self.inner);
+        let schedule: Arc<dyn Fn(Duration) + Send + Sync> = Arc::new(move |delay| {
+            let weak = weak.clone();
+            timer.after(delay, Box::new(move || Self::check_delivery(&weak)));
+        });
+        let mut state = lock(&self.inner.state);
+        state.monitor = Some(schedule);
+        if state.posted {
+            state.arm_monitor();
+        }
+    }
+
+    fn check_delivery(weak: &Weak<Inner<R, N>>) {
+        let Some(inner) = weak.upgrade() else { return };
+        let mut state = lock(&inner.state);
+        state.monitor_armed = false;
+        if !state.open || !state.posted {
+            return;
+        }
+        let Some(delivery) = state.notify.as_ref().map(Notify::delivery) else { return };
+        match delivery {
+            Delivery::Unobserved => return,
+            Delivery::Queued | Delivery::Running => {
+                state.check_after = (state.check_after * 2).min(DELIVERY_CHECK_MAX);
+            }
+            Delivery::Dropped | Delivery::Done => {
+                state.failures = state.failures.saturating_add(1);
+                state.redelivered += 1;
+                if let Some(notify) = &state.notify {
+                    notify.notify();
+                }
+                let exponent = (state.failures - 1).min(4);
+                state.check_after = (DELIVERY_CHECK_FIRST * (1 << exponent)).min(DELIVERY_CHECK_MAX);
+            }
+        }
+        let delay = state.check_after;
+        state.arm_monitor_after(delay);
     }
 }
 
@@ -337,7 +453,24 @@ impl<R, N: Notify> State<R, N> {
         if was_empty {
             if let Some(notify) = &self.notify {
                 notify.notify();
+                self.posted = true;
+                self.arm_monitor();
             }
+        }
+    }
+
+    /// Schedules the first check for a fresh wake, unless a check is already scheduled.
+    fn arm_monitor(&mut self) {
+        if !self.monitor_armed {
+            self.check_after = DELIVERY_CHECK_FIRST;
+            self.arm_monitor_after(DELIVERY_CHECK_FIRST);
+        }
+    }
+
+    fn arm_monitor_after(&mut self, delay: Duration) {
+        if let Some(schedule) = &self.monitor {
+            self.monitor_armed = true;
+            schedule(delay);
         }
     }
 }

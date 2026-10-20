@@ -1,5 +1,5 @@
 // Worklets lab app (docs/research/worklets-poc-plan.md): runs the staged checks in smoke.ts
-// and logs one RNR_WORKLETS line. JS only; the native trees are the RN 0.83.1 template's.
+// and logs one RNR_WORKLETS line. JS only; the native trees are the RN 0.88.0 template's.
 import React, { useEffect, useState } from 'react';
 import { SafeAreaView, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';

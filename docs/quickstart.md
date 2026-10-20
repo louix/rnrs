@@ -1,6 +1,6 @@
 # Quickstart: a Rust module from a TypeScript spec
 
-You write a TypeScript spec and Rust, and nothing else: no Swift, Kotlin, C++ or JSI. Everything here is experimental and unpublished. Packages exist only as local tarballs, and React Native 0.83.1 is the only tested version. Read [status](status.md) first.
+You write a TypeScript spec and Rust, and nothing else: no Swift, Kotlin, C++ or JSI. Everything here is experimental and unpublished. Packages exist only as local tarballs, and React Native 0.88.0 is the only targeted version (validation in progress; see [status](status.md)). Read [status](status.md) first.
 
 How each step was checked:
 
@@ -17,7 +17,7 @@ How each step was checked:
 | Node 24, npm | everything |
 | rustup with Rust **1.90.0** | any Rust build (the only tested toolchain) |
 | target `wasm32-unknown-unknown`, `wasm-bindgen` CLI **0.2.129** | web |
-| target `aarch64-linux-android`, JDK 17, Android SDK 36 (build-tools 36.0.0), NDK 27.1.12297006, CMake 3.22.1 | Android |
+| target `aarch64-linux-android`, JDK 17, Android SDK 37 (build-tools 37.0.0), NDK 27.1.12297006, CMake 3.22.1 | Android |
 | macOS, Xcode (26.6 tested), CocoaPods, targets `aarch64-apple-ios` and `aarch64-apple-ios-sim` | iOS |
 
 The repo's flake shells provide the system tools, but **not** Rust toolchains or targets:
@@ -179,7 +179,7 @@ The build stops before compiling if the `wasm32-unknown-unknown` target is missi
 
 ### Android ✅ `nix develop "$REPO"`
 
-1. Create an RN **0.83.1** app. The scripts unpack `@react-native-community/template@0.83.1`; `npx @react-native-community/cli@20.0.2 init App --version 0.83.1` should work too ⚠.
+1. Create an RN **0.88.0** app. The scripts unpack `@react-native-community/template@0.88.0`; `npx @react-native-community/cli@20.2.0 init App --version 0.88.0` should work too ⚠.
 2. Install the tarballs and build:
 
 ```sh
@@ -189,7 +189,7 @@ cd android && ./gradlew --no-daemon --init-script "$REPO/scripts/consumer/nix-sd
   assembleRelease -PreactNativeArchitectures=arm64-v8a
 ```
 
-- **The init script** is needed only with the Nix SDK, which has only build-tools 36. It sets library modules' `buildToolsVersion` and does not edit the app. With a normal SDK that has the template's default build-tools, leave it out ⚠.
+- **The init script** is needed only with the Nix SDK, which has only build-tools 37.0.0. It sets library modules' `buildToolsVersion` and does not edit the app. With a normal SDK that has the template's default build-tools, leave it out ⚠.
 - **Tools:** the framework's Gradle task runs `node` and `cargo`. If they are not on the Gradle process's `PATH` (Android Studio started outside your shell), set `NODE_BINARY` or `-Prnr.node=/absolute/path/to/node`, and `RNR_CARGO`. A relative path is rejected. With `RNR_CARGO`, also set `RUSTC` to the matching `rustc`, or the missing-target check is skipped and cargo reports it instead. A missing `aarch64-linux-android` target is reported before compiling, with the `rustup target add` command.
 - **ABIs:** only arm64 is tested.
 
@@ -200,7 +200,7 @@ Not rerun for this flow. These are the commands of `scripts/consumer/ios-app.sh`
 ```sh
 cd "$WORK/App"
 npm install "$PACK/rnrs-cli-0.1.0.tgz" "$PACK/rnrs-runtime-0.1.0.tgz" "$WORK/crc/demo-crc-0.1.0.tgz"   # needs "ios" in the module's targets
-cd ios && RCT_USE_RN_DEP=1 RCT_USE_PREBUILT_RNCORE=1 pod install           # prebuilt core: Xcode 26.4+ rejects RN 0.83.1's fmt
+cd ios && RCT_USE_RN_DEP=1 RCT_USE_PREBUILT_RNCORE=1 pod install           # RN's prebuilt core and dependencies (as Expo uses)
 ```
 
 - **Building:** use Xcode, or `xcodebuild` from the same shell. A pod script phase builds the Rust bundle.

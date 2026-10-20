@@ -14,7 +14,8 @@
 //    cancel or the detach reset), nothing stays pressed, and a new drag works after reattach.
 // 5. JS stall: the overlay's Stall JS button blocks JS for 1.5 s between two synchronous
 //    stats() calls; a drag during it reaches Rust and rotates the cube (RNR_STALL).
-// Screen pixels = layout × (wm density / 160), plus the status bar for y (bevy-device-test.mjs).
+// Screen pixels = layout × (wm density / 160), plus the status bar for y unless the app is
+// edge-to-edge (the 0.88 template default; bevy-device-test.mjs).
 //
 // Writes results/bevy3d/runs/<UTC>-<serial>-touch/{bevy-touch.json,*.png,logcat.txt}; never
 // overwrites results. Uninstalls the fixture app (com.helloworld) afterwards.
@@ -98,7 +99,13 @@ function screenGeometry() {
   const bar = /ITYPE_STATUS_BAR, mFrame=\[0,0\]\[\d+,(\d+)\]/.exec(
     adb('shell', 'dumpsys', 'window', 'windows'),
   );
-  return { scale: dpi / 160, statusBarPx: bar ? Number(bar[1]) : 0 };
+  const statusBarPx = bar ? Number(bar[1]) : 0;
+  // RN 0.88's template enables edge-to-edge: the root view then starts at the top of the
+  // screen and layout y needs no status-bar offset (edgeToEdgeEnabled=false starts below it).
+  const edgeToEdge = /^edgeToEdgeEnabled=true$/m.test(
+    readFileSync(path.join(ROOT, '.generated/consumer', NAME, 'android/gradle.properties'), 'utf8'),
+  );
+  return { scale: dpi / 160, statusBarPx, edgeToEdge, topPx: edgeToEdge ? 0 : statusBarPx };
 }
 /** Taps the centre of the button `id` from its latest RNR_BUTTON layout line. */
 function tap(id) {
@@ -109,7 +116,7 @@ function tap(id) {
   const g = (result.screen ??= screenGeometry());
   const [x, y] = [
     Math.round((b.x + b.w / 2) * g.scale),
-    Math.round((b.y + b.h / 2) * g.scale + g.statusBarPx),
+    Math.round((b.y + b.h / 2) * g.scale + g.topPx),
   ];
   adb('shell', 'input', 'tap', String(x), String(y));
   return { layout: b, x, y };
@@ -205,7 +212,7 @@ try {
   const g = (result.screen = screenGeometry());
   const rect = await waitFor(() => logLines('RNR_SURFACE').at(-1), 5000, 'RNR_SURFACE');
   const cx = Math.round((rect.x + rect.w / 2) * g.scale),
-    cy = Math.round((rect.y + rect.h / 2) * g.scale + g.statusBarPx);
+    cy = Math.round((rect.y + rect.h / 2) * g.scale + g.topPx);
   const half = Math.round(rect.w * g.scale * 0.3);
   result.surface = { layout: rect, centerPx: [cx, cy], dragHalfPx: half };
 

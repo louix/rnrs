@@ -71,12 +71,16 @@ function tap(id) {
   const bar = /ITYPE_STATUS_BAR, mFrame=\[0,0\]\[\d+,(\d+)\]/.exec(
     adb('shell', 'dumpsys', 'window', 'windows'),
   );
+  // RN 0.88's template is edge-to-edge: layout y then needs no status-bar offset.
+  const edgeToEdge = /^edgeToEdgeEnabled=true$/m.test(
+    readFileSync(path.join(app, 'android/gradle.properties'), 'utf8'),
+  );
   adb(
     'shell',
     'input',
     'tap',
     String(Math.round(((b.x + b.w / 2) * dpi) / 160)),
-    String(Math.round(((b.y + b.h / 2) * dpi) / 160 + (bar ? Number(bar[1]) : 0))),
+    String(Math.round(((b.y + b.h / 2) * dpi) / 160 + (bar && !edgeToEdge ? Number(bar[1]) : 0))),
   );
 }
 try {

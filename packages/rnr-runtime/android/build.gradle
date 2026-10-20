@@ -23,7 +23,7 @@ def diagnostics = rootProject.findProperty("rnr.diagnostics") == "true"
 
 android {
   namespace "dev.rustjsilab.rnr"
-  compileSdk ext("compileSdkVersion", 36)
+  compileSdk ext("compileSdkVersion", 37)
   ndkVersion ext("ndkVersion", "27.1.12297006")
   if (rootProject.ext.has("buildToolsVersion")) buildToolsVersion rootProject.ext.buildToolsVersion
 

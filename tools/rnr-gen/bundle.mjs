@@ -553,7 +553,7 @@ export const IOS_TRIPLES = {
   iphoneos: { arm64: 'aarch64-apple-ios' },
   iphonesimulator: { arm64: 'aarch64-apple-ios-sim', x86_64: 'x86_64-apple-ios' },
 };
-/** React Native 0.83's minimum iOS version, used when Xcode does not pass one. */
+/** React Native's minimum iOS version (15.1 in 0.83 through 0.88), when Xcode passes none. */
 export const IOS_DEPLOYMENT_TARGET = '15.1';
 
 /** The environment cargo runs in for iOS. An Xcode script phase exports hundreds of build

@@ -1,8 +1,8 @@
 // Build-environment adjustment (not an app change): the Nix Android SDK provides only
-// build-tools 36.0.0, while some template dependencies default to 35. Passed with
+// build-tools 37.0.0, while some template dependencies default to 35. Passed with
 // `--init-script`; the app's own Gradle files stay untouched.
 gradle.allprojects { project ->
   project.plugins.withId("com.android.library") {
-    project.android.buildToolsVersion = "36.0.0"
+    project.android.buildToolsVersion = "37.0.0"
   }
 }

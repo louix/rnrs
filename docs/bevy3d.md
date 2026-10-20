@@ -12,7 +12,7 @@ Opt in with `<SurfaceView surfaceKey={…} touchInput="rust" />` and `surface.en
 
 ## What the author writes
 
-`packages/bevy3d` (`@rnrs/example-bevy3d`) is an ordinary module package: a TypeScript spec (`bevy3d.spec.ts`) and a Rust crate (`rust/`). No Kotlin, Java, C++, JSI or handwritten glue; the generated interface and JS wrapper come from `rnr-gen`. The consumer (`fixtures/bevy-consumer`) is the pristine RN 0.83.1 template plus `App.tsx`/`smoke.ts`.
+`packages/bevy3d` (`@rnrs/example-bevy3d`) is an ordinary module package: a TypeScript spec (`bevy3d.spec.ts`) and a Rust crate (`rust/`). No Kotlin, Java, C++, JSI or handwritten glue; the generated interface and JS wrapper come from `rnr-gen`. The consumer (`fixtures/bevy-consumer`) is the pristine RN template (0.88.0; device results from 0.83.1) plus `App.tsx`/`smoke.ts`.
 
 ```ts
 const scene = bevy3DModule().create();          // Rust starts the render thread

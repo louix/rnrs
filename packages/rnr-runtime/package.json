@@ -61,7 +61,7 @@
     "@rnrs/cli": "0.1.0"
   },
   "peerDependencies": {
-    "react-native": "0.83.1"
+    "react-native": "0.88.0"
   },
   "license": "UNLICENSED",
   "peerDependenciesMeta": {

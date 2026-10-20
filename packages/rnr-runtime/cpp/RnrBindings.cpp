@@ -1,4 +1,5 @@
 #include "RnrBindings.h"
+#include "RnrDelivery.h"
 #include "RnrJsi.h"
 #include "RnrRuntimeIdentityJsi.h"
 #include "RnrWorklets.h"
@@ -89,6 +90,7 @@ void writeLifecycleStats(jsi::Runtime& rt, jsi::Object& out) {
   set("drainsPosted", c.drainsPosted);
   set("drainsRun", c.drainsRun);
   set("drainsSkipped", c.drainsSkipped);
+  set("drainsDropped", drainsDroppedCounter().load());
   set("lastInvalidateAtMs", c.lastInvalidateAtMs);
   set("bindingsInstalled", c.bindingsInstalled);
   out.setProperty(rt, "lastInvalidateThread", jsi::String::createFromUtf8(rt, c.lastInvalidateThread));

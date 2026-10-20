@@ -17,7 +17,7 @@ node fixtures/web-paddle/build.mjs --test
 
 The build packs the local framework/module sources, installs their tarballs into this fixture, verifies the installed component/runtime against the current source, and uses the packed runtime generator. npm/package and Cargo locks are committed; generated tarballs, node_modules, copied game sources and build output are ignored. The initial Cargo lock is seeded from the checked W1 web lock (same Rust module/library dependency graph) and validated by a locked build.
 
-Exact fixture pins: React 19.2.0, React DOM 19.2.0, React Native Web 0.21.2. React Native 0.83.1 is a fixture dev dependency for native public TypeScript types and peer compatibility; browser bundling aliases react-native to RNWeb. No root React/RN pin changes. RNWeb's published peers accept React/DOM 19; React DOM's peer requires React ^19.2.0.
+Exact fixture pins: React 19.3.0, React DOM 19.3.0, React Native Web 0.21.4 (Expo SDK 58). React Native 0.88.0 is a fixture dev dependency for native public TypeScript types and peer compatibility; browser bundling aliases react-native to RNWeb. No root React/RN pin changes. RNWeb's published peers accept React/DOM 19; React DOM's peer requires React ^19.3.0.
 
 provenance.json records source-copy hashes, tarball/lock hashes and actual installed-package browser/native resolution. The browser bundle metafile must stay wholly inside this packaged consumer and include index.web.tsx, with no native Fabric component. No relative workspace runtime or generated-module import is permitted.
 

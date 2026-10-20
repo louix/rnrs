@@ -6,7 +6,7 @@ Experimental platform surfaces with Rust-owned rendering, lifecycle gates and op
 
 - **TypeScript** owns all application and game state and simulation. Every frame it submits a whole frame description.
 - **Rust** owns only rendering resources: the render thread, the raster context, the wgpu device and surface, and the latest submitted frame. It makes no game decisions.
-- **Framework** (`@rnrs/surface`, plus the runtime teardown hook in `rnr-core`) owns the platform glue: the Fabric component, the Android `SurfaceView`, JNI, and window lifetime. App and renderer authors write TypeScript and Rust only. The consumer app builds from the pristine RN 0.83.1 template with no native edits.
+- **Framework** (`@rnrs/surface`, plus the runtime teardown hook in `rnr-core`) owns the platform glue: the Fabric component, the Android `SurfaceView`, JNI, and window lifetime. App and renderer authors write TypeScript and Rust only. The consumer app builds from the pristine RN template (0.88.0; device results from 0.83.1) with no native edits.
 
 ## Packages and files
 

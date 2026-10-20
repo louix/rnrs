@@ -140,7 +140,7 @@ writeFileSync(
       packageLock: hash(path.join(fixture, 'package-lock.json')),
       cargoLock: hash(path.join(fixture, 'rnr-web.Cargo.lock')),
       packagedOnly: true,
-      pins: { react: '19.2.0', reactDOM: '19.2.0', reactNativeWeb: '0.21.2' },
+      pins: { react: '19.3.0', reactDOM: '19.3.0', reactNativeWeb: '0.21.4' },
     },
     null,
     2,

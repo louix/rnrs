@@ -15,8 +15,8 @@
     };
     android = pkgs.androidenv.composeAndroidPackages {
       toolsVersion = null;
-      platformVersions = [ "36" ];
-      buildToolsVersions = [ "36.0.0" ];
+      platformVersions = [ "37.0" ];
+      buildToolsVersions = [ "37.0.0" ];
       includeNDK = true;
       ndkVersions = [ "27.1.12297006" ];
       cmakeVersions = [ "3.22.1" ];
@@ -28,7 +28,7 @@
     ANDROID_HOME = "${android.androidsdk}/libexec/android-sdk";
     ANDROID_SDK_ROOT = "${android.androidsdk}/libexec/android-sdk";
     JAVA_HOME = "${pkgs.jdk17}";
-    GRADLE_OPTS = "-Dorg.gradle.project.android.aapt2FromMavenOverride=${android.androidsdk}/libexec/android-sdk/build-tools/36.0.0/aapt2";
+    GRADLE_OPTS = "-Dorg.gradle.project.android.aapt2FromMavenOverride=${android.androidsdk}/libexec/android-sdk/build-tools/37.0.0/aapt2";
   };
   # Browser Wasm prototype: wasm-bindgen CLI must match the crate pin (=0.2.129).
   web = pkgs.mkShell {

@@ -57,7 +57,7 @@
   "peerDependencies": {
     "@rnrs/runtime": "0.1.0",
     "react": "*",
-    "react-native": "0.83.1"
+    "react-native": "0.88.0"
   },
   "license": "UNLICENSED",
   "browser": "src/index.web.tsx"

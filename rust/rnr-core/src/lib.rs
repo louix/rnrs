@@ -68,5 +68,8 @@ pub mod diagnostics;
 
 pub use budget::{Budget, BudgetStats};
 pub use cancel::{CancelToken, Cancelled};
-pub use host::{AdmitError, Host, HostStats, Notify, OpError, Outcome, Spawn, SpawnLocal, TeardownReport, Ticket};
+pub use host::{
+    AdmitError, Delivery, Host, HostStats, Notify, OpError, Outcome, Spawn, SpawnLocal, TeardownReport, Ticket, Timer,
+    DELIVERY_CHECK_FIRST, DELIVERY_CHECK_MAX,
+};
 pub use native::{live_counts, live_counts_by_name, LiveCounts, Native};

@@ -22,7 +22,7 @@ use std::sync::OnceLock;
 
 use rnr_core::bind::{valid_length, Adapter, BindError, BytesError, Env, ErrorKind, Kind, MethodKind, ModuleDef, NativeBox, Spawner, UnwrapError, Val};
 use rnr_core::exec::TokioSpawner;
-use rnr_core::{Budget, Notify};
+use rnr_core::{Budget, Delivery, Notify};
 
 /// Why an adapter was torn down (diagnostics only; teardown itself is the same).
 pub const RNR_TEARDOWN_EXPLICIT: u32 = 0;
@@ -38,11 +38,15 @@ pub const RNR_TEARDOWN_REFUSED: u32 = 3;
 pub const RNR_EXECUTOR_BUDGET: usize = 32;
 
 pub type Callback = extern "C" fn(*mut c_void);
+/// Reports the latest posted wake's state (RnrDelivery.h: 0 queued, 1 running, 2 done,
+/// 3 dropped). Called under the host lock; only reads an atomic.
+pub type DeliveryCallback = extern "C" fn(*mut c_void) -> u8;
 
 /// Wakes the JS thread. The adapter guarantees `notify` may be called from any thread and
 /// only schedules work, and that `ctx` stays valid until `release` is called once.
 pub struct Notifier {
     notify: Callback,
+    delivery: DeliveryCallback,
     release: Callback,
     ctx: *mut c_void,
 }
@@ -55,6 +59,16 @@ impl Notify for Notifier {
     fn notify(&self) {
         (self.notify)(self.ctx)
     }
+
+    fn delivery(&self) -> Delivery {
+        match (self.delivery)(self.ctx) {
+            0 => Delivery::Queued,
+            1 => Delivery::Running,
+            2 => Delivery::Done,
+            3 => Delivery::Dropped,
+            _ => Delivery::Unobserved,
+        }
+    }
 }
 
 impl Drop for Notifier {
@@ -65,9 +79,13 @@ impl Drop for Notifier {
 
 /// Binding-owned Tokio runtime for the whole process. It outlives every JS runtime
 /// generation (including RN reloads) and is never shut down from the JS thread.
-fn spawner() -> Option<&'static Spawner> {
+fn tokio_spawner() -> Option<&'static TokioSpawner> {
     static RUNTIME: OnceLock<Option<TokioSpawner>> = OnceLock::new();
-    RUNTIME.get_or_init(|| TokioSpawner::owned(2).ok()).as_ref().map(|s| s as &'static Spawner)
+    RUNTIME.get_or_init(|| TokioSpawner::owned(2).ok()).as_ref()
+}
+
+fn spawner() -> Option<&'static Spawner> {
+    tokio_spawner().map(|s| s as &'static Spawner)
 }
 
 /// Shared by every adapter on that runtime, so it has the same (process) scope.
@@ -105,6 +123,11 @@ impl RnrAdapter {
     pub fn new(def: &'static ModuleDef, max_in_flight: usize, budget: Budget, notifier: Notifier) -> Result<Self, String> {
         let spawner = spawner().ok_or("failed to start the Tokio runtime")?;
         let adapter = Adapter::new(def, max_in_flight, budget, spawner, notifier)?;
+        // React Native 0.88's RuntimeScheduler can drop a queued drain task (it clears its
+        // queue when another task throws): post a lost wake again (rnr_core Host docs).
+        if let Some(timer) = tokio_spawner() {
+            adapter.monitor_delivery(timer);
+        }
         HOSTS_CREATED.fetch_add(1, Ordering::SeqCst);
         Ok(Self { adapter, torn_down: AtomicBool::new(false) })
     }
@@ -452,9 +475,10 @@ pub unsafe extern "C" fn rnr_module_find(
 /// As for `rnr_module_find`; `ctx` stays valid until `release` is called once.
 #[no_mangle]
 pub unsafe extern "C" fn rnr_adapter_new(
-    module: u32, max_in_flight: u32, notify: Callback, release: Callback, ctx: *mut c_void, error: *mut u8, error_cap: usize,
+    module: u32, max_in_flight: u32, notify: Callback, delivery: DeliveryCallback, release: Callback, ctx: *mut c_void,
+    error: *mut u8, error_cap: usize,
 ) -> *mut RnrAdapter {
-    let notifier = Notifier { notify, release, ctx };
+    let notifier = Notifier { notify, delivery, release, ctx };
     let Some(def) = modules().get(module as usize) else {
         write_message(error, error_cap, "unknown module index");
         return std::ptr::null_mut();
@@ -679,12 +703,15 @@ mod tests {
         static DEFS: [&ModuleDef; 1] = [&DEF];
 
         extern "C" fn noop(_: *mut c_void) {}
+        extern "C" fn queued(_: *mut c_void) -> u8 {
+            0
+        }
 
         fn new_adapter() -> (*mut RnrAdapter, Arc<Resource>) {
             register(&DEFS);
             let index = modules().iter().position(|d| d.name == DEF.name).expect("registered") as u32;
             let mut error = [0u8; 256];
-            let adapter = unsafe { rnr_adapter_new(index, 4, noop, noop, std::ptr::null_mut(), error.as_mut_ptr(), error.len()) };
+            let adapter = unsafe { rnr_adapter_new(index, 4, noop, queued, noop, std::ptr::null_mut(), error.as_mut_ptr(), error.len()) };
             assert!(!adapter.is_null());
             let resource = CREATED.lock().unwrap().last().cloned().expect("instantiated");
             (adapter, resource)
@@ -718,7 +745,7 @@ mod tests {
 
         #[test]
         fn a_failed_instantiate_retires_what_it_registered() {
-            let notifier = Notifier { notify: noop, release: noop, ctx: std::ptr::null_mut() };
+            let notifier = Notifier { notify: noop, delivery: queued, release: noop, ctx: std::ptr::null_mut() };
             assert!(RnrAdapter::new(&FAILING, 4, budget().clone(), notifier).is_err());
             let resource = FAILING_RESOURCE.lock().unwrap().clone().expect("registered");
             assert_eq!(resource.0.load(Ordering::SeqCst), 1);

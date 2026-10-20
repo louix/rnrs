@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Clean React Native iOS consumer (on a Mac, inside `nix develop .#ios`; Xcode from the
-# system): the pristine RN 0.83.1 community template, plus only JS changes (App.tsx, the
+# system): the pristine RN 0.88.0 community template, plus only JS changes (App.tsx, the
 # device test, the lab's shared suites with imports pointed at the installed packages, the
 # vectors JSON) and `npm install` of the packed tarballs. No native file of the app is edited:
 # autolinking adds the RnrRuntime pod, whose script phase builds the app's Rust bundle, and
@@ -46,11 +46,11 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 C="${RNR_IOS_OUT:-$ROOT/.generated/consumer-ios}"
 APP="$C/rn-app"
 REF="$C/rn-template"
-TEMPLATE="$C/react-native-community-template-0.83.1.tgz"
+TEMPLATE="$C/react-native-community-template-0.88.0.tgz"
 TEMPLATE_SHA256=58a0fd5b3b420ab491d1cde76cb935e988c43b83a93428d80becd351b5bd3888
 SDKS="${RNR_IOS_SDKS:-iphoneos iphonesimulator}"
 mkdir -p "$C"
-[ -f "$TEMPLATE" ] || (cd "$C" && npm pack @react-native-community/template@0.83.1 >/dev/null)
+[ -f "$TEMPLATE" ] || (cd "$C" && npm pack @react-native-community/template@0.88.0 >/dev/null)
 echo "$TEMPLATE_SHA256  $TEMPLATE" | shasum -a 256 -c -
 node "$ROOT/scripts/pack.mjs"
 
@@ -100,9 +100,9 @@ export CARGO_HOME="${CARGO_HOME:-$ROOT/.generated/cargo}"
 export RUSTUP_TOOLCHAIN="${RUSTUP_TOOLCHAIN:-1.90.0}"
 rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal --target aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios >/dev/null
 
-# React Native 0.83.1 builds fmt 11.0.2 from source, which Xcode 26.4+ clang rejects
-# (consteval format strings; facebook/react-native#55601, fixed in 0.84). Its supported
-# prebuilt core and dependencies (pod install environment, not an app edit) avoid that.
+# React Native's supported prebuilt core and dependencies (pod install environment, not an
+# app edit; also Expo's default). Adopted for 0.83.1, whose source-built fmt 11.0.2 Xcode 26.4+
+# clang rejects (facebook/react-native#55601, fixed in 0.84); 0.88 source builds are untested.
 export RCT_USE_RN_DEP="${RCT_USE_RN_DEP:-1}" RCT_USE_PREBUILT_RNCORE="${RCT_USE_PREBUILT_RNCORE:-1}"
 # The device test drives the framework's native test hooks; the default package omits them.
 # (RNR_TEST_HOOKS=0 builds the default package instead.)

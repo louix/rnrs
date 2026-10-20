@@ -38,7 +38,7 @@ option(RNR_TEST_HOOKS "Compile the native test hooks (device test harnesses only
 if(RNR_TEST_HOOKS)
   target_compile_definitions(rnr PRIVATE RNR_TEST_HOOKS=1)
 endif()
-# 16 KB page sizes (Android 15+ devices): React Native 0.83.1 sets flexible page sizes only
+# 16 KB page sizes (Android 15+ devices): React Native (0.83.1 to 0.88.0) sets flexible page sizes only
 # for com.android.application modules, and this is a library, so librnr.so (which also
 # contains the app's Rust bundle) is linked with 16 KB segment alignment here. NDK 27 or
 # lower needs both flags (developer.android.com/guide/practices/page-sizes); 4 KB devices

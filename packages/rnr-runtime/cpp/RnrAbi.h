@@ -41,7 +41,10 @@ struct JsiVTable {
 void rnr_bytes_free(uint8_t* ptr, size_t len, size_t cap);
 void rnr_bundle_init();
 uint32_t rnr_module_find(const char*, size_t, const char*, size_t, uint32_t*, char*, size_t);
-RnrAdapter* rnr_adapter_new(uint32_t module, uint32_t maxInFlight, RnrCallback notify, RnrCallback release, void* ctx, char*, size_t);
+// delivery: the latest post's state (RnrDelivery.h values), read under the host lock.
+typedef uint8_t (*RnrDeliveryCallback)(void*);
+RnrAdapter* rnr_adapter_new(uint32_t module, uint32_t maxInFlight, RnrCallback notify, RnrDeliveryCallback delivery,
+                            RnrCallback release, void* ctx, char*, size_t);
 uint64_t rnr_adapter_generation(const RnrAdapter*);
 uint32_t rnr_adapter_call(const RnrAdapter*, const JsiVTable*, void* ctx, uint32_t epoch, uint32_t method, uint32_t self,
                           const uint32_t* args, size_t nargs, uint32_t* out, uint32_t* errorKind, char* error, size_t cap);

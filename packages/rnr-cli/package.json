@@ -11,7 +11,7 @@
     "generator"
   ],
   "dependencies": {
-    "typescript": "5.9.3"
+    "typescript": "6.0.3"
   },
   "peerDependencies": {
     "@rnrs/runtime": "0.1.0"

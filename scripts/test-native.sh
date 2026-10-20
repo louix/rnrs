@@ -16,3 +16,8 @@ clang++ -std=c++20 -g -O1 -fsanitize=address,undefined -fno-sanitize-recover=all
 clang++ -std=c++20 -g -O1 -fsanitize=thread -Wall -Wextra -I "$cpp" \
   native/tests/rnr_runtime_identity_test.cpp -o "$out/rnr_runtime_identity_test"
 "$out/rnr_runtime_identity_test"
+# Drain-post fate tracking (RnrDelivery.h): copies, drops, runs, throws, drops under a held
+# mutex and concurrent reads, with a fake invoker: TSan.
+clang++ -std=c++20 -g -O1 -fsanitize=thread -Wall -Wextra -I "$cpp" \
+  native/tests/rnr_delivery_test.cpp -o "$out/rnr_delivery_test"
+"$out/rnr_delivery_test"

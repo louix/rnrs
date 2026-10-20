@@ -94,7 +94,13 @@ function screenGeometry() {
   const bar = /ITYPE_STATUS_BAR, mFrame=\[0,0\]\[\d+,(\d+)\]/.exec(
     adb('shell', 'dumpsys', 'window', 'windows'),
   );
-  return { scale: dpi / 160, statusBarPx: bar ? Number(bar[1]) : 0 };
+  const statusBarPx = bar ? Number(bar[1]) : 0;
+  // RN 0.88's template enables edge-to-edge: the root view then starts at the top of the
+  // screen and layout y needs no status-bar offset (edgeToEdgeEnabled=false starts below it).
+  const edgeToEdge = /^edgeToEdgeEnabled=true$/m.test(
+    readFileSync(path.join(ROOT, '.generated/consumer', NAME, 'android/gradle.properties'), 'utf8'),
+  );
+  return { scale: dpi / 160, statusBarPx, edgeToEdge, topPx: edgeToEdge ? 0 : statusBarPx };
 }
 /** Taps the centre of the button `id` from its latest RNR_BUTTON layout line. */
 function tap(id) {
@@ -105,7 +111,7 @@ function tap(id) {
   const g = (result.screen ??= screenGeometry());
   const [x, y] = [
     Math.round((b.x + b.w / 2) * g.scale),
-    Math.round((b.y + b.h / 2) * g.scale + g.statusBarPx),
+    Math.round((b.y + b.h / 2) * g.scale + g.topPx),
   ];
   adb('shell', 'input', 'tap', String(x), String(y));
   return { layout: b, x, y };
