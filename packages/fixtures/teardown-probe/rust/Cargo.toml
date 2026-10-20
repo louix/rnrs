@@ -1,0 +1,9 @@
+[package]
+name = "teardown-probe"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Lab fixture: resources registered with the runtime teardown scope."
+
+[dependencies]
+rnr-core = "0.1"

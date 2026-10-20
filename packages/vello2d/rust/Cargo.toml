@@ -1,0 +1,36 @@
+[package]
+name = "rnr-vello2d"
+version = "0.1.0"
+edition = "2021"
+description = "2D renderer module for @rnrs/example-vello2d: Vello CPU raster presented with wgpu on an rnr-surface."
+
+[dependencies]
+rnr-core = "0.1"
+rnr-surface = "0.1"
+# Pinned. The surface with this renderer has run on the Pixel 2 XL (Adreno) only; on the
+# Pixel 8a only headless probes ran (results/surface), where GPU Vello (vello 0.11,
+# vello_hybrid 0.2) failed in the Mali driver, so the scene is rasterized by vello_cpu (a
+# provisional choice, not a final backend).
+vello_cpu = { version = "=0.3.0", default-features = false, features = ["std", "u8_pipeline"] }
+log = "0.4"
+
+# The same pinned wgpu with one backend per native target: Metal on iOS (docs/research/
+# ios-surface-c1-design.md), Vulkan on the other native targets (Android; host tests). macOS is
+# not a supported surface target. wasm32 (web) gets no native wgpu backend here; its renderer
+# path is the web plan's.
+[target.'cfg(target_os = "ios")'.dependencies]
+wgpu = { version = "=30.0.1", default-features = false, features = ["std", "wgsl", "metal"] }
+
+[target.'cfg(all(not(target_os = "ios"), not(target_arch = "wasm32")))'.dependencies]
+wgpu = { version = "=30.0.1", default-features = false, features = ["std", "wgsl", "vulkan"] }
+
+[dev-dependencies]
+raw-window-handle = "0.6.2"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+pollster = "0.4"
+libc = "0.2"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "=0.2.129"
+js-sys = "=0.3.106"

@@ -1,0 +1,25 @@
+# Standalone headless GPU probe: checks that the pinned wgpu/Vello versions work on a device
+# (Vulkan adapter, limits, one Vello scene rendered to a texture and read back) before any
+# React Native surface code depends on them. Built for aarch64-linux-android and run from
+# `adb shell`; see docs/surface.md.
+[package]
+name = "gpu-probe"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+wgpu = { version = "=30.0.1", default-features = false, features = ["std", "wgsl", "vulkan", "gles"] }
+vello = { version = "=0.11.0", default-features = false, features = ["wgpu"] }
+pollster = "0.4"
+# vello_hybrid (sparse strips; wgpu render pipelines instead of Vello's compute pipeline).
+vello_hybrid = { version = "=0.2.0", default-features = false, features = ["wgpu"] }
+vello_common = { version = "=0.2.0", default-features = false, features = ["std"] }
+vello_cpu = { version = "=0.3.0", default-features = false, features = ["std", "u8_pipeline", "multithreading"] }
+wgpu29 = { package = "wgpu", version = "=29.0.4", default-features = false, features = ["std", "wgsl", "vulkan"] }
+
+[workspace]
+
+[profile.release]
+opt-level = 3
+panic = "abort"

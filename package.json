@@ -1,0 +1,54 @@
+{
+  "name": "rust-jsi-lab",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "start": "react-native start",
+    "android": "react-native run-android",
+    "test": "node --test scripts/*.test.mjs tools/rnr-gen/test/*.test.mjs",
+    "typecheck": "node tools/rnr-gen/cli.mjs generate && tsc --noEmit && node scripts/typecheck-ios-fixture.mjs",
+    "summarize": "node scripts/summarize.mjs",
+    "rnr:gen": "node tools/rnr-gen/cli.mjs generate",
+    "rnr:check": "node tools/rnr-gen/cli.mjs check"
+  },
+  "codegenConfig": {
+    "name": "LabSpecs",
+    "type": "modules",
+    "jsSrcsDir": "specs",
+    "android": {
+      "javaPackageName": "com.helloworld"
+    }
+  },
+  "dependencies": {
+    "@rnrs/cli": "file:packages/rnr-cli",
+    "@rnrs/example-blake3": "file:packages/blake3",
+    "@rnrs/example-counter": "file:packages/counter",
+    "@rnrs/example-http": "file:packages/http",
+    "@rnrs/example-kv": "file:packages/kv",
+    "@rnrs/labs-bench": "file:packages/bench",
+    "@rnrs/labs-meter": "file:packages/meter",
+    "@rnrs/labs-values": "file:packages/values",
+    "@rnrs/runtime": "file:packages/rnr-runtime",
+    "react": "19.2.0",
+    "react-native": "0.83.1"
+  },
+  "devDependencies": {
+    "@react-native-community/cli": "20.0.2",
+    "@react-native-community/cli-platform-android": "20.0.2",
+    "@react-native/babel-preset": "0.83.1",
+    "@react-native/metro-config": "0.83.1",
+    "@types/react": "19.2.0",
+    "typescript": "5.9.3"
+  },
+  "rustNativeApp": {
+    "packages": [
+      "packages/counter",
+      "packages/meter",
+      "packages/values",
+      "packages/blake3",
+      "packages/http",
+      "packages/kv",
+      "packages/bench"
+    ]
+  }
+}

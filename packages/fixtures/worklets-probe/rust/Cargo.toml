@@ -1,0 +1,8 @@
+[package]
+name = "worklets-probe"
+version = "0.1.0"
+edition = "2021"
+description = "Lab-only fixture for the Worklets proof of concept: scalar methods, one native object, and refused shapes."
+
+[dependencies]
+rnr-core = "0.1"

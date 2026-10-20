@@ -1,0 +1,43 @@
+{
+  "name": "@rnrs/labs-values",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Value-conversion fixture module (generator M2/M3). Rust implementation in rust/values.",
+  "rustNative": {
+    "targets": [
+      "android",
+      "ios",
+      "web"
+    ],
+    "spec": "values.spec.ts",
+    "rust": {
+      "crate": "values",
+      "path": "rust",
+      "module": "Values"
+    },
+    "maxInFlight": 8
+  },
+  "files": [
+    "values.spec.ts",
+    "rust/Cargo.toml",
+    "rust/src",
+    "rnr",
+    "shared.ts"
+  ],
+  "main": "rnr/index.ts",
+  "types": "rnr/index.ts",
+  "react-native": "rnr/index.ts",
+  "browser": "rnr/web.ts",
+  "exports": {
+    ".": {
+      "types": "./rnr/index.ts",
+      "browser": "./rnr/web.ts",
+      "default": "./rnr/index.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "peerDependencies": {
+    "@rnrs/runtime": "0.1.0"
+  },
+  "license": "UNLICENSED"
+}

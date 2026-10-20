@@ -1,0 +1,28 @@
+// @rnrs/surface Android library: the RnrSurfaceView Fabric component (a SurfaceView) and its
+// view manager. No native code of its own: the JNI entry points are Rust functions in the
+// rnr-surface crate, linked into the framework's librnr.so through the app's Rust bundle.
+// Applications add nothing: autolinking includes this project and its codegen output.
+apply plugin: "com.android.library"
+apply plugin: "org.jetbrains.kotlin.android"
+apply plugin: "com.facebook.react"
+
+def ext(name, fallback) {
+  return rootProject.ext.has(name) ? rootProject.ext.get(name) : fallback
+}
+
+android {
+  namespace "dev.rustjsilab.rnr.surface"
+  compileSdk ext("compileSdkVersion", 36)
+  if (rootProject.ext.has("buildToolsVersion")) buildToolsVersion rootProject.ext.buildToolsVersion
+  defaultConfig {
+    minSdkVersion ext("minSdkVersion", 24)
+    consumerProguardFiles "consumer-rules.pro"
+  }
+  sourceSets {
+    main { java.srcDirs += ["${project.buildDir}/generated/source/codegen/java"] }
+  }
+}
+
+dependencies {
+  implementation "com.facebook.react:react-android"
+}

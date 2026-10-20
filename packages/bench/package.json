@@ -1,0 +1,42 @@
+{
+  "name": "@rnrs/labs-bench",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Measurement-only module for the conversion pilot (docs/pilot.md). Not a product module.",
+  "rustNative": {
+    "targets": [
+      "android",
+      "ios",
+      "web"
+    ],
+    "spec": "bench.spec.ts",
+    "rust": {
+      "crate": "rnr-bench",
+      "path": "rust",
+      "module": "Bench"
+    },
+    "maxInFlight": 64
+  },
+  "files": [
+    "bench.spec.ts",
+    "rust/Cargo.toml",
+    "rust/src",
+    "rnr"
+  ],
+  "main": "rnr/index.ts",
+  "types": "rnr/index.ts",
+  "react-native": "rnr/index.ts",
+  "browser": "rnr/web.ts",
+  "exports": {
+    ".": {
+      "types": "./rnr/index.ts",
+      "browser": "./rnr/web.ts",
+      "default": "./rnr/index.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "peerDependencies": {
+    "@rnrs/runtime": "0.1.0"
+  },
+  "license": "UNLICENSED"
+}

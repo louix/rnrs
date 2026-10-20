@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "lib": [
+      "ES2022",
+      "DOM"
+    ],
+    "types": [
+      "react",
+      "react-dom"
+    ],
+    "noEmit": true
+  },
+  "include": [
+    "main.tsx",
+    ".generated/game/*.ts",
+    ".generated/game/*.tsx",
+    "node_modules/@rnrs/surface/src/index.web.tsx"
+  ]
+}

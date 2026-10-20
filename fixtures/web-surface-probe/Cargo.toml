@@ -1,0 +1,18 @@
+[package]
+name = "rnr-web-surface-probe"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Isolated feasibility fixture; does not alter the repository workspace.
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+vello_cpu = { version = "=0.3.0", default-features = false, features = ["std", "u8_pipeline"] }
+wasm-bindgen = "=0.2.129"
+
+[profile.release]
+panic = "abort"

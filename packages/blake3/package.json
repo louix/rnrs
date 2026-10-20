@@ -1,0 +1,42 @@
+{
+  "name": "@rnrs/example-blake3",
+  "version": "0.1.0",
+  "private": true,
+  "description": "BLAKE3 hashing for React Native (Android) and browser Wasm, implemented in Rust with the blake3 crate. Experimental.",
+  "rustNative": {
+    "targets": [
+      "android",
+      "ios",
+      "web"
+    ],
+    "spec": "blake3.spec.ts",
+    "rust": {
+      "crate": "rnr-blake3",
+      "path": "rust",
+      "module": "Blake3"
+    },
+    "maxInFlight": 8
+  },
+  "files": [
+    "blake3.spec.ts",
+    "rust/Cargo.toml",
+    "rust/src",
+    "rnr"
+  ],
+  "main": "rnr/index.ts",
+  "types": "rnr/index.ts",
+  "react-native": "rnr/index.ts",
+  "browser": "rnr/web.ts",
+  "exports": {
+    ".": {
+      "types": "./rnr/index.ts",
+      "browser": "./rnr/web.ts",
+      "default": "./rnr/index.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "peerDependencies": {
+    "@rnrs/runtime": "0.1.0"
+  },
+  "license": "UNLICENSED"
+}

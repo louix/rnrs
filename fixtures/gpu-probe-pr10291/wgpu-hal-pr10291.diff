@@ -1,0 +1,22 @@
+Upstream gfx-rs/wgpu PR #10291 (merged into trunk as 7a2c88d314be4154347802748838a9a653cb9372,
+2026-09-11; not in any wgpu release or the v30 branch as of 2026-10-20), wgpu-hal hunk only,
+with paths relative to the wgpu-hal crate root. The CHANGELOG hunk is omitted.
+--- a/src/vulkan/adapter.rs
++++ b/src/vulkan/adapter.rs
+@@ -1,12 +1,12 @@
+             can_present: true,
+             //TODO: make configurable
+             robust_buffer_access: phd_features.core.robust_buffer_access != 0,
+-            robust_image_access: match phd_features.robustness2 {
+-                Some(ref f) => f.robust_image_access2 != 0,
+-                None => phd_features
++            robust_image_access: phd_features
++                .robustness2
++                .is_some_and(|f| f.robust_image_access2 != 0)
++                || phd_features
+                     .image_robustness
+                     .is_some_and(|ext| ext.robust_image_access != 0),
+-            },
+             robust_buffer_access2: has_robust_buffer_access2,
+             robust_image_access2: phd_features
+                 .robustness2

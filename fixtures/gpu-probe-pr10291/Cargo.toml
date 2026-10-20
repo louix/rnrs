@@ -1,0 +1,43 @@
+# The fixtures/gpu-probe binaries (same sources, same pinned versions and lock) built against
+# wgpu-hal patched with upstream PR #10291 only (prepare.sh; see wgpu-hal-pr10291.diff).
+# Separate manifest so fixtures/gpu-probe and its recorded results stay unchanged.
+[package]
+name = "gpu-probe-pr10291"
+version = "0.0.0"
+edition = "2021"
+publish = false
+autobins = false
+
+[[bin]]
+name = "gpu-probe"
+path = "../gpu-probe/src/main.rs"
+[[bin]]
+name = "hybrid"
+path = "../gpu-probe/src/bin/hybrid.rs"
+[[bin]]
+name = "imgload"
+path = "../gpu-probe/src/bin/imgload.rs"
+[[bin]]
+name = "cpu"
+path = "../gpu-probe/src/bin/cpu.rs"
+
+[dependencies]
+wgpu = { version = "=30.0.1", default-features = false, features = ["std", "wgsl", "vulkan", "gles"] }
+vello = { version = "=0.11.0", default-features = false, features = ["wgpu"] }
+pollster = "0.4"
+# vello_hybrid (sparse strips; wgpu render pipelines instead of Vello's compute pipeline).
+vello_hybrid = { version = "=0.2.0", default-features = false, features = ["wgpu"] }
+vello_common = { version = "=0.2.0", default-features = false, features = ["std"] }
+vello_cpu = { version = "=0.3.0", default-features = false, features = ["std", "u8_pipeline", "multithreading"] }
+wgpu29 = { package = "wgpu", version = "=29.0.4", default-features = false, features = ["std", "wgsl", "vulkan"] }
+
+
+[patch.crates-io]
+wgpu-hal-30 = { package = "wgpu-hal", path = ".patched/wgpu-hal-30.0.1" }
+wgpu-hal-29 = { package = "wgpu-hal", path = ".patched/wgpu-hal-29.0.4" }
+
+[workspace]
+
+[profile.release]
+opt-level = 3
+panic = "abort"

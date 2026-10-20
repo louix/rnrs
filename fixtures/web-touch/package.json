@@ -1,0 +1,10 @@
+{
+  "name": "rnr-surface-web-touch-fixture",
+  "version": "0.0.0",
+  "private": true,
+  "dependencies": {
+    "@rnrs/labs-touch-probe": "file:../../packages/fixtures/touch-probe",
+    "@rnrs/runtime": "file:../../packages/rnr-runtime",
+    "@rnrs/surface": "file:../../packages/rnr-surface"
+  }
+}

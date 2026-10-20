@@ -1,0 +1,41 @@
+{
+  "name": "@rnrs/example-kv",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Persistent key-value store for React Native on Android and iOS, implemented in Rust with sled. No browser backend. Experimental.",
+  "rustNative": {
+    "targets": [
+      "android",
+      "ios"
+    ],
+    "spec": "kv.spec.ts",
+    "rust": {
+      "crate": "rnr-kv",
+      "path": "rust",
+      "module": "Kv"
+    },
+    "maxInFlight": 32
+  },
+  "files": [
+    "kv.spec.ts",
+    "rust/Cargo.toml",
+    "rust/src",
+    "rnr"
+  ],
+  "main": "rnr/index.ts",
+  "types": "rnr/index.ts",
+  "react-native": "rnr/index.ts",
+  "browser": "rnr/web.ts",
+  "exports": {
+    ".": {
+      "types": "./rnr/index.ts",
+      "browser": "./rnr/web.ts",
+      "default": "./rnr/index.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "peerDependencies": {
+    "@rnrs/runtime": "0.1.0"
+  },
+  "license": "UNLICENSED"
+}

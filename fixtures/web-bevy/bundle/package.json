@@ -1,0 +1,11 @@
+{
+  "name": "rnr-web-bevy-bundle",
+  "version": "0.0.0",
+  "private": true,
+  "description": "App manifest for the web Bevy fixture's generated Rust bundle (never npm-installed; build.mjs links these packages, as fixtures/web-webgpu does).",
+  "dependencies": {
+    "@rnrs/example-bevy3d": "file:../../../packages/bevy3d",
+    "@rnrs/runtime": "file:../../../packages/rnr-runtime",
+    "@rnrs/surface": "file:../../../packages/rnr-surface"
+  }
+}

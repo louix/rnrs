@@ -1,0 +1,41 @@
+{
+  "name": "@rnrs/labs-webgpu-triangle",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Lab-only browser fixture: one wgpu (WebGPU) triangle drawn by Rust straight into an @rnrs/surface canvas, with no CPU pixel path. Web only; optional, never a fallback.",
+  "rustNative": {
+    "targets": [
+      "web"
+    ],
+    "spec": "webgpu-triangle.spec.ts",
+    "rust": {
+      "crate": "rnr-webgpu-triangle",
+      "path": "rust",
+      "module": "Module"
+    }
+  },
+  "files": [
+    "webgpu-triangle.spec.ts",
+    "rust/Cargo.toml",
+    "rust/src",
+    "rnr"
+  ],
+  "main": "rnr/index.ts",
+  "types": "rnr/index.ts",
+  "browser": "rnr/web.ts",
+  "exports": {
+    ".": {
+      "types": "./rnr/index.ts",
+      "browser": "./rnr/web.ts",
+      "default": "./rnr/index.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@rnrs/surface": "0.1.0"
+  },
+  "peerDependencies": {
+    "@rnrs/runtime": "0.1.0"
+  },
+  "license": "UNLICENSED"
+}

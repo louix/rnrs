@@ -1,0 +1,42 @@
+{
+  "name": "@rnrs/example-counter",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Counter example module: TS spec here, Rust implementation in rust/.",
+  "rustNative": {
+    "targets": [
+      "android",
+      "ios",
+      "web"
+    ],
+    "spec": "counter.spec.ts",
+    "rust": {
+      "crate": "counter",
+      "path": "rust",
+      "module": "Module"
+    },
+    "maxInFlight": 8
+  },
+  "files": [
+    "counter.spec.ts",
+    "rust/Cargo.toml",
+    "rust/src",
+    "rnr"
+  ],
+  "main": "rnr/index.ts",
+  "types": "rnr/index.ts",
+  "react-native": "rnr/index.ts",
+  "browser": "rnr/web.ts",
+  "exports": {
+    ".": {
+      "types": "./rnr/index.ts",
+      "browser": "./rnr/web.ts",
+      "default": "./rnr/index.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "peerDependencies": {
+    "@rnrs/runtime": "0.1.0"
+  },
+  "license": "UNLICENSED"
+}

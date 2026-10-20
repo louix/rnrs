@@ -1,0 +1,133 @@
+<!doctype html><meta charset="utf-8"><title>WebGPU canvas teardown probe (plain JS)</title>
+<style>body{margin:0;background:#111;color:#ddd;font:12px monospace}#box{width:600px;height:300px;border:1px solid #888}button{margin:4px}pre{white-space:pre-wrap;padding:8px}</style>
+<!-- Plain JavaScript, no Rust, Wasm or Bevy. Each button: request a device, configure a canvas
+     with the preferred format (opaque, as the scene does), draw cleared frames for 2 s through
+     requestAnimationFrame, then tear down in one order. Steps are written to localStorage BEFORE
+     each call, so after a crash /log.html shows the last step reached. One variant per page load. -->
+<div id="buttons"></div><div id="box"></div><pre id="out"></pre>
+<script>
+const KEY = 'rnr-teardown-probe-log';
+// Structured record: steps, GPU errors, and whether a device loss was expected (after our own
+// destroy()) or premature (before it: the run is then inconclusive, never "survived").
+const log = {startedAt: new Date().toISOString(), userAgent: navigator.userAgent, probeSha256: null,
+  steps: [], gpuErrors: [], deviceLoss: null, destroyRequested: false};
+const t0 = performance.now();
+const stamp = () => Math.round(performance.now() - t0) + 'ms';
+// Each step is also sent to the fixture server at once (POST /log, appended to a file), since
+// localStorage may not reach disk before a browser crash.
+const beacon = (kind, s) => { try { navigator.sendBeacon('/log', JSON.stringify({startedAt: log.startedAt, variant: log.variant ?? null, t: stamp(), kind, s})); } catch {} };
+const step = s => { log.steps.push(stamp() + ' ' + s); localStorage.setItem(KEY, JSON.stringify(log)); beacon('step', s); document.getElementById('out').textContent = log.steps.join('\n'); };
+const probeInfo = fetch('/probe-info.json', {cache: 'no-store'}).then(r => r.json()).then(i => { log.probeSha256 = i.sha256; }).catch(() => {});
+// Our current unmount order (66ab971+): stop frames, drop scene, unconfigure, destroy, canvas size 0, remove element.
+const variants = {
+  'A current: unconfigure, destroy, size 0, remove': [['unconfigure'], ['destroy'], ['size0'], ['remove']],
+  'B 168a2fb: destroy, size 0, remove': [['destroy'], ['size0'], ['remove']],
+  'C no destroy: unconfigure, size 0, remove': [['unconfigure'], ['size0'], ['remove']],
+  'D destroy only (canvas stays)': [['destroy']],
+  'E remove element only': [['remove']],
+  'F scene pattern (offscreen srgb + blit, one resize), then A order': [['unconfigure'], ['destroy'], ['size0'], ['remove']],
+};
+async function run(name, actions) {
+  for (const b of document.querySelectorAll('button')) b.disabled = true;
+  await probeInfo;
+  log.variant = name; step('variant ' + name + ' (probe sha256 ' + (log.probeSha256 ?? 'unknown') + ')');
+  const adapter = await navigator.gpu.requestAdapter();
+  step('adapter ' + (adapter ? 'ok' : 'null')); if (!adapter) return;
+  const device = await adapter.requestDevice();
+  device.lost.then(i => {
+    log.deviceLoss = {expected: log.destroyRequested, reason: i.reason, message: i.message, t: stamp()};
+    step((log.destroyRequested ? 'device lost (expected, after destroy): ' : 'device lost PREMATURE (before teardown): ') + i.reason + ' ' + i.message);
+  });
+  device.onuncapturederror = e => { log.gpuErrors.push({t: stamp(), message: e.error.message}); step('GPU error: ' + e.error.message); };
+  const canvas = document.createElement('canvas');
+  canvas.style.cssText = 'width:100%;height:100%;display:block';
+  document.getElementById('box').append(canvas);
+  canvas.width = Math.round(600 * devicePixelRatio); canvas.height = Math.round(300 * devicePixelRatio);
+  const context = canvas.getContext('webgpu');
+  const format = navigator.gpu.getPreferredCanvasFormat();
+  context.configure({device, format, alphaMode: 'opaque'});
+  step('configured ' + format + ' ' + canvas.width + 'x' + canvas.height);
+  // F only: the scene's GPU pattern. An offscreen Rgba8UnormSrgb texture (view_formats
+  // rgba8unorm) is cleared each frame through its sRGB view, then sampled through its raw view
+  // by a blit pipeline into the canvas texture. After ~1 s there is one resize: the canvas is
+  // reconfigured at a new size and the offscreen texture is recreated.
+  const offscreen = name.startsWith('F');
+  let blit, makeTarget, target;
+  if (offscreen) {
+    const module = device.createShaderModule({code: `
+      @group(0) @binding(0) var t: texture_2d<f32>; @group(0) @binding(1) var s: sampler;
+      struct V { @builtin(position) p: vec4f, @location(0) uv: vec2f };
+      @vertex fn vs(@builtin(vertex_index) i: u32) -> V {
+        let uv = vec2f(f32((i << 1u) & 2u), f32(i & 2u)); return V(vec4f(uv * vec2f(2, -2) + vec2f(-1, 1), 0, 1), uv); }
+      @fragment fn fs(v: V) -> @location(0) vec4f { return textureSample(t, s, v.uv); }`});
+    blit = device.createRenderPipeline({layout: 'auto', vertex: {module, entryPoint: 'vs'}, fragment: {module, entryPoint: 'fs', targets: [{format}]}});
+    const sampler = device.createSampler();
+    makeTarget = () => {
+      const texture = device.createTexture({size: [canvas.width, canvas.height], format: 'rgba8unorm-srgb', viewFormats: ['rgba8unorm'],
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING});
+      const bind = device.createBindGroup({layout: blit.getBindGroupLayout(0), entries: [
+        {binding: 0, resource: texture.createView({format: 'rgba8unorm'})}, {binding: 1, resource: sampler}]});
+      return {texture, srgb: texture.createView(), bind};
+    };
+    target = makeTarget();
+    step('offscreen rgba8unorm-srgb + blit pipeline');
+    setTimeout(() => {
+      step('about to resize');
+      canvas.width = Math.round(600 * devicePixelRatio); canvas.height = Math.round(160 * devicePixelRatio);
+      context.configure({device, format, alphaMode: 'opaque'});
+      target = makeTarget();
+      step('resized ' + canvas.width + 'x' + canvas.height);
+    }, 1000);
+  }
+  let frames = 0, raf = 0;
+  const frame = () => {
+    const encoder = device.createCommandEncoder();
+    const g = (frames % 120) / 120;
+    if (offscreen) {
+      encoder.beginRenderPass({colorAttachments: [{view: target.srgb, loadOp: 'clear', clearValue: [0.9, 0.45 * g, 0.1, 1], storeOp: 'store'}]}).end();
+      const pass = encoder.beginRenderPass({colorAttachments: [{view: context.getCurrentTexture().createView(), loadOp: 'clear', clearValue: [0, 0, 0, 1], storeOp: 'store'}]});
+      pass.setPipeline(blit); pass.setBindGroup(0, target.bind); pass.draw(3); pass.end();
+    } else {
+      encoder.beginRenderPass({colorAttachments: [{view: context.getCurrentTexture().createView(), loadOp: 'clear', clearValue: [0.9, 0.45 * g, 0.1, 1], storeOp: 'store'}]}).end();
+    }
+    device.queue.submit([encoder.finish()]); frames++;
+    if (frames % 30 === 0) beacon('frame', 'frames ' + frames);
+    raf = requestAnimationFrame(frame);
+  };
+  raf = requestAnimationFrame(frame);
+  await new Promise(r => setTimeout(r, offscreen ? 2500 : 2000));
+  cancelAnimationFrame(raf); step('stopped frames after ' + frames);
+  for (const [action] of actions) {
+    step('about to ' + action);
+    if (action === 'unconfigure') context.unconfigure();
+    if (action === 'destroy') { log.destroyRequested = true; device.destroy(); }
+    if (action === 'size0') { canvas.width = 0; canvas.height = 0; }
+    if (action === 'remove') canvas.remove();
+    step('done ' + action);
+    await new Promise(r => requestAnimationFrame(r));
+  }
+  await new Promise(r => setTimeout(r, 1500));
+  step(log.deviceLoss && !log.deviceLoss.expected ? 'inconclusive: device was lost before teardown' : 'survived 1.5 s after teardown');
+}
+for (const [name, actions] of Object.entries(variants)) {
+  const b = document.createElement('button'); b.textContent = name;
+  b.onclick = () => run(name, actions).catch(e => step('threw ' + e));
+  document.getElementById('buttons').append(b);
+}
+// Not persisted: loading this page must not overwrite the log of a run that crashed.
+// ?auto=<letter>: headless self-check of one variant (validation only; proves nothing about crashes).
+const auto = new URLSearchParams(location.search).get('auto');
+if (auto) {
+  const entry = Object.entries(variants).find(([n]) => n.startsWith(auto + ' '));
+  run(entry[0], entry[1]).catch(e => step('threw ' + e)).finally(() => {
+    // Any GPU error or exception fails; a device loss before teardown makes the run inconclusive
+    // (headless SwiftShader loses the device early, so later frames run on a lost device).
+    const errors = [...log.gpuErrors.map(e => e.message), ...log.steps.filter(s => / threw /.test(s))];
+    const lostEarly = log.deviceLoss !== null && !log.deviceLoss.expected;
+    const finished = log.steps.some(s => s.includes('survived'));
+    globalThis.__rnrResult = {ok: errors.length === 0 && finished && !lostEarly, blocked: lostEarly ? 'inconclusive: premature device loss before teardown' : undefined,
+      checks: [{name: 'teardown ' + auto, ok: errors.length === 0 && finished && !lostEarly, detail: JSON.stringify({gpuErrors: log.gpuErrors, deviceLoss: log.deviceLoss, steps: log.steps})}]};
+  });
+}
+document.getElementById('out').textContent = 'navigator.gpu ' + ('gpu' in navigator) + '. Pick one variant, then reload for the next. After a crash, open /log.html first.';
+</script>

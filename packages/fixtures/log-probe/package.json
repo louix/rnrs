@@ -1,0 +1,42 @@
+{
+  "name": "@rnrs/labs-log-probe",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Lab-only fixture for the Rust logging smoke: emits tracing events and log records on the JS thread and on a worker thread.",
+  "rustNative": {
+    "targets": [
+      "android",
+      "ios",
+      "web"
+    ],
+    "spec": "log-probe.spec.ts",
+    "rust": {
+      "crate": "log-probe",
+      "path": "rust",
+      "module": "Module"
+    },
+    "maxInFlight": 4
+  },
+  "files": [
+    "log-probe.spec.ts",
+    "rust/Cargo.toml",
+    "rust/src",
+    "rnr"
+  ],
+  "main": "rnr/index.ts",
+  "types": "rnr/index.ts",
+  "react-native": "rnr/index.ts",
+  "browser": "rnr/web.ts",
+  "exports": {
+    ".": {
+      "types": "./rnr/index.ts",
+      "browser": "./rnr/web.ts",
+      "default": "./rnr/index.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "peerDependencies": {
+    "@rnrs/runtime": "0.1.0"
+  },
+  "license": "UNLICENSED"
+}

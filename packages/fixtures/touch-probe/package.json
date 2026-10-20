@@ -1,0 +1,45 @@
+{
+  "name": "@rnrs/labs-touch-probe",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Lab-only, GPU-free consumer of rnr-surface touch input: a surface with touch enabled, drained explicitly by drain() into bounded consumer state. No renderer.",
+  "rustNative": {
+    "targets": [
+      "android",
+      "ios",
+      "web"
+    ],
+    "spec": "touch-probe.spec.ts",
+    "rust": {
+      "crate": "touch-probe",
+      "path": "rust",
+      "module": "Module"
+    },
+    "maxInFlight": 4
+  },
+  "files": [
+    "touch-probe.spec.ts",
+    "rust/Cargo.toml",
+    "rust/src",
+    "rnr"
+  ],
+  "main": "rnr/index.ts",
+  "types": "rnr/index.ts",
+  "react-native": "rnr/index.ts",
+  "browser": "rnr/web.ts",
+  "exports": {
+    ".": {
+      "types": "./rnr/index.ts",
+      "browser": "./rnr/web.ts",
+      "default": "./rnr/index.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@rnrs/surface": "0.1.0"
+  },
+  "peerDependencies": {
+    "@rnrs/runtime": "0.1.0"
+  },
+  "license": "UNLICENSED"
+}

@@ -1,0 +1,42 @@
+{
+  "name": "@rnrs/example-http",
+  "version": "0.1.0",
+  "private": true,
+  "description": "HTTP client for React Native (Android and iOS, reqwest on Tokio) and browser Wasm (reqwest over fetch), implemented in Rust. Experimental.",
+  "rustNative": {
+    "targets": [
+      "android",
+      "ios",
+      "web"
+    ],
+    "spec": "http.spec.ts",
+    "rust": {
+      "crate": "rnr-http",
+      "path": "rust",
+      "module": "Http"
+    },
+    "maxInFlight": 16
+  },
+  "files": [
+    "http.spec.ts",
+    "rust/Cargo.toml",
+    "rust/src",
+    "rnr"
+  ],
+  "main": "rnr/index.ts",
+  "types": "rnr/index.ts",
+  "react-native": "rnr/index.ts",
+  "browser": "rnr/web.ts",
+  "exports": {
+    ".": {
+      "types": "./rnr/index.ts",
+      "browser": "./rnr/web.ts",
+      "default": "./rnr/index.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "peerDependencies": {
+    "@rnrs/runtime": "0.1.0"
+  },
+  "license": "UNLICENSED"
+}

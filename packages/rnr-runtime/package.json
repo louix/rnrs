@@ -1,0 +1,72 @@
+{
+  "name": "@rnrs/runtime",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Experimental framework for React Native modules written as TypeScript specs plus Rust: JS runtime, Android and iOS (JSI) backends, the browser Wasm backend, the framework spec and Rust crates. The rnrs CLI is @rnrs/cli.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "react-native": "src/native.ts",
+  "browser": "src/web.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "browser": "./src/web.ts",
+      "react-native": "./src/native.ts",
+      "default": "./src/index.ts"
+    },
+    "./web": {
+      "types": "./src/web.ts",
+      "default": "./src/web.ts"
+    },
+    "./worklets": {
+      "types": "./src/worklets.ts",
+      "default": "./src/worklets.ts"
+    },
+    "./testing": {
+      "types": "./src/testing.ts",
+      "default": "./src/testing.ts"
+    },
+    "./spec": {
+      "types": "./src/spec.ts",
+      "default": "./src/spec.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "cli",
+    "rust",
+    "android/build.gradle",
+    "android/CMakeLists.txt",
+    "android/src",
+    "cpp",
+    "ios",
+    "RnrRuntime.podspec",
+    "react-native.config.js"
+  ],
+  "codegenConfig": {
+    "name": "RnrRuntimeSpec",
+    "type": "modules",
+    "jsSrcsDir": "src/specs",
+    "android": {
+      "javaPackageName": "dev.rustjsilab.rnr"
+    },
+    "ios": {
+      "modulesProvider": {
+        "RnrRuntime": "RnrRuntimeModule"
+      }
+    }
+  },
+  "dependencies": {
+    "@rnrs/cli": "0.1.0"
+  },
+  "peerDependencies": {
+    "react-native": "0.83.1"
+  },
+  "license": "UNLICENSED",
+  "peerDependenciesMeta": {
+    "react-native": {
+      "optional": true
+    }
+  }
+}

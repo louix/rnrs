@@ -1,0 +1,47 @@
+{
+  "name": "@rnrs/example-vello2d",
+  "version": "0.1.0",
+  "private": true,
+  "description": "2D renderer for @rnrs/surface on Android and iOS: Vello scene raster (vello_cpu) presented through wgpu (Vulkan on Android, Metal on iOS), fed by whole frames from TypeScript. Experimental.",
+  "rustNative": {
+    "targets": [
+      "android",
+      "ios",
+      "web"
+    ],
+    "spec": "vello2d.spec.ts",
+    "rust": {
+      "crate": "rnr-vello2d",
+      "path": "rust",
+      "module": "Module"
+    }
+  },
+  "files": [
+    "vello2d.spec.ts",
+    "frame.ts",
+    "rust/Cargo.toml",
+    "rust/src",
+    "rnr"
+  ],
+  "main": "rnr/index.ts",
+  "types": "rnr/index.ts",
+  "react-native": "rnr/index.ts",
+  "exports": {
+    ".": {
+      "types": "./rnr/index.ts",
+      "default": "./rnr/index.ts"
+    },
+    "./frame": {
+      "types": "./frame.ts",
+      "default": "./frame.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@rnrs/surface": "0.1.0"
+  },
+  "peerDependencies": {
+    "@rnrs/runtime": "0.1.0"
+  },
+  "license": "UNLICENSED"
+}

@@ -1,0 +1,17 @@
+[package]
+name = "counter"
+version = "0.1.0"
+edition = "2021"
+description = "Example module implementation: plain Rust, no JS or platform code."
+
+[dependencies]
+rnr-core = "0.1"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { version = "1.47", default-features = false, features = ["time"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+gloo-timers = { version = "0.3", features = ["futures"] }
+
+[dev-dependencies]
+tokio = { version = "1.47", default-features = false, features = ["time", "rt", "macros", "test-util"] }

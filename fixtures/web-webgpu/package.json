@@ -1,0 +1,11 @@
+{
+  "name": "rnr-surface-webgpu-fixture",
+  "version": "0.0.0",
+  "private": true,
+  "dependencies": {
+    "@rnrs/example-vello2d": "file:../../packages/vello2d",
+    "@rnrs/labs-webgpu-triangle": "file:../../packages/fixtures/webgpu-triangle",
+    "@rnrs/runtime": "file:../../packages/rnr-runtime",
+    "@rnrs/surface": "file:../../packages/rnr-surface"
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "name": "@rnrs/surface",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Experimental framework rendering surface for React Native (Android, iOS): the <RnrSurfaceView> Fabric component and the rnr-surface Rust crate that renderer modules depend on. Platform glue is framework code; renderer authors write TypeScript and Rust only.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "react-native": "src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "browser": "./src/index.web.tsx",
+      "react-native": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./package.json": "./package.json",
+    "./browser": {
+      "types": "./src/browser/bootstrap.ts",
+      "default": "./src/browser/bootstrap.ts"
+    }
+  },
+  "rustNative": {
+    "targets": [
+      "android",
+      "ios",
+      "web"
+    ],
+    "library": {
+      "crate": "rnr-surface",
+      "path": "rust"
+    }
+  },
+  "codegenConfig": {
+    "name": "RnrSurfaceSpec",
+    "type": "components",
+    "jsSrcsDir": "src/specs",
+    "android": {
+      "javaPackageName": "dev.rustjsilab.rnr.surface"
+    },
+    "ios": {
+      "componentProvider": {
+        "RnrSurfaceView": "RnrSurfaceViewComponentView"
+      }
+    }
+  },
+  "files": [
+    "src",
+    "rust/Cargo.toml",
+    "rust/src",
+    "android/build.gradle",
+    "android/consumer-rules.pro",
+    "android/src",
+    "react-native.config.js",
+    "ios",
+    "RnrSurface.podspec"
+  ],
+  "peerDependencies": {
+    "@rnrs/runtime": "0.1.0",
+    "react": "*",
+    "react-native": "0.83.1"
+  },
+  "license": "UNLICENSED",
+  "browser": "src/index.web.tsx"
+}
