@@ -1,8 +1,8 @@
 // Value-conversion fixture module: records, strings, arrays, optional and nullable values,
 // and discriminated unions.
 // Rust implementation: rust/values. Used by the shared value suite on Android and web.
-import type {NativeModule, NativeObject} from '@rnrs/runtime/spec';
-import type {Size} from './shared';
+import type { NativeModule, NativeObject } from '@rnrs/runtime/spec';
+import type { Size } from './shared';
 
 export interface Point {
   x: number;
@@ -21,16 +21,16 @@ export interface Labeled {
 
 /** Discriminator inferred: `kind` is the only candidate. `empty` has no other fields. */
 export type Shape =
-  | {kind: 'circle'; radius: number}
-  | {kind: 'rect'; width: number; height: number}
-  | {kind: 'empty'};
+  | { kind: 'circle'; radius: number }
+  | { kind: 'rect'; width: number; height: number }
+  | { kind: 'empty' };
 
 /** Two candidates (`kind`, `category`), so the annotation chooses; `category` is a
  *  constant literal field restored on output. */
 /** @discriminator kind */
 export type Tagged =
-  | {kind: 'round'; category: 'curved'; r: number}
-  | {kind: 'square'; category: 'angular'; side: number};
+  | { kind: 'round'; category: 'curved'; r: number }
+  | { kind: 'square'; category: 'angular'; side: number };
 
 /** A variant declared as an interface. */
 export interface Move {
@@ -40,8 +40,8 @@ export interface Move {
 
 export type Event =
   | Move
-  | {type: 'batch'; shapes: Shape[]; label?: string}
-  | {type: 'two-words'; note: string | null};
+  | { type: 'batch'; shapes: Shape[]; label?: string }
+  | { type: 'two-words'; note: string | null };
 
 /** A record carrying bytes; `after` is read after `data` (conversion order). */
 export interface Blob {
@@ -54,9 +54,7 @@ export interface Blob {
 export type Later = Promise<number>;
 
 /** Field names that match locals of the generated glue (`object`, `value`). */
-export type Slot =
-  | {kind: 'filled'; object: number; value: string}
-  | {kind: 'vacant'};
+export type Slot = { kind: 'filled'; object: number; value: string } | { kind: 'vacant' };
 
 /** A native object taking records, to check receiver handling around getters. */
 export interface Bag extends NativeObject {

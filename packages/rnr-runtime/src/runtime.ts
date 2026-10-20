@@ -22,28 +22,40 @@ const functionBind = Function.prototype.bind;
 export function bindThis(f: Function, thisArg: unknown): (...args: any[]) => unknown {
   return reflectApply(functionBind, f, [thisArg]) as (...args: any[]) => unknown;
 }
-export function bindThisAndFirst(f: Function, thisArg: unknown, first: unknown): (...args: any[]) => unknown {
+export function bindThisAndFirst(
+  f: Function,
+  thisArg: unknown,
+  first: unknown,
+): (...args: any[]) => unknown {
   return reflectApply(functionBind, f, [thisArg, first]) as (...args: any[]) => unknown;
 }
 const reflectGet = Reflect.get;
 const defineProperty = Object.defineProperty;
 const arrayIsArray = Array.isArray;
 const isView = ArrayBuffer.isView;
-const getter = (proto: object | undefined, key: string) => (proto ? Object.getOwnPropertyDescriptor(proto, key)?.get : undefined);
+const getter = (proto: object | undefined, key: string) =>
+  proto ? Object.getOwnPropertyDescriptor(proto, key)?.get : undefined;
 // Brand checks: these intrinsic getters throw unless their receiver really is that kind of
 // buffer, so proxies and look-alikes fail. `resizable` / `detached` exist only on engines
 // that support resizable buffers and transfer(); where absent the state cannot occur.
 const abByteLength = getter(ArrayBuffer.prototype, 'byteLength')!;
 const abResizable = getter(ArrayBuffer.prototype, 'resizable');
 const abDetached = getter(ArrayBuffer.prototype, 'detached');
-const sabByteLength = typeof SharedArrayBuffer === 'function' ? getter(SharedArrayBuffer.prototype, 'byteLength') : undefined;
+const sabByteLength =
+  typeof SharedArrayBuffer === 'function'
+    ? getter(SharedArrayBuffer.prototype, 'byteLength')
+    : undefined;
 // Byte copies use these captured constructors and %TypedArray%.prototype.set, never a
 // `length`/`byteLength` property read or a global looked up at call time.
 const ArrayBufferCtor = ArrayBuffer;
 const Uint8ArrayCtor = Uint8Array;
-const typedArraySet = Object.getPrototypeOf(Uint8Array.prototype).set as (this: Uint8Array, source: Uint8Array) => void;
+const typedArraySet = Object.getPrototypeOf(Uint8Array.prototype).set as (
+  this: Uint8Array,
+  source: Uint8Array,
+) => void;
 const wasmApi = (globalThis as any).WebAssembly; // absent on Hermes
-const wasmMemoryBuffer = typeof wasmApi?.Memory === 'function' ? getter(wasmApi.Memory.prototype, 'buffer') : undefined;
+const wasmMemoryBuffer =
+  typeof wasmApi?.Memory === 'function' ? getter(wasmApi.Memory.prototype, 'buffer') : undefined;
 
 /** 0 ArrayBuffer, 1 not a buffer, 2 SharedArrayBuffer, 3 resizable, 4 detached, 5 view. */
 function bufferStatus(value: unknown): number {
@@ -52,7 +64,12 @@ function bufferStatus(value: unknown): number {
     reflectApply(abByteLength, value, []);
   } catch {
     if (sabByteLength) {
-      try { reflectApply(sabByteLength, value, []); return 2; } catch { /* not shared */ }
+      try {
+        reflectApply(sabByteLength, value, []);
+        return 2;
+      } catch {
+        /* not shared */
+      }
     }
     return isView(value) ? 5 : 1;
   }
@@ -72,7 +89,13 @@ export const conversionHelpers = Object.freeze({
     return reflectApply(hasOwn, object, [key]) ? (object as any)[key] : undefined;
   },
   define(object: object, key: string | number, value: unknown): void {
-    defineProperty(object, key, {__proto__: null, value, writable: true, enumerable: true, configurable: true} as PropertyDescriptor);
+    defineProperty(object, key, {
+      __proto__: null,
+      value,
+      writable: true,
+      enumerable: true,
+      configurable: true,
+    } as PropertyDescriptor);
   },
   isArray(value: unknown): boolean {
     return arrayIsArray(value);
@@ -97,7 +120,11 @@ export const conversionHelpers = Object.freeze({
     if (bufferStatus(value) !== 0 || !wasmMemoryBuffer) return false;
     if (reflectApply(abByteLength, value, []) !== length) return false;
     if (length === 0) return true;
-    const target = new Uint8ArrayCtor(reflectApply(wasmMemoryBuffer, memory, []) as ArrayBuffer, ptr, length);
+    const target = new Uint8ArrayCtor(
+      reflectApply(wasmMemoryBuffer, memory, []) as ArrayBuffer,
+      ptr,
+      length,
+    );
     reflectApply(typedArraySet, target, [new Uint8ArrayCtor(value as ArrayBuffer)]);
     return true;
   },
@@ -105,7 +132,11 @@ export const conversionHelpers = Object.freeze({
   bytesFromMemory(memory: object, ptr: number, length: number): ArrayBuffer {
     const out = new ArrayBufferCtor(length);
     if (length === 0 || !wasmMemoryBuffer) return out;
-    const source = new Uint8ArrayCtor(reflectApply(wasmMemoryBuffer, memory, []) as ArrayBuffer, ptr, length);
+    const source = new Uint8ArrayCtor(
+      reflectApply(wasmMemoryBuffer, memory, []) as ArrayBuffer,
+      ptr,
+      length,
+    );
     reflectApply(typedArraySet, new Uint8ArrayCtor(out), [source]);
     return out;
   },
@@ -194,8 +225,21 @@ export interface NativeAdapter {
   call0(index: number, receiver: object | undefined): unknown;
   call1(index: number, receiver: object | undefined, a0: unknown): unknown;
   call2(index: number, receiver: object | undefined, a0: unknown, a1: unknown): unknown;
-  call3(index: number, receiver: object | undefined, a0: unknown, a1: unknown, a2: unknown): unknown;
-  call4(index: number, receiver: object | undefined, a0: unknown, a1: unknown, a2: unknown, a3: unknown): unknown;
+  call3(
+    index: number,
+    receiver: object | undefined,
+    a0: unknown,
+    a1: unknown,
+    a2: unknown,
+  ): unknown;
+  call4(
+    index: number,
+    receiver: object | undefined,
+    a0: unknown,
+    a1: unknown,
+    a2: unknown,
+    a3: unknown,
+  ): unknown;
   cancel(id: number): boolean;
   dispose(handle: object): void;
   teardown(): void;
@@ -215,7 +259,8 @@ export interface Backend {
 }
 
 let backend: Backend | undefined;
-let missingBackend = '@rnrs/runtime: no platform backend is installed (import @rnrs/runtime under React Native, or call initRnr from @rnrs/runtime/web in the browser)';
+let missingBackend =
+  '@rnrs/runtime: no platform backend is installed (import @rnrs/runtime under React Native, or call initRnr from @rnrs/runtime/web in the browser)';
 
 /** Called once by the platform entry point (native.ts, web.ts) or a test harness. */
 export function setBackend(b: Backend): void {
@@ -233,7 +278,7 @@ function currentBackend(): Backend {
   return backend;
 }
 
-const Status = {Ok: 0, Cancelled: 1, Failed: 2, Lost: 3} as const;
+const Status = { Ok: 0, Cancelled: 1, Failed: 2, Lost: 3 } as const;
 
 interface PendingOperation {
   resolve(value: unknown): void;
@@ -244,9 +289,12 @@ interface PendingOperation {
 
 function admitError(failure: AdmitFailure): RnrError {
   switch (failure.code) {
-    case -1: return new RnrError('closed', failure.message);
-    case -2: return new RnrError('overloaded', failure.message, 'module');
-    default: return new RnrError('overloaded', failure.message, 'executor');
+    case -1:
+      return new RnrError('closed', failure.message);
+    case -2:
+      return new RnrError('overloaded', failure.message, 'module');
+    default:
+      return new RnrError('overloaded', failure.message, 'executor');
   }
 }
 
@@ -258,8 +306,15 @@ export class ModuleHost {
   readonly violations: string[] = [];
   readonly adapter: NativeAdapter;
 
-  constructor(readonly name: string, hash: string, maxInFlight: number, readonly runtimeOwned: boolean) {
-    this.adapter = currentBackend().install(name, hash, maxInFlight, (id, status, value, message) => this.settle(id, status, value, message));
+  constructor(
+    readonly name: string,
+    hash: string,
+    maxInFlight: number,
+    readonly runtimeOwned: boolean,
+  ) {
+    this.adapter = currentBackend().install(name, hash, maxInFlight, (id, status, value, message) =>
+      this.settle(id, status, value, message),
+    );
     const self = this as any;
     self.call0 = this.adapter.call0;
     self.call1 = this.adapter.call1;
@@ -276,19 +331,29 @@ export class ModuleHost {
   settle(id: number, status: number, value: unknown, message: string): void {
     const operation = this.pendingOps.get(id);
     if (!operation) {
-      this.violations.push(`${this.closed ? 'after close' : 'unknown or duplicate'}: op ${id} status ${status}`);
+      this.violations.push(
+        `${this.closed ? 'after close' : 'unknown or duplicate'}: op ${id} status ${status}`,
+      );
       return;
     }
     this.pendingOps.delete(id);
     operation.detach();
     switch (status) {
       case Status.Ok:
-        try { operation.resolve(operation.wrap ? operation.wrap(value) : value); }
-        catch (error) { operation.reject(new RnrError('failed', String(error))); }
+        try {
+          operation.resolve(operation.wrap ? operation.wrap(value) : value);
+        } catch (error) {
+          operation.reject(new RnrError('failed', String(error)));
+        }
         break;
-      case Status.Cancelled: operation.reject(new RnrError('cancelled', 'operation cancelled')); break;
-      case Status.Lost: operation.reject(new RnrError('lost', 'executor dropped the operation')); break;
-      default: operation.reject(new RnrError('failed', message));
+      case Status.Cancelled:
+        operation.reject(new RnrError('cancelled', 'operation cancelled'));
+        break;
+      case Status.Lost:
+        operation.reject(new RnrError('lost', 'executor dropped the operation'));
+        break;
+      default:
+        operation.reject(new RnrError('failed', message));
     }
   }
 
@@ -306,7 +371,13 @@ export class ModuleHost {
   readonly call4!: NativeAdapter['call4'];
 
   /** Async call: admission, cancellation wiring and promise bookkeeping. */
-  start(index: number, receiver: object | undefined, args: unknown[], options: CallOptions | undefined, wrap?: (value: unknown) => unknown): Promise<unknown> {
+  start(
+    index: number,
+    receiver: object | undefined,
+    args: unknown[],
+    options: CallOptions | undefined,
+    wrap?: (value: unknown) => unknown,
+  ): Promise<unknown> {
     const signal = options?.signal;
     if (signal?.aborted) return Promise.reject(new RnrError('cancelled', 'aborted before start'));
     let started: unknown;
@@ -319,9 +390,16 @@ export class ModuleHost {
     const id = started;
     return new Promise((resolve, reject) => {
       // Abort only requests cancellation; the outcome still arrives through settle().
-      const onAbort = () => { this.adapter.cancel(id); };
+      const onAbort = () => {
+        this.adapter.cancel(id);
+      };
       signal?.addEventListener('abort', onAbort);
-      this.pendingOps.set(id, {resolve, reject, wrap, detach: () => signal?.removeEventListener('abort', onAbort)});
+      this.pendingOps.set(id, {
+        resolve,
+        reject,
+        wrap,
+        detach: () => signal?.removeEventListener('abort', onAbort),
+      });
     });
   }
 
@@ -340,7 +418,8 @@ export class ModuleHost {
   /** Test hook: explicit teardown while JS is still alive. Rejects pending promises here;
    *  the backend guarantees no later outcome for this generation. */
   teardown(): void {
-    if (this.runtimeOwned) throw new Error('the runtime-scoped module is torn down by the framework with its runtime');
+    if (this.runtimeOwned)
+      throw new Error('the runtime-scoped module is torn down by the framework with its runtime');
     if (this.closed) return;
     this.closed = true;
     this.adapter.teardown();
@@ -357,19 +436,34 @@ export class ModuleHost {
 /** Base of generated module classes. */
 export abstract class ModuleBase {
   constructor(/** @internal */ readonly host: ModuleHost) {}
-  get generation(): number { return this.host.generation; }
-  get runtimeOwned(): boolean { return this.host.runtimeOwned; }
-  get violations(): readonly string[] { return this.host.violations; }
-  stats(): AdapterStats { return this.host.stats(); }
+  get generation(): number {
+    return this.host.generation;
+  }
+  get runtimeOwned(): boolean {
+    return this.host.runtimeOwned;
+  }
+  get violations(): readonly string[] {
+    return this.host.violations;
+  }
+  stats(): AdapterStats {
+    return this.host.stats();
+  }
   /** Test hook only (see ModuleHost.teardown). */
-  teardown(): void { this.host.teardown(); }
+  teardown(): void {
+    this.host.teardown();
+  }
 }
 
 /** Base of generated native-object classes: a wrapper owning one native handle. */
 export abstract class NativeObjectBase {
-  constructor(/** @internal */ readonly host: ModuleHost, /** @internal */ readonly handle: object) {}
+  constructor(
+    /** @internal */ readonly host: ModuleHost,
+    /** @internal */ readonly handle: object,
+  ) {}
   /** Releases this wrapper's handle now; in-flight operations keep the object alive. */
-  dispose(): void { this.host.dispose(this.handle); }
+  dispose(): void {
+    this.host.dispose(this.handle);
+  }
 }
 
 /** Native wrapper -> handle for the adapter; anything else passes through for the native
@@ -382,17 +476,24 @@ export interface ModuleClass<M extends ModuleBase> {
   new (host: ModuleHost): M;
   /** `protocol`: the wrapper/runtime call protocol the generated wrapper uses (1 or absent:
    *  argument arrays only; 2: also positional host.call0..call4). */
-  readonly descriptor: {name: string; hash: string; defaultMaxInFlight: number; protocol?: number};
+  readonly descriptor: {
+    name: string;
+    hash: string;
+    defaultMaxInFlight: number;
+    protocol?: number;
+  };
 }
 
 /** The newest wrapper call protocol this runtime implements. */
 export const RUNTIME_PROTOCOL = 2;
 
 /** Refuses wrappers generated for a newer runtime, with an actionable message. */
-export function checkWrapperProtocol(descriptor: {name: string; protocol?: number}): void {
+export function checkWrapperProtocol(descriptor: { name: string; protocol?: number }): void {
   const protocol = descriptor.protocol ?? 1;
   if (protocol > RUNTIME_PROTOCOL)
-    throw new Error(`@rnrs/runtime: ${descriptor.name} was generated for call protocol ${protocol}, but this @rnrs/runtime implements up to ${RUNTIME_PROTOCOL}; update @rnrs/runtime to the version that generated the module package`);
+    throw new Error(
+      `@rnrs/runtime: ${descriptor.name} was generated for call protocol ${protocol}, but this @rnrs/runtime implements up to ${RUNTIME_PROTOCOL}; update @rnrs/runtime to the version that generated the module package`,
+    );
 }
 
 // JS module state is per runtime, so this map is runtime-scoped.
@@ -401,7 +502,7 @@ const runtimeModules = new Map<string, ModuleBase>();
 /** The runtime's framework-owned instance of a module (generated accessors call this). */
 export function runtimeModule<M extends ModuleBase>(cls: ModuleClass<M>): M {
   checkWrapperProtocol(cls.descriptor);
-  const {name, hash, defaultMaxInFlight} = cls.descriptor;
+  const { name, hash, defaultMaxInFlight } = cls.descriptor;
   let module = runtimeModules.get(name);
   if (!module) {
     module = new cls(new ModuleHost(name, hash, defaultMaxInFlight, true));
@@ -411,8 +512,11 @@ export function runtimeModule<M extends ModuleBase>(cls: ModuleClass<M>): M {
 }
 
 /** Test hook: an extra adapter generation; the caller tears it down. */
-export function createModuleForTesting<M extends ModuleBase>(cls: ModuleClass<M>, maxInFlight: number): M {
+export function createModuleForTesting<M extends ModuleBase>(
+  cls: ModuleClass<M>,
+  maxInFlight: number,
+): M {
   checkWrapperProtocol(cls.descriptor);
-  const {name, hash} = cls.descriptor;
+  const { name, hash } = cls.descriptor;
   return new cls(new ModuleHost(name, hash, maxInFlight, false));
 }

@@ -1,17 +1,34 @@
 // Author-side commands for one module package: `rnrs init` (scaffold), `rnrs test` (the crate's
 // cargo tests against the installed framework) and the package.json contract lint that
 // `rnrs check <dir>` and `rnrs pack-js` apply.
-import {appendFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
-import {tmpdir} from 'node:os';
+import {
+  appendFileSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
-import {spawnSync} from 'node:child_process';
-import {FRAMEWORK_RUST, RUNTIME_DIR, checkCoreRequirement, isFrameworkCrate, loadPackage, plan, writeAtomic} from './cli.mjs';
-import {KNOWN_TARGETS, declaredTargets} from './targets.mjs';
+import { spawnSync } from 'node:child_process';
+import {
+  FRAMEWORK_RUST,
+  RUNTIME_DIR,
+  checkCoreRequirement,
+  isFrameworkCrate,
+  loadPackage,
+  plan,
+  writeAtomic,
+} from './cli.mjs';
+import { KNOWN_TARGETS, declaredTargets } from './targets.mjs';
 
 export class AuthorError extends Error {}
 
-const readJson = file => JSON.parse(readFileSync(file, 'utf8'));
-const rel = file => path.relative(process.cwd(), file) || '.';
+const readJson = (file) => JSON.parse(readFileSync(file, 'utf8'));
+const rel = (file) => path.relative(process.cwd(), file) || '.';
 const sameJson = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 /** npm package names (lowercase, optionally scoped). */
@@ -19,23 +36,41 @@ const NPM_NAME = /^(@[a-z0-9][a-z0-9._~-]*\/)?[a-z0-9][a-z0-9._~-]*$/;
 
 /** What `rnrs init` derives from a package name: `@demo/crc-lite` -> crate demo-crc-lite,
  *  spec crc-lite.spec.ts, interface CrcLiteModule (JS accessor crcLiteModule()). */
-export function scaffoldNames(name, {crate} = {}) {
+export function scaffoldNames(name, { crate } = {}) {
   if (!NPM_NAME.test(name) || name.length > 214)
-    throw new AuthorError(`invalid package name ${JSON.stringify(name)}: use a lowercase npm name such as @scope/my-module (pass --name)`);
+    throw new AuthorError(
+      `invalid package name ${JSON.stringify(name)}: use a lowercase npm name such as @scope/my-module (pass --name)`,
+    );
   const base = name.split('/').pop();
   const words = base.split(/[^a-zA-Z0-9]+/).filter(Boolean);
   if (!words.length || !/^[a-zA-Z]/.test(words[0]))
-    throw new AuthorError(`cannot derive a TypeScript interface name from ${JSON.stringify(name)}: the name after the scope must start with a letter`);
-  const iface = words.map(w => w[0].toUpperCase() + w.slice(1)).join('') + 'Module';
-  crate ??= name.replace(/^@/, '').replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '');
+    throw new AuthorError(
+      `cannot derive a TypeScript interface name from ${JSON.stringify(name)}: the name after the scope must start with a letter`,
+    );
+  const iface = words.map((w) => w[0].toUpperCase() + w.slice(1)).join('') + 'Module';
+  crate ??= name
+    .replace(/^@/, '')
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
   if (!/^[a-z][a-z0-9_-]*$/.test(crate))
-    throw new AuthorError(`invalid crate name ${JSON.stringify(crate)}: lowercase letters, digits, - and _, starting with a letter (pass --crate)`);
-  if (isFrameworkCrate(crate)) throw new AuthorError(`crate name ${crate} is reserved for the framework (pass --crate)`);
-  return {base, crate, iface, accessor: iface[0].toLowerCase() + iface.slice(1), spec: `${base}.spec.ts`};
+    throw new AuthorError(
+      `invalid crate name ${JSON.stringify(crate)}: lowercase letters, digits, - and _, starting with a letter (pass --crate)`,
+    );
+  if (isFrameworkCrate(crate))
+    throw new AuthorError(`crate name ${crate} is reserved for the framework (pass --crate)`);
+  return {
+    base,
+    crate,
+    iface,
+    accessor: iface[0].toLowerCase() + iface.slice(1),
+    spec: `${base}.spec.ts`,
+  };
 }
 
 function coreRequirement() {
-  const version = readFileSync(path.join(FRAMEWORK_RUST, 'rnr-core/Cargo.toml'), 'utf8').match(/^version\s*=\s*"([^"]+)"/m)[1];
+  const version = readFileSync(path.join(FRAMEWORK_RUST, 'rnr-core/Cargo.toml'), 'utf8').match(
+    /^version\s*=\s*"([^"]+)"/m,
+  )[1];
   return version.split('.').slice(0, 2).join('.');
 }
 
@@ -48,22 +83,37 @@ function manifestFields(n, targets) {
   return {
     version: '0.1.0',
     private: true,
-    rustNative: {targets, spec: n.spec, rust: {crate: n.crate, path: 'rust', module: 'Module'}},
+    rustNative: { targets, spec: n.spec, rust: { crate: n.crate, path: 'rust', module: 'Module' } },
     files: [n.spec, 'rust/Cargo.toml', 'rust/src', 'rnr'],
     main: 'rnr/index.ts',
     types: 'rnr/index.ts',
     'react-native': 'rnr/index.ts',
-    ...(web ? {browser: 'rnr/web.ts'} : {}),
-    exports: {'.': {types: './rnr/index.ts', ...(web ? {browser: './rnr/web.ts'} : {}), default: './rnr/index.ts'}, './package.json': './package.json'},
-    scripts: {prepack: 'rnrs generate . && rnrs pack-js .', test: 'rnrs test .'},
+    ...(web ? { browser: 'rnr/web.ts' } : {}),
+    exports: {
+      '.': {
+        types: './rnr/index.ts',
+        ...(web ? { browser: './rnr/web.ts' } : {}),
+        default: './rnr/index.ts',
+      },
+      './package.json': './package.json',
+    },
+    scripts: { prepack: 'rnrs generate . && rnrs pack-js .', test: 'rnrs test .' },
     // Apps provide the runtime; the author develops against it and runs the rnrs CLI.
-    peerDependencies: {'@rnrs/runtime': runtimeVersion()},
-    devDependencies: {'@rnrs/cli': runtimeVersion(), '@rnrs/runtime': runtimeVersion()},
+    peerDependencies: { '@rnrs/runtime': runtimeVersion() },
+    devDependencies: { '@rnrs/cli': runtimeVersion(), '@rnrs/runtime': runtimeVersion() },
   };
 }
 
-const GITIGNORE = ['node_modules/', '*.tgz', '# generated by rnrs (rnrs generate, rnrs test, npm pack regenerate them)', 'rnr/', '.rnr/',
-  'rust/src/rnr_interface.rs', 'rust/target/', 'rust/Cargo.lock'];
+const GITIGNORE = [
+  'node_modules/',
+  '*.tgz',
+  '# generated by rnrs (rnrs generate, rnrs test, npm pack regenerate them)',
+  'rnr/',
+  '.rnr/',
+  'rust/src/rnr_interface.rs',
+  'rust/target/',
+  'rust/Cargo.lock',
+];
 
 function sourceFiles(n) {
   const spec = `import type {NativeModule} from '@rnrs/runtime/spec';
@@ -107,91 +157,133 @@ mod tests {
     }
 }
 `;
-  return {[n.spec]: spec, 'rust/Cargo.toml': cargo, 'rust/src/lib.rs': lib};
+  return { [n.spec]: spec, 'rust/Cargo.toml': cargo, 'rust/src/lib.rs': lib };
 }
 
 /** `rnrs init [dir] [--name N] [--targets a,b] [--crate C]`. Writes nothing unless every file
  *  can be created or merged without changing what is already there; never installs or uses
  *  the network. Returns the derived names. */
-export function init(dir, {name, targets: targetList, crate} = {}) {
+export function init(dir, { name, targets: targetList, crate } = {}) {
   const manifestPath = path.join(dir, 'package.json');
   const existing = existsSync(manifestPath) ? readJson(manifestPath) : null;
-  if (existing?.rustNative) throw new AuthorError(`${rel(manifestPath)} already declares rustNative; rnrs init only creates new module packages`);
+  if (existing?.rustNative)
+    throw new AuthorError(
+      `${rel(manifestPath)} already declares rustNative; rnrs init only creates new module packages`,
+    );
   if (name && existing?.name && existing.name !== name)
-    throw new AuthorError(`${rel(manifestPath)} is named ${existing.name}, not ${name}; rnrs init does not rename packages`);
+    throw new AuthorError(
+      `${rel(manifestPath)} is named ${existing.name}, not ${name}; rnrs init does not rename packages`,
+    );
   name ??= existing?.name ?? path.basename(dir);
-  const targets = targetList ? targetList.split(',').map(t => t.trim()).filter(Boolean) : [...KNOWN_TARGETS];
+  const targets = targetList
+    ? targetList
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean)
+    : [...KNOWN_TARGETS];
   try {
-    declaredTargets({name, rustNative: {targets}}, '--targets');
+    declaredTargets({ name, rustNative: { targets } }, '--targets');
   } catch (error) {
     throw new AuthorError(error.message);
   }
-  const n = scaffoldNames(name, {crate});
+  const n = scaffoldNames(name, { crate });
 
   // Plan everything first; refuse on any conflict, so a failed init changes nothing.
   const conflicts = [];
-  const manifest = {...(existing ?? {}), name};
+  const manifest = { ...existing, name };
   for (const [key, value] of Object.entries(manifestFields(n, targets))) {
-    if (manifest[key] === undefined) { manifest[key] = value; continue; }
+    if (manifest[key] === undefined) {
+      manifest[key] = value;
+      continue;
+    }
     if (key === 'scripts' || key === 'peerDependencies' || key === 'devDependencies') {
-      const merged = {...manifest[key]};
+      const merged = { ...manifest[key] };
       for (const [k, v] of Object.entries(value)) {
         if (merged[k] === undefined) merged[k] = v;
         // An existing test script or @rnrs/* range is the author's choice.
-        else if (merged[k] !== v && !(key === 'scripts' && k === 'test') && key === 'scripts') conflicts.push(`${key}.${k} is ${JSON.stringify(merged[k])}; rnrs needs ${JSON.stringify(v)}`);
+        else if (merged[k] !== v && !(key === 'scripts' && k === 'test') && key === 'scripts')
+          conflicts.push(
+            `${key}.${k} is ${JSON.stringify(merged[k])}; rnrs needs ${JSON.stringify(v)}`,
+          );
       }
       manifest[key] = merged;
     } else if (!sameJson(manifest[key], value)) {
       if (key === 'version' || key === 'private') continue; // the author's own choice
-      conflicts.push(`${key} is ${JSON.stringify(manifest[key])}; rnrs needs ${JSON.stringify(value)}`);
+      conflicts.push(
+        `${key} is ${JSON.stringify(manifest[key])}; rnrs needs ${JSON.stringify(value)}`,
+      );
     }
   }
   const files = sourceFiles(n);
   for (const [file, content] of Object.entries(files)) {
     const full = path.join(dir, file);
-    if (existsSync(full) && readFileSync(full, 'utf8') !== content) conflicts.push(`${file} already exists (rnrs init does not overwrite files)`);
+    if (existsSync(full) && readFileSync(full, 'utf8') !== content)
+      conflicts.push(`${file} already exists (rnrs init does not overwrite files)`);
   }
   if (conflicts.length)
-    throw new AuthorError(`rnrs init: nothing was written, because ${rel(dir)} conflicts with the scaffold:\n  ${conflicts.join('\n  ')}\n` +
-      'Use an empty directory (or one holding only a package.json without these fields), or adapt the existing files by hand (see the quickstart).');
+    throw new AuthorError(
+      `rnrs init: nothing was written, because ${rel(dir)} conflicts with the scaffold:\n  ${conflicts.join('\n  ')}\n` +
+        'Use an empty directory (or one holding only a package.json without these fields), or adapt the existing files by hand (see the quickstart).',
+    );
 
-  mkdirSync(path.join(dir, 'rust/src'), {recursive: true});
+  mkdirSync(path.join(dir, 'rust/src'), { recursive: true });
   // Exclusive creates: a file that appeared since the check above is never replaced.
   const created = [];
   try {
     for (const [file, content] of Object.entries(files)) {
       const full = path.join(dir, file);
-      if (existsSync(full)) continue;   // identical content (checked above)
-      writeFileSync(full, content, {flag: 'wx'});
+      if (existsSync(full)) continue; // identical content (checked above)
+      writeFileSync(full, content, { flag: 'wx' });
       created.push(file);
     }
     writeAtomic(manifestPath, JSON.stringify(manifest, null, 2) + '\n');
   } catch (error) {
-    throw new AuthorError(`rnrs init failed: ${error.message}. ${created.length ? `Created before the failure: ${created.join(', ')}; ` : ''}package.json was not changed.`);
+    throw new AuthorError(
+      `rnrs init failed: ${error.message}. ${created.length ? `Created before the failure: ${created.join(', ')}; ` : ''}package.json was not changed.`,
+    );
   }
   const ignore = path.join(dir, '.gitignore');
   const have = existsSync(ignore) ? readFileSync(ignore, 'utf8') : '';
-  const missing = GITIGNORE.filter(line => !have.split('\n').includes(line));
-  if (missing.length) appendFileSync(ignore, (have && !have.endsWith('\n') ? '\n' : '') + missing.join('\n') + '\n');
-  return {...n, targets, existing: Boolean(existing)};
+  const missing = GITIGNORE.filter((line) => !have.split('\n').includes(line));
+  if (missing.length)
+    appendFileSync(ignore, (have && !have.endsWith('\n') ? '\n' : '') + missing.join('\n') + '\n');
+  return { ...n, targets, existing: Boolean(existing) };
 }
 
 /** `rnrs test [dir] [cargo test args...]`: regenerates the interface, then runs the crate's
  *  `cargo test` with rnr-core patched to the installed framework copy. Returns cargo's exit
  *  status. The target directory is <package>/.rnr/target unless CARGO_TARGET_DIR is set. */
-export function testPackage(dir, cargoArgs = [], {cargo = process.env.RNR_CARGO ?? 'cargo'} = {}) {
+export function testPackage(
+  dir,
+  cargoArgs = [],
+  { cargo = process.env.RNR_CARGO ?? 'cargo' } = {},
+) {
   if (!existsSync(path.join(dir, 'package.json')))
-    throw new AuthorError(`rnrs test: ${rel(dir)} has no package.json. Usage: rnrs test [dir] [cargo test args...]; ` +
-      'a test-name filter needs the directory first, e.g. rnrs test . my_test');
+    throw new AuthorError(
+      `rnrs test: ${rel(dir)} has no package.json. Usage: rnrs test [dir] [cargo test args...]; ` +
+        'a test-name filter needs the directory first, e.g. rnrs test . my_test',
+    );
   const pkg = loadPackage(dir);
-  if (pkg.library) throw new AuthorError(`${pkg.manifestPath}: rnrs test applies to module packages; run cargo test in the library crate`);
+  if (pkg.library)
+    throw new AuthorError(
+      `${pkg.manifestPath}: rnrs test applies to module packages; run cargo test in the library crate`,
+    );
   checkCoreRequirement(pkg);
-  for (const o of plan([pkg]).filter(o => o.committed)) writeAtomic(o.file, o.content);
+  for (const o of plan([pkg]).filter((o) => o.committed)) writeAtomic(o.file, o.content);
   const core = path.join(FRAMEWORK_RUST, 'rnr-core');
-  const env = {...process.env, CARGO_TARGET_DIR: process.env.CARGO_TARGET_DIR || path.join(dir, '.rnr/target')};
-  const args = ['test', '--manifest-path', path.join(pkg.cratePath, 'Cargo.toml'),
-    '--config', `patch.crates-io.rnr-core.path=${JSON.stringify(core.split(path.sep).join('/'))}`, ...cargoArgs];
-  const result = spawnSync(cargo, args, {stdio: 'inherit', env});
+  const env = {
+    ...process.env,
+    CARGO_TARGET_DIR: process.env.CARGO_TARGET_DIR || path.join(dir, '.rnr/target'),
+  };
+  const args = [
+    'test',
+    '--manifest-path',
+    path.join(pkg.cratePath, 'Cargo.toml'),
+    '--config',
+    `patch.crates-io.rnr-core.path=${JSON.stringify(core.split(path.sep).join('/'))}`,
+    ...cargoArgs,
+  ];
+  const result = spawnSync(cargo, args, { stdio: 'inherit', env });
   if (result.error) throw new AuthorError(cargoMissing(cargo, result.error));
   return result.status ?? 1;
 }
@@ -204,19 +296,25 @@ export const cargoMissing = (cargo, error) =>
 
 const NATIVE_CONDITIONS = ['react-native', 'require', 'import', 'default'];
 const WEB_CONDITIONS = ['browser', 'import', 'module', 'default'];
-const strip = p => (typeof p === 'string' ? p.replace(/^\.\//, '') : p);
+const strip = (p) => (typeof p === 'string' ? p.replace(/^\.\//, '') : p);
 
 /** The target a conditional `exports` value selects under `conditions` (Node's algorithm,
  *  without patterns); null when nothing matches. */
 export function resolveConditional(value, conditions) {
   if (typeof value === 'string') return value;
   if (Array.isArray(value)) {
-    for (const v of value) { const r = resolveConditional(v, conditions); if (r != null) return r; }
+    for (const v of value) {
+      const r = resolveConditional(v, conditions);
+      if (r != null) return r;
+    }
     return null;
   }
   if (value && typeof value === 'object')
     for (const [key, v] of Object.entries(value))
-      if (key === 'default' || conditions.includes(key)) { const r = resolveConditional(v, conditions); if (r != null) return r; }
+      if (key === 'default' || conditions.includes(key)) {
+        const r = resolveConditional(v, conditions);
+        if (r != null) return r;
+      }
   return null;
 }
 
@@ -224,11 +322,18 @@ export function resolveConditional(value, conditions) {
 function entry(manifest, conditions, legacy) {
   const exp = manifest.exports;
   if (exp !== undefined) {
-    const sub = exp && typeof exp === 'object' && !Array.isArray(exp) && Object.keys(exp).some(k => k.startsWith('.')) ? exp['.'] : exp;
-    return {from: 'exports["."]', file: strip(resolveConditional(sub, conditions))};
+    const sub =
+      exp &&
+      typeof exp === 'object' &&
+      !Array.isArray(exp) &&
+      Object.keys(exp).some((k) => k.startsWith('.'))
+        ? exp['.']
+        : exp;
+    return { from: 'exports["."]', file: strip(resolveConditional(sub, conditions)) };
   }
-  for (const field of legacy) if (typeof manifest[field] === 'string') return {from: field, file: strip(manifest[field])};
-  return {from: 'main', file: 'index.js'};
+  for (const field of legacy)
+    if (typeof manifest[field] === 'string') return { from: field, file: strip(manifest[field]) };
+  return { from: 'main', file: 'index.js' };
 }
 
 /** The files `npm pack` would put in the tarball (package-relative), from a dry run in a
@@ -238,19 +343,34 @@ function entry(manifest, conditions, legacy) {
 function packedFiles(dir, needed, npm = process.env.RNR_NPM || 'npm') {
   const scratch = mkdtempSync(path.join(tmpdir(), 'rnr-pack-'));
   try {
-    const skip = new Set(['node_modules', '.rnr', '.git', 'target'].map(d => path.join(dir, d)).concat(path.join(dir, 'rust/target')));
-    cpSync(dir, scratch, {recursive: true, filter: src => !skip.has(src) && !src.endsWith('.tgz')});
+    const skip = new Set(
+      ['node_modules', '.rnr', '.git', 'target']
+        .map((d) => path.join(dir, d))
+        .concat(path.join(dir, 'rust/target')),
+    );
+    cpSync(dir, scratch, {
+      recursive: true,
+      filter: (src) => !skip.has(src) && !src.endsWith('.tgz'),
+    });
     for (const f of needed) {
       const file = path.resolve(scratch, f);
       const inside = path.relative(scratch, file);
-      if (!inside || inside.startsWith('..') || path.isAbsolute(inside)) throw new AuthorError(`${f} is outside the package directory`);
-      if (!existsSync(file)) { mkdirSync(path.dirname(file), {recursive: true}); writeFileSync(file, ''); }
+      if (!inside || inside.startsWith('..') || path.isAbsolute(inside))
+        throw new AuthorError(`${f} is outside the package directory`);
+      if (!existsSync(file)) {
+        mkdirSync(path.dirname(file), { recursive: true });
+        writeFileSync(file, '');
+      }
     }
-    const result = spawnSync(npm, ['pack', '--dry-run', '--json', '--ignore-scripts', '--offline'], {cwd: scratch, encoding: 'utf8', timeout: 120_000});
+    const result = spawnSync(
+      npm,
+      ['pack', '--dry-run', '--json', '--ignore-scripts', '--offline'],
+      { cwd: scratch, encoding: 'utf8', timeout: 120_000 },
+    );
     if (result.error || result.status !== 0) return null;
-    return new Set(JSON.parse(result.stdout)[0].files.map(f => f.path));
+    return new Set(JSON.parse(result.stdout)[0].files.map((f) => f.path));
   } finally {
-    rmSync(scratch, {recursive: true, force: true});
+    rmSync(scratch, { recursive: true, force: true });
   }
 }
 
@@ -258,37 +378,55 @@ function packedFiles(dir, needed, npm = process.env.RNR_NPM || 'npm') {
  *  left out of the tarball, or an entry point that does not reach the generated wrapper
  *  directly (an author re-export module in between is not supported). `warn` receives a
  *  note when npm is unavailable and the tarball contents were not checked. */
-export function lintManifest(pkg, {warn = console.error} = {}) {
+export function lintManifest(pkg, { warn = console.error } = {}) {
   const manifest = readJson(path.join(pkg.dir, 'package.json'));
   const errors = [];
-  const native = pkg.targets.some(t => t !== 'web');
+  const native = pkg.targets.some((t) => t !== 'web');
   const wrapper = ['rnr/index.ts', 'rnr/index'];
   if (native) {
     // Metro's default resolverMainFields without exports: react-native, browser, main.
     const e = entry(manifest, NATIVE_CONDITIONS, ['react-native', 'browser', 'main']);
     if (!wrapper.includes(e.file))
-      errors.push(`React Native resolves the package (via ${e.from}) to ${e.file ?? 'nothing'}, not the generated wrapper ./rnr/index.ts`);
+      errors.push(
+        `React Native resolves the package (via ${e.from}) to ${e.file ?? 'nothing'}, not the generated wrapper ./rnr/index.ts`,
+      );
   }
   let webEntry = null;
   if (pkg.targets.includes('web')) {
     const e = entry(manifest, WEB_CONDITIONS, ['browser', 'module', 'main']);
     webEntry = e.file;
     if (![...wrapper, 'rnr/web.ts', 'rnr/web'].includes(e.file))
-      errors.push(`web bundlers resolve the package (via ${e.from}) to ${e.file ?? 'nothing'}, not ./rnr/web.ts or ./rnr/index.ts`);
+      errors.push(
+        `web bundlers resolve the package (via ${e.from}) to ${e.file ?? 'nothing'}, not ./rnr/web.ts or ./rnr/index.ts`,
+      );
   }
-  const needed = [path.relative(pkg.dir, pkg.spec), path.join(path.relative(pkg.dir, pkg.cratePath), 'Cargo.toml'),
-    path.join(path.relative(pkg.dir, pkg.cratePath), 'src/lib.rs'), path.join(path.relative(pkg.dir, pkg.cratePath), 'src/rnr_interface.rs'),
-    'rnr/index.ts', ...(webEntry?.startsWith('rnr/web') ? ['rnr/web.ts'] : [])].map(f => f.split(path.sep).join('/'));
+  const needed = [
+    path.relative(pkg.dir, pkg.spec),
+    path.join(path.relative(pkg.dir, pkg.cratePath), 'Cargo.toml'),
+    path.join(path.relative(pkg.dir, pkg.cratePath), 'src/lib.rs'),
+    path.join(path.relative(pkg.dir, pkg.cratePath), 'src/rnr_interface.rs'),
+    'rnr/index.ts',
+    ...(webEntry?.startsWith('rnr/web') ? ['rnr/web.ts'] : []),
+  ].map((f) => f.split(path.sep).join('/'));
   // npm pack takes only the package directory: a spec or crate outside it can never ship.
-  const outside = needed.filter(f => f.startsWith('../') || path.isAbsolute(f));
-  if (outside.length) errors.push(`${outside.join(', ')} ${outside.length > 1 ? 'are' : 'is'} outside the package directory; npm pack cannot include ${outside.length > 1 ? 'them' : 'it'}`);
+  const outside = needed.filter((f) => f.startsWith('../') || path.isAbsolute(f));
+  if (outside.length)
+    errors.push(
+      `${outside.join(', ')} ${outside.length > 1 ? 'are' : 'is'} outside the package directory; npm pack cannot include ${outside.length > 1 ? 'them' : 'it'}`,
+    );
   const packed = outside.length ? null : packedFiles(pkg.dir, needed);
   if (!packed && !outside.length) {
     errors.unchecked = true;
     warn(`${pkg.manifestPath}: tarball contents not checked (npm pack --dry-run could not run)`);
   } else if (packed) {
-    const left = needed.filter(f => !packed.has(f));
-    if (left.length) errors.push(`npm pack would leave out ${left.join(', ')} (check "files", .npmignore and .gitignore)`);
+    const left = needed.filter((f) => !packed.has(f));
+    if (left.length)
+      errors.push(
+        `npm pack would leave out ${left.join(', ')} (check "files", .npmignore and .gitignore)`,
+      );
   }
-  return Object.assign(errors.map(e => `${pkg.manifestPath}: ${e}`), {unchecked: Boolean(errors.unchecked)});
+  return Object.assign(
+    errors.map((e) => `${pkg.manifestPath}: ${e}`),
+    { unchecked: Boolean(errors.unchecked) },
+  );
 }

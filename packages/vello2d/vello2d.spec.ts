@@ -2,7 +2,7 @@
 // application and game state and submits whole frames; Rust (rust/) owns only rendering
 // resources (render thread, Vello raster context, wgpu device and surface) and the latest
 // submitted frame. See docs/surface.md and frame.ts for the frame format.
-import type {NativeModule, NativeObject} from '@rnrs/runtime/spec';
+import type { NativeModule, NativeObject } from '@rnrs/runtime/spec';
 
 export interface RendererOptions {
   /** Raster pixels per physical surface pixel, 0.25 to 1. Lower values render a smaller

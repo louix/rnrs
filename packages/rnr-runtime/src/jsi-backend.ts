@@ -4,8 +4,16 @@
 // invalidates that module when the runtime is reloaded or destroyed, which tears down every
 // adapter installed here. Call installJsiBackend() once at startup (an explicit call rather
 // than an import side effect: Metro inlines requires).
-import {TurboModuleRegistry} from 'react-native';
-import {bindThisAndFirst, conversionHelpers, setBackend, type AdapterStats, type Backend, type NativeAdapter, type SettleFn} from './runtime';
+import { TurboModuleRegistry } from 'react-native';
+import {
+  bindThisAndFirst,
+  conversionHelpers,
+  setBackend,
+  type AdapterStats,
+  type Backend,
+  type NativeAdapter,
+  type SettleFn,
+} from './runtime';
 
 export interface LifecycleStats {
   scopesCreated: number;
@@ -87,7 +95,8 @@ interface RuntimeBindings {
 export function runtimeBindings(): RuntimeBindings {
   const global = globalThis as any;
   if (!global.__rnrRuntime) TurboModuleRegistry.get('RnrRuntime');
-  if (!global.__rnrRuntime) throw new Error('rnr: the RnrRuntime framework module is not linked into this app');
+  if (!global.__rnrRuntime)
+    throw new Error('rnr: the RnrRuntime framework module is not linked into this app');
   return global.__rnrRuntime;
 }
 
@@ -103,10 +112,12 @@ export function registeredModuleCount(): number {
 
 /** The native adapter must provide the entries this JS runtime calls; a native library from an
  *  older @rnrs/runtime lacks the positional entry. Throws an actionable error. */
-export function checkNativeAdapter(raw: {callp?: unknown; call?: unknown}, name: string): void {
+export function checkNativeAdapter(raw: { callp?: unknown; call?: unknown }, name: string): void {
   for (const entry of ['call', 'callp'] as const) {
     if (typeof raw[entry] !== 'function')
-      throw new Error(`@rnrs/runtime: the app's native library does not match this JS runtime: module ${name} has no "${entry}" entry. Rebuild the native app (Android: librnr.so; iOS: pod install) so it comes from the installed @rnrs/runtime.`);
+      throw new Error(
+        `@rnrs/runtime: the app's native library does not match this JS runtime: module ${name} has no "${entry}" entry. Rebuild the native app (Android: librnr.so; iOS: pod install) so it comes from the installed @rnrs/runtime.`,
+      );
   }
 }
 
@@ -120,17 +131,27 @@ function jsiBackend(platform: JsiPlatform): Backend {
       } catch (error) {
         // Do not leave a refused adapter registered with the runtime scope; a failing
         // teardown must not replace the original error.
-        try { raw.teardown(); } catch { /* reported error stays the mismatch */ }
+        try {
+          raw.teardown();
+        } catch {
+          /* reported error stays the mismatch */
+        }
         throw error;
       }
       settles.set(raw.generation, settle);
       const global = globalThis as any;
       if (!global.__rnrSettle) {
-        const entry = (generation: number, id: number, status: number, value: unknown, message: string) => {
+        const entry = (
+          generation: number,
+          id: number,
+          status: number,
+          value: unknown,
+          message: string,
+        ) => {
           settles.get(generation)?.(id, status, value, message);
         };
         // Drains convert results with these helpers (read by the JSI adapter).
-        Object.defineProperty(entry, 'helpers', {value: conversionHelpers});
+        Object.defineProperty(entry, 'helpers', { value: conversionHelpers });
         global.__rnrSettle = entry;
       }
       const callp = bindThisAndFirst(raw.callp, raw, conversionHelpers);
@@ -145,12 +166,12 @@ function jsiBackend(platform: JsiPlatform): Backend {
         call2: callp as NativeAdapter['call2'],
         call3: callp as NativeAdapter['call3'],
         call4: callp as NativeAdapter['call4'],
-        cancel: id => raw.cancel(id),
-        dispose: handle => raw.dispose(handle),
+        cancel: (id) => raw.cancel(id),
+        dispose: (handle) => raw.dispose(handle),
         teardown: () => raw.teardown(),
         stats: () => raw.stats(conversionHelpers),
         // Absent on native libraries without the worklet endpoint.
-        workletEndpoint: raw.workletEndpoint && (methods => raw.workletEndpoint!(methods)),
+        workletEndpoint: raw.workletEndpoint && ((methods) => raw.workletEndpoint!(methods)),
         workletBox: raw.workletBox && ((endpoint, handle) => raw.workletBox!(endpoint, handle)),
       };
       return adapter;

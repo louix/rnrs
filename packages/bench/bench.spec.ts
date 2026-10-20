@@ -1,6 +1,6 @@
 // Measurement-only module for the conversion pilot (docs/pilot.md): each method does a small,
 // input-dependent computation so results can be verified and work cannot be skipped.
-import type {NativeModule, NativeObject} from '@rnrs/runtime/spec';
+import type { NativeModule, NativeObject } from '@rnrs/runtime/spec';
 
 export interface Point8 {
   a: number;
@@ -14,9 +14,9 @@ export interface Point8 {
 }
 
 export type Shape =
-  | {kind: 'circle'; r: number}
-  | {kind: 'rect'; w: number; h: number}
-  | {kind: 'tri'; b: number; h: number};
+  | { kind: 'circle'; r: number }
+  | { kind: 'rect'; w: number; h: number }
+  | { kind: 'tri'; b: number; h: number };
 
 export interface Cell extends NativeObject {
   get(): number;

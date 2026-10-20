@@ -8,17 +8,21 @@
 // Commands: frames (window frames, in points, of the surface and the overlay), stats (drain + JS state), touch-off / touch-on (the touchInput prop), detach /
 // attach (surfaceKey 0, then the same key again: a reattach of the same surface), remount
 // (closes the probe and its view, creates a new probe: a new surface key).
-import React, {useEffect, useRef, useState} from 'react';
-import {Pressable, SafeAreaView, Text, View} from 'react-native';
-import {SurfaceView} from '@rnrs/surface';
-import {touchProbeModule, type Probe} from '@rnrs/labs-touch-probe';
+import React, { useEffect, useRef, useState } from 'react';
+import { Pressable, SafeAreaView, Text, View } from 'react-native';
+import { SurfaceView } from '@rnrs/surface';
+import { touchProbeModule, type Probe } from '@rnrs/labs-touch-probe';
 
 const SERVER = 'http://127.0.0.1:8765';
 const RUNTIME = `${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
 
 async function post(path: string, body: object) {
   try {
-    await fetch(`${SERVER}${path}`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({runtime: RUNTIME, at: Date.now(), ...body})});
+    await fetch(`${SERVER}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ runtime: RUNTIME, at: Date.now(), ...body }),
+    });
   } catch {
     // No driver: nothing to report to.
   }
@@ -31,10 +35,19 @@ export default function App(): React.JSX.Element {
   const [overlayTaps, setOverlayTaps] = useState(0);
   const surfaceBox = useRef<View>(null);
   const overlay = useRef<View>(null);
-  const state = useRef({probe: null as Probe | null, overlayTaps: 0, touchInput: 'rust', detached: false, probes: 0});
+  const state = useRef({
+    probe: null as Probe | null,
+    overlayTaps: 0,
+    touchInput: 'rust',
+    detached: false,
+    probes: 0,
+  });
+  // The driver reads this render-time snapshot; preserve its established timing.
+  /* oxlint-disable react/refs */
   state.current.overlayTaps = overlayTaps;
   state.current.touchInput = touchInput;
   state.current.detached = detached;
+  /* oxlint-enable react/refs */
 
   const create = () => {
     const p = touchProbeModule().create();
@@ -45,13 +58,15 @@ export default function App(): React.JSX.Element {
   };
 
   useEffect(() => {
+    // Native handles must be created after mount and published to the view.
+    // oxlint-disable-next-line react/set-state-in-effect
     const p = create();
-    void post('/event', {kind: 'ready', surfaceKey: p.surfaceKey()});
+    void post('/event', { kind: 'ready', surfaceKey: p.surfaceKey() });
     let seq = 0;
     let stopped = false;
     const poll = async () => {
       while (!stopped) {
-        let command: {id: number; cmd: string} | null = null;
+        let command: { id: number; cmd: string } | null = null;
         try {
           const res = await fetch(`${SERVER}/next?runtime=${RUNTIME}&seq=${seq}`);
           command = res.status === 200 ? await res.json() : null;
@@ -61,12 +76,17 @@ export default function App(): React.JSX.Element {
         if (command && command.id >= seq) {
           seq = command.id + 1;
           const s = state.current;
-          const done = (data: object = {}) => post('/report', {id: command!.id, cmd: command!.cmd, ...data});
+          const done = (data: object = {}) =>
+            post('/report', { id: command!.id, cmd: command!.cmd, ...data });
           switch (command.cmd) {
             case 'frames': {
-              const frame = (ref: React.RefObject<View | null>) => new Promise<number[] | null>(resolve =>
-                ref.current ? ref.current.measureInWindow((x, y, w, h) => resolve([x, y, w, h])) : resolve(null));
-              await done({surface: await frame(surfaceBox), overlay: await frame(overlay)});
+              const frame = (ref: React.RefObject<View | null>) =>
+                new Promise<number[] | null>((resolve) =>
+                  ref.current
+                    ? ref.current.measureInWindow((x, y, w, h) => resolve([x, y, w, h]))
+                    : resolve(null),
+                );
+              await done({ surface: await frame(surfaceBox), overlay: await frame(overlay) });
               break;
             }
             case 'stats': {
@@ -74,46 +94,86 @@ export default function App(): React.JSX.Element {
               await done({
                 surfaceKey: current?.surfaceKey() ?? 0,
                 probe: current?.drain() ?? null,
-                js: {overlayTaps: s.overlayTaps, touchInput: s.touchInput, detached: s.detached, probes: s.probes},
+                js: {
+                  overlayTaps: s.overlayTaps,
+                  touchInput: s.touchInput,
+                  detached: s.detached,
+                  probes: s.probes,
+                },
               });
               break;
             }
-            case 'touch-off': setTouchInput('none'); await done(); break;
-            case 'touch-on': setTouchInput('rust'); await done(); break;
-            case 'detach': setDetached(true); await done(); break;
-            case 'attach': setDetached(false); await done(); break;
+            case 'touch-off':
+              setTouchInput('none');
+              await done();
+              break;
+            case 'touch-on':
+              setTouchInput('rust');
+              await done();
+              break;
+            case 'detach':
+              setDetached(true);
+              await done();
+              break;
+            case 'attach':
+              setDetached(false);
+              await done();
+              break;
             case 'remount': {
               const old = s.probe;
               old?.close();
               const final = old?.drain() ?? null; // after close: the closed reset is queued
               const next = create();
-              await done({closed: final, surfaceKey: next.surfaceKey()});
+              await done({ closed: final, surfaceKey: next.surfaceKey() });
               break;
             }
             default:
-              await done({error: 'unknown command'});
+              await done({ error: 'unknown command' });
           }
         } else {
-          await new Promise(r => setTimeout(r, 100));
+          await new Promise((r) => setTimeout(r, 100));
         }
       }
     };
     void poll();
     return () => {
       stopped = true;
+      // Close the latest probe, including replacements created by driver commands.
+      // oxlint-disable-next-line react-hooks/exhaustive-deps
       state.current.probe?.close();
     };
   }, []);
 
   const key = probe && !detached ? probe.surfaceKey() : 0;
   return (
-    <SafeAreaView style={{flex: 1, backgroundColor: '#202020'}}>
-      <Text style={{color: 'white', padding: 8}}>touch probe: {touchInput}{detached ? ' (detached)' : ''}</Text>
-      <View ref={surfaceBox} style={{flex: 1, margin: 16}}>
-        <SurfaceView key={probe ? probe.surfaceKey() : 0} testID="probe-surface" surfaceKey={key} touchInput={touchInput} style={{flex: 1}} />
-        <Pressable ref={overlay} testID="overlay" accessibilityRole="button" onPress={() => setOverlayTaps(n => n + 1)}
-          style={{position: 'absolute', left: 0, top: 0, width: 140, height: 90, backgroundColor: '#3060c0'}}>
-          <Text style={{color: 'white', padding: 8}}>overlay {overlayTaps}</Text>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#202020' }}>
+      <Text style={{ color: 'white', padding: 8 }}>
+        touch probe: {touchInput}
+        {detached ? ' (detached)' : ''}
+      </Text>
+      <View ref={surfaceBox} style={{ flex: 1, margin: 16 }}>
+        <SurfaceView
+          key={probe ? probe.surfaceKey() : 0}
+          testID="probe-surface"
+          surfaceKey={key}
+          touchInput={touchInput}
+          style={{ flex: 1 }}
+        />
+        <Pressable
+          ref={overlay}
+          testID="overlay"
+          accessibilityRole="button"
+          onPress={() => setOverlayTaps((n) => n + 1)}
+          style={{
+            position: 'absolute',
+            left: 0,
+            top: 0,
+            width: 140,
+            height: 90,
+            backgroundColor: '#3060c0',
+          }}
+        >
+          <Text style={{ color: 'white', padding: 8 }}>overlay {overlayTaps}</Text>
         </Pressable>
       </View>
     </SafeAreaView>

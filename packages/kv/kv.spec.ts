@@ -1,7 +1,7 @@
 // A persistent key-value store for React Native on Android and iOS: the TypeScript contract. The
 // Rust implementation in rust/ uses sled, with databases under the app's private storage
 // (the framework's application data directory). There is no browser backend.
-import type {NativeModule, NativeObject} from '@rnrs/runtime/spec';
+import type { NativeModule, NativeObject } from '@rnrs/runtime/spec';
 
 /** An open database handle.
  *

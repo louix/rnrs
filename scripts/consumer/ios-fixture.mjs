@@ -5,9 +5,9 @@
 // `--modules` writes the http/kv consumer instead (fixtures/ios-modules-consumer: App.tsx,
 // modules.ts, and the shared http and kv consumer smokes).
 //   node scripts/consumer/ios-fixture.mjs [--modules] <app-dir>
-import {copyFileSync, mkdirSync, readFileSync, writeFileSync} from 'node:fs';
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import {fileURLToPath} from 'node:url';
+import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 export const SUITES = ['conformance', 'meter-suite', 'values-suite', 'blake3-suite'];
@@ -22,20 +22,27 @@ const IMPORTS = {
 };
 
 export function writeIosFixture(app) {
-  for (const f of ['ios/App.tsx', 'ios/device.ts', 'smoke.ts']) copyFileSync(path.join(ROOT, 'fixtures/consumer', f), path.join(app, path.basename(f)));
-  copyFileSync(path.join(ROOT, 'fixtures/blake3/test_vectors.json'), path.join(app, 'test_vectors.json'));
-  mkdirSync(path.join(app, 'suites'), {recursive: true});
+  for (const f of ['ios/App.tsx', 'ios/device.ts', 'smoke.ts'])
+    copyFileSync(path.join(ROOT, 'fixtures/consumer', f), path.join(app, path.basename(f)));
+  copyFileSync(
+    path.join(ROOT, 'fixtures/blake3/test_vectors.json'),
+    path.join(app, 'test_vectors.json'),
+  );
+  mkdirSync(path.join(app, 'suites'), { recursive: true });
   for (const suite of SUITES) {
     let text = readFileSync(path.join(ROOT, 'src/rnr', `${suite}.ts`), 'utf8');
-    for (const [from, to] of Object.entries(IMPORTS)) text = text.replaceAll(`'${from}'`, `'${to}'`);
-    if (/from '\.\.\/\.\.\//.test(text)) throw new Error(`suite ${suite} still imports from the repository`);
+    for (const [from, to] of Object.entries(IMPORTS))
+      text = text.replaceAll(`'${from}'`, `'${to}'`);
+    if (/from '\.\.\/\.\.\//.test(text))
+      throw new Error(`suite ${suite} still imports from the repository`);
     writeFileSync(path.join(app, 'suites', `${suite}.ts`), text);
   }
 }
 
 /** The http/kv consumer: modules.ts drives both smokes, a reload and a process restart. */
 export function writeIosModulesFixture(app) {
-  for (const f of ['App.tsx', 'modules.ts']) copyFileSync(path.join(ROOT, 'fixtures/ios-modules-consumer', f), path.join(app, f));
+  for (const f of ['App.tsx', 'modules.ts'])
+    copyFileSync(path.join(ROOT, 'fixtures/ios-modules-consumer', f), path.join(app, f));
   copyFileSync(path.join(ROOT, 'fixtures/http-consumer/smoke.ts'), path.join(app, 'http-smoke.ts'));
   copyFileSync(path.join(ROOT, 'fixtures/kv-consumer/smoke.ts'), path.join(app, 'kv-smoke.ts'));
 }

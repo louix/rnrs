@@ -1,5 +1,5 @@
 // Counter module spec: the TypeScript contract. Rust implementation: rust/counter.
-import type {NativeModule, NativeObject} from '@rnrs/runtime/spec';
+import type { NativeModule, NativeObject } from '@rnrs/runtime/spec';
 
 /** A persistent counter. Every number is an f64. */
 export interface Counter extends NativeObject {

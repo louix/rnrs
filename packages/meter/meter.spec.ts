@@ -1,6 +1,6 @@
 // Meter module spec: a second, independently shaped module (not a Counter variant).
 // Rust implementation: rust/meter.
-import type {NativeModule, NativeObject} from '@rnrs/runtime/spec';
+import type { NativeModule, NativeObject } from '@rnrs/runtime/spec';
 
 /** A settable reading. */
 export interface Gauge extends NativeObject {

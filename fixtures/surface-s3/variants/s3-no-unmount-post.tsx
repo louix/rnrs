@@ -12,13 +12,22 @@
 // Commands: stats (renderer stats + lifecycle), reload (React Native reload through the
 // framework's test hook), unmount / remount (closes the renderer and its SurfaceView; a remount
 // creates a new renderer, so a new surface key), resize (toggles the surface's height).
-import React, {useEffect, useRef, useState} from 'react';
-import {AppState, SafeAreaView, Text, View, type LayoutChangeEvent} from 'react-native';
-import {SurfaceView} from '@rnrs/surface';
-import {runtimeBindings} from '@rnrs/runtime/testing';
-import {vello2DModule, type Renderer, type RendererStats} from '@rnrs/example-vello2d';
-import {FrameWriter} from '@rnrs/example-vello2d/frame';
-import {Clock, Lifecycle, autopilot, createGame, drawFrame, resize, step, type Game} from './game';
+import React, { useEffect, useRef, useState } from 'react';
+import { AppState, SafeAreaView, Text, View, type LayoutChangeEvent } from 'react-native';
+import { SurfaceView } from '@rnrs/surface';
+import { runtimeBindings } from '@rnrs/runtime/testing';
+import { vello2DModule, type Renderer, type RendererStats } from '@rnrs/example-vello2d';
+import { FrameWriter } from '@rnrs/example-vello2d/frame';
+import {
+  Clock,
+  Lifecycle,
+  autopilot,
+  createGame,
+  drawFrame,
+  resize,
+  step,
+  type Game,
+} from './game';
 
 const SERVER = 'http://127.0.0.1:8765';
 const SEED = 12345;
@@ -35,36 +44,54 @@ function netLog(path: string, phase: string) {
 async function post(path: string, body: object, phase = 'normal') {
   netLog(path, phase);
   try {
-    await fetch(`${SERVER}${path}`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({runtime: RUNTIME, at: Date.now(), ...body})});
+    await fetch(`${SERVER}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ runtime: RUNTIME, at: Date.now(), ...body }),
+    });
   } catch {
     // No driver: nothing to report to.
   }
 }
 
 /** Renderer stats plus what JS knows (lifecycle, game) — the S3 driver's evidence. */
-function snapshot(st: RendererStats | null, life: Lifecycle | null, game: Game | null, key: number) {
+function snapshot(
+  st: RendererStats | null,
+  life: Lifecycle | null,
+  game: Game | null,
+  key: number,
+) {
   return {
-    appState: AppState.currentState, surfaceKey: key, renderer: st,
-    lifecycle: life ? {running: life.running, resumes: life.resumes, pauses: life.pauses, transitions: life.transitions.slice(-8)} : null,
-    game: game ? {tick: game.tick, score: game.score} : null,
+    appState: AppState.currentState,
+    surfaceKey: key,
+    renderer: st,
+    lifecycle: life
+      ? {
+          running: life.running,
+          resumes: life.resumes,
+          pauses: life.pauses,
+          transitions: life.transitions.slice(-8),
+        }
+      : null,
+    game: game ? { tick: game.tick, score: game.score } : null,
   };
 }
 
-function GameSurface({onStats, tall}: {onStats: (s: () => object) => void; tall: boolean}) {
+function GameSurface({ onStats, tall }: { onStats: (s: () => object) => void; tall: boolean }) {
   const [renderer, setRenderer] = useState<Renderer | null>(null);
-  const layout = useRef<{w: number; h: number} | null>(null);
+  const layout = useRef<{ w: number; h: number } | null>(null);
 
   useEffect(() => {
     let r: Renderer;
     try {
-      r = vello2DModule().create({resolutionScale: 1});
+      r = vello2DModule().create({ resolutionScale: 1 });
     } catch (e) {
       // E.g. the render-thread cap: reported, never thrown into React.
-      void post('/event', {kind: 'renderer-create-failed', error: String(e)});
+      void post('/event', { kind: 'renderer-create-failed', error: String(e) });
       return;
     }
     setRenderer(r);
-    void post('/event', {kind: 'renderer-created', surfaceKey: r.surfaceKey()});
+    void post('/event', { kind: 'renderer-created', surfaceKey: r.surfaceKey() });
     return () => {
       // E1: no request from the unmount cleanup.
       console.log(`RNR-NET unmount-no-post runtime=${RUNTIME} requestsBefore=${requests}`);
@@ -78,15 +105,18 @@ function GameSurface({onStats, tall}: {onStats: (s: () => object) => void; tall:
     const writer = new FrameWriter();
     let game: Game | null = null;
     const clock = new Clock();
-    const life = new Lifecycle({
-      appActive: () => AppState.currentState === 'active',
-      rendererAttached: () => r.stats().state === 'attached',
-      gameTick: () => game?.tick ?? 0,
-      framesSubmitted: () => r.stats().framesSubmitted,
-    }, clock);
-    const appState = AppState.addEventListener('change', s => {
+    const life = new Lifecycle(
+      {
+        appActive: () => AppState.currentState === 'active',
+        rendererAttached: () => r.stats().state === 'attached',
+        gameTick: () => game?.tick ?? 0,
+        framesSubmitted: () => r.stats().framesSubmitted,
+      },
+      clock,
+    );
+    const appState = AppState.addEventListener('change', (s) => {
       life.check('appstate');
-      void post('/event', {kind: 'appstate', state: s, stats: r.stats()});
+      void post('/event', { kind: 'appstate', state: s, stats: r.stats() });
     });
     let handle = 0;
     let needsFrame = true;
@@ -117,11 +147,11 @@ function GameSurface({onStats, tall}: {onStats: (s: () => object) => void; tall:
   }, [renderer, onStats]);
 
   const onLayout = (e: LayoutChangeEvent) => {
-    layout.current = {w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height};
+    layout.current = { w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height };
   };
   return (
-    <View style={{height: tall ? '100%' : '60%'}} onLayout={onLayout}>
-      {renderer && <SurfaceView surfaceKey={renderer.surfaceKey()} style={{flex: 1}} />}
+    <View style={{ height: tall ? '100%' : '60%' }} onLayout={onLayout}>
+      {renderer && <SurfaceView surfaceKey={renderer.surfaceKey()} style={{ flex: 1 }} />}
     </View>
   );
 }
@@ -130,15 +160,15 @@ export default function App() {
   const [mounted, setMounted] = useState(true);
   const [tall, setTall] = useState(true);
   const [generation, setGeneration] = useState(0);
-  const stats = useRef<() => object>(() => ({appState: AppState.currentState, renderer: null}));
+  const stats = useRef<() => object>(() => ({ appState: AppState.currentState, renderer: null }));
 
   useEffect(() => {
-    void post('/event', {kind: 'runtime-start'});
+    void post('/event', { kind: 'runtime-start' });
     let seq = 0;
     let stopped = false;
     const poll = async () => {
       while (!stopped) {
-        let command: {id: number; cmd: string} | null = null;
+        let command: { id: number; cmd: string } | null = null;
         try {
           netLog('/next', 'poll');
           const res = await fetch(`${SERVER}/next?runtime=${RUNTIME}&seq=${seq}`);
@@ -148,13 +178,14 @@ export default function App() {
         }
         if (command && command.id >= seq) {
           seq = command.id + 1;
-          const done = (data: object = {}) => post('/report', {id: command!.id, cmd: command!.cmd, ...data});
+          const done = (data: object = {}) =>
+            post('/report', { id: command!.id, cmd: command!.cmd, ...data });
           switch (command.cmd) {
             case 'stats':
-              await done({snapshot: stats.current()});
+              await done({ snapshot: stats.current() });
               break;
             case 'reload':
-              await done({snapshot: stats.current()});
+              await done({ snapshot: stats.current() });
               console.log(`RNR-NET reload runtime=${RUNTIME} requestsBefore=${requests}`);
               runtimeBindings().reloadForTesting!();
               break;
@@ -163,23 +194,23 @@ export default function App() {
               await done();
               break;
             case 'remount':
-              setGeneration(g => g + 1);
+              setGeneration((g) => g + 1);
               setMounted(true);
               await done();
               break;
             case 'resize':
-              setTall(t => !t);
+              setTall((t) => !t);
               await done();
               break;
             default:
-              await done({error: 'unknown command'});
+              await done({ error: 'unknown command' });
           }
         }
-        await new Promise<void>(resolve => setTimeout(resolve, 250));
+        await new Promise<void>((resolve) => setTimeout(resolve, 250));
       }
     };
     void poll();
-    const periodic = setInterval(() => void post('/stats', {snapshot: stats.current()}), 1000);
+    const periodic = setInterval(() => void post('/stats', { snapshot: stats.current() }), 1000);
     return () => {
       stopped = true;
       clearInterval(periodic);
@@ -191,11 +222,13 @@ export default function App() {
   }, []);
 
   return (
-    <SafeAreaView style={{flex: 1, backgroundColor: '#000'}}>
-      <View style={{flex: 1}}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }}>
+      <View style={{ flex: 1 }}>
         {mounted && <GameSurface key={generation} onStats={onStats} tall={tall} />}
       </View>
-      <Text style={{position: 'absolute', top: 40, left: 8, color: '#9ab', fontSize: 12}}>{`S3 ${RUNTIME} ${mounted ? 'mounted' : 'unmounted'}`}</Text>
+      <Text
+        style={{ position: 'absolute', top: 40, left: 8, color: '#9ab', fontSize: 12 }}
+      >{`S3 ${RUNTIME} ${mounted ? 'mounted' : 'unmounted'}`}</Text>
     </SafeAreaView>
   );
 }

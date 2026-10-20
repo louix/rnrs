@@ -3,6 +3,10 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
+    "lint": "oxlint --deny-warnings src specs packages scripts tools fixtures web *.js",
+    "lint:fix": "npm run lint -- --fix",
+    "fmt": "oxfmt --write \"{src,specs,packages,scripts,tools,fixtures,web}/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}\" \"*.js\" package.json .oxfmtrc.json .oxlintrc.json renovate.json",
+    "fmt:check": "oxfmt --check \"{src,specs,packages,scripts,tools,fixtures,web}/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}\" \"*.js\" package.json .oxfmtrc.json .oxlintrc.json renovate.json",
     "start": "react-native start",
     "android": "react-native run-android",
     "test": "node --test scripts/*.test.mjs tools/rnr-gen/test/*.test.mjs",
@@ -38,6 +42,8 @@
     "@react-native/babel-preset": "0.83.1",
     "@react-native/metro-config": "0.83.1",
     "@types/react": "19.2.0",
+    "oxfmt": "0.72.0",
+    "oxlint": "1.87.0",
     "typescript": "5.9.3"
   },
   "rustNativeApp": {

@@ -4,7 +4,7 @@
 // thread natively, and in the browser in the host's requestAnimationFrame callback. TypeScript
 // only sets a few latest-value controls; no per-frame work happens in app JavaScript.
 // See docs/bevy3d.md for scope and limits.
-import type {NativeModule, NativeObject} from '@rnrs/runtime/spec';
+import type { NativeModule, NativeObject } from '@rnrs/runtime/spec';
 
 export interface SceneStats {
   /** "attached", "detached" (unmounted, background, zero size) or "closed". */

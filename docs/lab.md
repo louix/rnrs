@@ -35,3 +35,11 @@ The Android app launches the ownership and lifecycle suites by default. Install 
 ## Recorded measurements
 
 Historical comparison capture apps and controls are archived outside the tracked source. Pure analysis utilities and their tests remain available for existing recordings; they do not require Nitro. The live rendering/input contention fixtures and their runners remain part of regression coverage.
+
+## JavaScript maintenance
+
+Use `npm run fmt` / `npm run fmt:check` for maintained JS/TS formatting, `npm run lint` / `npm run lint:fix` for correctness checks and safe fixes, then `npm run typecheck` and `npm test`. Generated/vendor/build output, archives, results and lockfiles are excluded; native formatting uses separate tools. Oxfmt 0.72.0 and Oxlint 1.87.0 were published on 2026-10-05 and selected on 2026-10-20 as the newest non-prereleases at least 14 days old. Narrow documented exceptions preserve lifecycle timing, measured allocations and mutable Worklets values.
+
+`.npmrc` saves exact npm versions. Once Renovate is enabled, routine updates wait 14 days with required publication timestamps and strict age filtering; direct npm dependencies are pinned, peer ranges remain separate. This bot policy does not block manual `npm install`, does not enforce Cargo exact pins, and release age does not guarantee safety. Review release notes and test results, and commit lockfile changes.
+
+Security fixes may bypass the delay: Renovate vulnerability-alert PRs explicitly use zero delay and require review (no automerge). GitHub dependency graph/Dependabot alerts and Renovate access are required. For a manual security exception, record the advisory and reason in the update PR, install the exact fixed version, and run relevant checks.

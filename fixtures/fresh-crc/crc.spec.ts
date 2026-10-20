@@ -1,4 +1,4 @@
-import type {NativeModule} from '@rnrs/runtime/spec';
+import type { NativeModule } from '@rnrs/runtime/spec';
 
 /** CRC-32 (IEEE) from the crc32fast crate. */
 export interface CrcModule extends NativeModule {

@@ -1,0 +1,50 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "react", "unicorn", "oxc"],
+  "categories": {
+    "correctness": "error"
+  },
+  "rules": {
+    "react/rules-of-hooks": "error"
+  },
+  "overrides": [
+    {
+      "files": ["fixtures/bevy-worklets/App.tsx", "fixtures/worklets-lab/GestureLab.tsx"],
+      "rules": { "react/immutability": "off" }
+    },
+    {
+      "files": [
+        "fixtures/surface-s3/App.tsx",
+        "fixtures/surface-s3/variants/control-surface-nofetch.tsx",
+        "fixtures/surface-s3/variants/s3-instrumented.tsx",
+        "fixtures/surface-s3/variants/s3-no-unmount-post.tsx"
+      ],
+      "rules": { "react/set-state-in-effect": "off" }
+    }
+  ],
+  "ignorePatterns": [
+    "**/node_modules/**",
+    "**/.generated/**",
+    "**/.rnr/**",
+    "**/generator/**",
+    "**/build/**",
+    "**/dist/**",
+    "**/target/**",
+    "**/vendor/**",
+    "**/bundle/**",
+    "**/archive/**",
+    "**/archives/**",
+    ".project-notes/**",
+    "results/**",
+    "docs/research/**",
+    "react-native/**",
+    "**/*.min.js",
+    "packages/*/rnr/**",
+    "packages/fixtures/*/rnr/**",
+    "web/rnr/**",
+    "fixtures/*/rnr/**",
+    "**/package-lock.json",
+    "**/Cargo.lock",
+    "**/*.Cargo.lock"
+  ]
+}

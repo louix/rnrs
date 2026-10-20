@@ -5,7 +5,7 @@
 // - renderer snapshots: stats() sampled every 100 ms, each holding the most recent presented
 //   frame (CPU time on the render thread), so a distribution of snapshots, not per frame.
 // Presented frames are counted by the renderer; nothing here measures display latency.
-import type {RendererStats} from '@rnrs/example-vello2d';
+import type { RendererStats } from '@rnrs/example-vello2d';
 
 export interface Check {
   name: string;
@@ -17,7 +17,13 @@ export function distribution(xs: number[]) {
   const s = [...xs].sort((a, b) => a - b);
   const at = (q: number) => (s.length ? s[Math.min(s.length - 1, Math.floor(q * s.length))] : NaN);
   const r = (v: number) => Math.round(v * 1000) / 1000;
-  return {p50: r(at(0.5)), p90: r(at(0.9)), p99: r(at(0.99)), max: r(s.length ? s[s.length - 1] : NaN), n: s.length};
+  return {
+    p50: r(at(0.5)),
+    p90: r(at(0.9)),
+    p99: r(at(0.99)),
+    max: r(s.length ? s[s.length - 1] : NaN),
+    n: s.length,
+  };
 }
 
 /** Collects per-tick and snapshot samples for one session. */
@@ -26,8 +32,13 @@ export class Recorder {
   stepsPerTick: number[] = [];
   submits = 0;
   private lastTick: number | null = null;
-  private snaps: {raster: number[]; upload: number[]; acquire: number[]; present: number[]; submitToPresentReturn: number[]} =
-    {raster: [], upload: [], acquire: [], present: [], submitToPresentReturn: []};
+  private snaps: {
+    raster: number[];
+    upload: number[];
+    acquire: number[];
+    present: number[];
+    submitToPresentReturn: number[];
+  } = { raster: [], upload: [], acquire: [], present: [], submitToPresentReturn: [] };
   first: RendererStats | null = null;
   last: RendererStats | null = null;
   startedMs = 0;
@@ -73,18 +84,30 @@ export class Recorder {
         rendererPresented: Math.round((presented / seconds) * 10) / 10,
       },
       framesReplacedBeforeDrawing: replaced,
-      perRafTick: {intervalMs: distribution(this.tickIntervalsMs), stepsHistogram: hist},
-      rendererSnapshotsMs: Object.fromEntries(Object.entries(this.snaps).map(([k, v]) => [k, distribution(v)])),
+      perRafTick: { intervalMs: distribution(this.tickIntervalsMs), stepsHistogram: hist },
+      rendererSnapshotsMs: Object.fromEntries(
+        Object.entries(this.snaps).map(([k, v]) => [k, distribution(v)]),
+      ),
       note: 'perRafTick: every running requestAnimationFrame tick (JS). rendererPresented includes re-presentations after a resize or re-attach. rendererSnapshotsMs: 100 ms snapshots of the latest presented frame (render-thread CPU time; submitToPresentReturn is Rust submit to present-call return). Display latency is not measured.',
     };
   }
 }
 
 /** Reports a result as several short console lines (logcat truncates near 4 KB). */
-export function report(tag: string, result: {ok: boolean; checks: Check[]; [k: string]: unknown}) {
-  result.checks.forEach((c, i) => console.log(`${tag}_CHECK ` + JSON.stringify({i, ...c})));
+export function report(
+  tag: string,
+  result: { ok: boolean; checks: Check[]; [k: string]: unknown },
+) {
+  result.checks.forEach((c, i) => console.log(`${tag}_CHECK ` + JSON.stringify({ i, ...c })));
   for (const [k, v] of Object.entries(result)) {
-    if (k !== 'checks' && k !== 'ok') console.log(`${tag}_DATA ` + JSON.stringify({key: k, value: v}));
+    if (k !== 'checks' && k !== 'ok')
+      console.log(`${tag}_DATA ` + JSON.stringify({ key: k, value: v }));
   }
-  console.log(`${tag} ` + JSON.stringify({ok: result.ok, checks: result.checks.map(c => ({name: c.name, ok: c.ok}))}));
+  console.log(
+    `${tag} ` +
+      JSON.stringify({
+        ok: result.ok,
+        checks: result.checks.map((c) => ({ name: c.name, ok: c.ok })),
+      }),
+  );
 }

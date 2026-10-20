@@ -4,7 +4,7 @@
 // them, on the calling (JS) thread, into bounded consumer state checked against the queue
 // contract. Evidence from it shows platform delivery into the queue, not render-thread
 // consumption or input latency.
-import type {NativeModule, NativeObject} from '@rnrs/runtime/spec';
+import type { NativeModule, NativeObject } from '@rnrs/runtime/spec';
 
 /** A pointer down for the consumer: its latest record. */
 export interface ProbePointer {

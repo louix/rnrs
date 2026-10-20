@@ -1,7 +1,7 @@
 // HTTP for React Native (Android, iOS) and the browser: the TypeScript contract. The Rust
 // implementation in rust/ uses reqwest: natively on the framework's Tokio runtime with
 // rustls and the bundled webpki root certificates, in the browser over fetch.
-import type {NativeModule} from '@rnrs/runtime/spec';
+import type { NativeModule } from '@rnrs/runtime/spec';
 
 export interface Header {
   name: string;

@@ -28,7 +28,7 @@
 // Rust methods run on the calling runtime's thread (often the UI thread): they must be
 // short, bounded and non-blocking, and their state Send + Sync. The framework does not
 // enforce that.
-import {NativeObjectBase, type ModuleBase, type ModuleHost} from './runtime';
+import { NativeObjectBase, type ModuleBase, type ModuleHost } from './runtime';
 
 /** The part of react-native-worklets this module uses (pass the package's exports). */
 export interface WorkletsRegistrar {
@@ -42,12 +42,16 @@ export interface WorkletsRegistrar {
 
 /** An endpoint: the listed module methods, plus `$open` (false once the RN runtime that created it
  *  is torn down; a hint, since teardown can race a call). */
-export type WorkletEndpoint<Methods> = Methods & {readonly $open: boolean};
+export type WorkletEndpoint<Methods> = Methods & { readonly $open: boolean };
 
 /** Whether `error` is the endpoint's closed error (ERR_RNR_CLOSED). Callable in worklets. */
 export function isRnrClosedError(error: unknown): boolean {
   'worklet';
-  return typeof error === 'object' && error !== null && (error as {code?: unknown}).code === 'ERR_RNR_CLOSED';
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { code?: unknown }).code === 'ERR_RNR_CLOSED'
+  );
 }
 
 /** The latest endpoint per module, used to box that module's native objects. */
@@ -55,10 +59,16 @@ const endpoints = new WeakMap<ModuleHost, object>();
 
 /** Allow-listed sync methods of `module` (module methods by name, object methods as
  *  `'Type.method'`), callable from any JS runtime. Capture the result in worklets. */
-export function workletEndpoint<M extends ModuleBase, K extends string>(module: M, methods: readonly K[]): WorkletEndpoint<Pick<M, Extract<K, keyof M>>> {
+export function workletEndpoint<M extends ModuleBase, K extends string>(
+  module: M,
+  methods: readonly K[],
+): WorkletEndpoint<Pick<M, Extract<K, keyof M>>> {
   const host = module.host;
   const create = host.adapter.workletEndpoint;
-  if (!create) throw new Error('@rnrs/runtime/worklets: this platform backend has no worklet endpoint (prototype: Android only)');
+  if (!create)
+    throw new Error(
+      '@rnrs/runtime/worklets: this platform backend has no worklet endpoint (prototype: Android only)',
+    );
   const endpoint = create(Array.from(methods));
   endpoints.set(host, endpoint);
   return endpoint as WorkletEndpoint<Pick<M, Extract<K, keyof M>>>;
@@ -68,7 +78,9 @@ function boxWrapper(wrapper: NativeObjectBase): object {
   const endpoint = endpoints.get(wrapper.host);
   const box = wrapper.host.adapter.workletBox;
   if (!endpoint || !box)
-    throw new Error(`@rnrs/runtime/worklets: call workletEndpoint(module, [...]) listing this object's methods before passing a ${wrapper.constructor.name} to a worklet`);
+    throw new Error(
+      `@rnrs/runtime/worklets: call workletEndpoint(module, [...]) listing this object's methods before passing a ${wrapper.constructor.name} to a worklet`,
+    );
   return box(endpoint, wrapper.handle);
 }
 

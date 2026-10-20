@@ -1,7 +1,7 @@
 // Lab fixture for the optional browser WebGPU presentation of @rnrs/surface: Rust draws one
 // triangle with wgpu (WebGPU backend) directly into the surface's canvas. No pixel readback or
 // CPU upload; no Canvas 2D fallback. Web only.
-import type {NativeModule, NativeObject} from '@rnrs/runtime/spec';
+import type { NativeModule, NativeObject } from '@rnrs/runtime/spec';
 
 export interface TriangleStats {
   /** "attached" (the host bound a canvas), "detached" or "closed". */

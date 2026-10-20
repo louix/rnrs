@@ -16,14 +16,20 @@
 // JS module is a stub without __DEV__; RCTDevSettings is the empty variant without
 // RCT_DEV_MENU). The hook calls RCTTriggerReloadCommandListeners, as the Debug DevSettings.reload
 // does, so the hook and React Native's reload cannot be told apart on this binary.
-import React, {useEffect} from 'react';
-import {AppState, SafeAreaView, Text} from 'react-native';
-import {runtimeBindings} from '@rnrs/runtime/testing';
+import React, { useEffect } from 'react';
+import { AppState, SafeAreaView, Text } from 'react-native';
+import { runtimeBindings } from '@rnrs/runtime/testing';
 
 const SERVER = 'http://127.0.0.1:8765';
 const RUNTIME = `${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`;
 
-export function controlApp(variant: string, {quiesce = false, firstFetchDelayMs = 0}: {quiesce?: boolean; firstFetchDelayMs?: number} = {}) {
+export function controlApp(
+  variant: string,
+  {
+    quiesce = false,
+    firstFetchDelayMs = 0,
+  }: { quiesce?: boolean; firstFetchDelayMs?: number } = {},
+) {
   let inFlight = 0;
   let settled: (() => void)[] = [];
   const track = async <T,>(f: () => Promise<T>): Promise<T> => {
@@ -32,14 +38,19 @@ export function controlApp(variant: string, {quiesce = false, firstFetchDelayMs 
       return await f();
     } finally {
       inFlight--;
-      if (inFlight === 0) settled.splice(0).forEach(r => r());
+      if (inFlight === 0) settled.splice(0).forEach((r) => r());
     }
   };
-  const idle = () => (inFlight === 0 ? Promise.resolve() : new Promise<void>(r => settled.push(r)));
+  const idle = () =>
+    inFlight === 0 ? Promise.resolve() : new Promise<void>((r) => settled.push(r));
   const post = (path: string, body: object) =>
     track(async () => {
       try {
-        await fetch(`${SERVER}${path}`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({runtime: RUNTIME, variant, at: Date.now(), ...body})});
+        await fetch(`${SERVER}${path}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ runtime: RUNTIME, variant, at: Date.now(), ...body }),
+        });
       } catch {
         // No driver: nothing to report to.
       }
@@ -51,14 +62,18 @@ export function controlApp(variant: string, {quiesce = false, firstFetchDelayMs 
       let seq = 0;
       let stopped = false;
       let periodic: ReturnType<typeof setInterval> | undefined;
-      const snapshot = () => ({variant, appState: AppState.currentState, inFlight});
+      const snapshot = () => ({ variant, appState: AppState.currentState, inFlight });
       const poll = async () => {
-        if (firstFetchDelayMs > 0) await new Promise<void>(r => setTimeout(r, firstFetchDelayMs));
+        if (firstFetchDelayMs > 0) await new Promise<void>((r) => setTimeout(r, firstFetchDelayMs));
         if (stopped) return;
-        void post('/event', {kind: 'runtime-start', firstFetchDelayMs, firstFetchAfterMs: Date.now() - mounted});
-        periodic = setInterval(() => void post('/stats', {snapshot: snapshot()}), 1000);
+        void post('/event', {
+          kind: 'runtime-start',
+          firstFetchDelayMs,
+          firstFetchAfterMs: Date.now() - mounted,
+        });
+        periodic = setInterval(() => void post('/stats', { snapshot: snapshot() }), 1000);
         while (!stopped) {
-          let command: {id: number; cmd: string} | null = null;
+          let command: { id: number; cmd: string } | null = null;
           try {
             const res = await track(() => fetch(`${SERVER}/next?runtime=${RUNTIME}&seq=${seq}`));
             command = res.status === 200 ? await res.json() : null;
@@ -67,24 +82,25 @@ export function controlApp(variant: string, {quiesce = false, firstFetchDelayMs 
           }
           if (command && command.id >= seq) {
             seq = command.id + 1;
-            const done = (data: object = {}) => post('/report', {id: command!.id, cmd: command!.cmd, ...data});
+            const done = (data: object = {}) =>
+              post('/report', { id: command!.id, cmd: command!.cmd, ...data });
             if (command.cmd === 'stats') {
-              await done({snapshot: snapshot()});
+              await done({ snapshot: snapshot() });
             } else if (command.cmd === 'reload') {
-              await done({snapshot: snapshot(), quiesce});
+              await done({ snapshot: snapshot(), quiesce });
               if (quiesce) {
                 stopped = true;
                 clearInterval(periodic);
                 await idle();
-                await new Promise<void>(r => setTimeout(r, 1000));
+                await new Promise<void>((r) => setTimeout(r, 1000));
                 console.log(`RNR-D3 reload runtime=${RUNTIME} inFlight=${inFlight}`);
               }
               runtimeBindings().reloadForTesting!();
             } else {
-              await done({error: 'unknown command'});
+              await done({ error: 'unknown command' });
             }
           }
-          await new Promise<void>(r => setTimeout(r, 250));
+          await new Promise<void>((r) => setTimeout(r, 250));
         }
       };
       void poll();
@@ -94,8 +110,10 @@ export function controlApp(variant: string, {quiesce = false, firstFetchDelayMs 
       };
     }, []);
     return (
-      <SafeAreaView style={{flex: 1, backgroundColor: '#000'}}>
-        <Text style={{marginTop: 40, marginLeft: 8, color: '#9ab', fontSize: 12}}>{`S3 control ${variant} ${RUNTIME}`}</Text>
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }}>
+        <Text
+          style={{ marginTop: 40, marginLeft: 8, color: '#9ab', fontSize: 12 }}
+        >{`S3 control ${variant} ${RUNTIME}`}</Text>
       </SafeAreaView>
     );
   };

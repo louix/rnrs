@@ -9,10 +9,10 @@
 // therefore catches, classifies ERR_RNR_CLOSED (expected after teardown) and records any
 // other error as unexpected (a test failure); nothing is rethrown or silently dropped.
 import React from 'react';
-import {View} from 'react-native';
-import {GestureDetector, usePanGesture} from 'react-native-gesture-handler';
-import {useAnimatedReaction, useSharedValue} from 'react-native-reanimated';
-import {isRnrClosedError} from '@rnrs/runtime/worklets';
+import { View } from 'react-native';
+import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
+import { useAnimatedReaction, useSharedValue } from 'react-native-reanimated';
+import { isRnrClosedError } from '@rnrs/runtime/worklets';
 
 export interface GestureStats {
   events: number;
@@ -36,13 +36,13 @@ export interface GestureLabProps {
   /** The W1 routing probe: called once from the first gesture event. */
   probe: (x: number) => number;
   /** Written by the worklets, read by the smoke from the RN runtime. */
-  stats: {value: GestureStats};
+  stats: { value: GestureStats };
   /** Set by the smoke: call the endpoint without checking `$open` (forced late calls). */
-  control: {value: {bypassOpen: boolean}};
+  control: { value: { bypassOpen: boolean } };
 }
 
 // Installed on every worklet runtime by react-native-worklets (not in the RN type lib).
-declare const performance: {now(): number};
+declare const performance: { now(): number };
 
 const REPEAT = 20;
 
@@ -53,18 +53,18 @@ function empty(x: number, y: number): number {
 
 function describe(error: unknown): string {
   'worklet';
-  const e = error as {code?: unknown; message?: unknown} | null;
+  const e = error as { code?: unknown; message?: unknown } | null;
   return `${String(e?.code)}: ${String(e?.message ?? error)}`;
 }
 
-export function GestureLab({endpoint, reactions, probe, stats, control}: GestureLabProps) {
+export function GestureLab({ endpoint, reactions, probe, stats, control }: GestureLabProps) {
   const translationX = useSharedValue(0);
   const pan = usePanGesture({
-    onUpdate: e => {
+    onUpdate: (e) => {
       'worklet';
       try {
         if (!control.value.bypassOpen && !endpoint.$open) {
-          stats.value = {...stats.value, skippedClosed: stats.value.skippedClosed + 1};
+          stats.value = { ...stats.value, skippedClosed: stats.value.skippedClosed + 1 };
           return;
         }
         const t0 = performance.now();
@@ -75,12 +75,22 @@ export function GestureLab({endpoint, reactions, probe, stats, control}: Gesture
         const t2 = performance.now();
         const t = stats.value;
         if (!t.probed) probe(sink);
-        stats.value = {...t, events: t.events + 1, endpointMs: t.endpointMs + (t1 - t0), emptyMs: t.emptyMs + (t2 - t1), probed: true};
+        stats.value = {
+          ...t,
+          events: t.events + 1,
+          endpointMs: t.endpointMs + (t1 - t0),
+          emptyMs: t.emptyMs + (t2 - t1),
+          probed: true,
+        };
       } catch (error) {
         const t = stats.value;
         stats.value = isRnrClosedError(error)
-          ? {...t, caughtClosed: t.caughtClosed + 1}
-          : {...t, unexpected: t.unexpected.length < 5 ? [...t.unexpected, describe(error)] : t.unexpected};
+          ? { ...t, caughtClosed: t.caughtClosed + 1 }
+          : {
+              ...t,
+              unexpected:
+                t.unexpected.length < 5 ? [...t.unexpected, describe(error)] : t.unexpected,
+            };
       }
       // Drives the reaction, also after teardown (its calls then throw and are caught there).
       translationX.value = e.translationX;
@@ -96,14 +106,18 @@ export function GestureLab({endpoint, reactions, probe, stats, control}: Gesture
       } catch (error) {
         const t = stats.value;
         stats.value = isRnrClosedError(error)
-          ? {...t, reactionCaughtClosed: t.reactionCaughtClosed + 1}
-          : {...t, unexpected: t.unexpected.length < 5 ? [...t.unexpected, describe(error)] : t.unexpected};
+          ? { ...t, reactionCaughtClosed: t.reactionCaughtClosed + 1 }
+          : {
+              ...t,
+              unexpected:
+                t.unexpected.length < 5 ? [...t.unexpected, describe(error)] : t.unexpected,
+            };
       }
     },
   );
   return (
     <GestureDetector gesture={pan}>
-      <View style={{flex: 1, backgroundColor: '#dde6f5'}} />
+      <View style={{ flex: 1, backgroundColor: '#dde6f5' }} />
     </GestureDetector>
   );
 }

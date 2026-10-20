@@ -11,7 +11,7 @@
 // transforms and rounded-corner clipping of the surface or its ancestors are not applied to
 // its content, and two overlapping surfaces have an undefined order. See docs/surface.md.
 import React from 'react';
-import {Platform, type ViewProps} from 'react-native';
+import { Platform, type ViewProps } from 'react-native';
 import NativeRnrSurfaceView from './specs/RnrSurfaceViewNativeComponent';
 
 export type SurfaceTouchInput = 'none' | 'rust';
@@ -36,12 +36,22 @@ export interface SurfaceViewProps extends ViewProps {
 
 let warnedUnsupported = false;
 
-export function SurfaceView({surfaceKey, touchInput = 'none', ...rest}: SurfaceViewProps): React.ReactElement {
+export function SurfaceView({
+  surfaceKey,
+  touchInput = 'none',
+  ...rest
+}: SurfaceViewProps): React.ReactElement {
   const supported = Platform.OS === 'android' || Platform.OS === 'ios';
   if (touchInput === 'rust' && !supported && !warnedUnsupported) {
     warnedUnsupported = true;
-    console.warn(`@rnrs/surface: touchInput="rust" is not supported on ${Platform.OS}; no touches reach Rust`);
+    console.warn(
+      `@rnrs/surface: touchInput="rust" is not supported on ${Platform.OS}; no touches reach Rust`,
+    );
   }
   const nativeTouchInput = supported ? touchInput : 'none';
-  return React.createElement(NativeRnrSurfaceView, {...rest, surfaceKey: surfaceKey ?? 0, touchInput: nativeTouchInput});
+  return React.createElement(NativeRnrSurfaceView, {
+    ...rest,
+    surfaceKey: surfaceKey ?? 0,
+    touchInput: nativeTouchInput,
+  });
 }

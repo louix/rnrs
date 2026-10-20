@@ -1,7 +1,7 @@
 // One Counter/async contract suite, run unchanged against each backend, over the
 // generated Counter module (packages/counter/counter.spec.ts).
-import {RnrError, type AdapterStats} from '../../packages/rnr-runtime/src/runtime';
-import {Counter, type CounterModule} from '../../.generated/rnr/counter';
+import { RnrError, type AdapterStats } from '../../packages/rnr-runtime/src/runtime';
+import { Counter, type CounterModule } from '../../.generated/rnr/counter';
 
 export interface ConformanceEnv {
   platform: string;
@@ -22,7 +22,7 @@ export interface CheckResult {
   detail: string;
 }
 
-const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
 class CheckFailure extends Error {}
@@ -31,7 +31,12 @@ function expect(condition: unknown, message: string): asserts condition {
   if (!condition) throw new CheckFailure(message);
 }
 
-async function waitFor(what: string, condition: () => boolean, timeoutMs = 3000, poll?: () => Promise<void>) {
+async function waitFor(
+  what: string,
+  condition: () => boolean,
+  timeoutMs = 3000,
+  poll?: () => Promise<void>,
+) {
   const deadline = now() + timeoutMs;
   while (!condition()) {
     if (now() > deadline) throw new CheckFailure(`timed out waiting for ${what}`);
@@ -61,7 +66,9 @@ function throws(fn: () => unknown, pattern: RegExp): void {
 
 function busyWait(ms: number) {
   const end = now() + ms;
-  while (now() < end) { /* hold the JS thread */ }
+  while (now() < end) {
+    /* hold the JS thread */
+  }
 }
 
 export async function runConformance(env: ConformanceEnv): Promise<CheckResult[]> {
@@ -70,20 +77,31 @@ export async function runConformance(env: ConformanceEnv): Promise<CheckResult[]
   const stats = (): AdapterStats => main.stats();
   // Live Rust Counter objects (framework counts per native type).
   const dropped = (s: AdapterStats = stats()) => s.native.Counter.dropped;
-  const live = () => { const s = stats(); return s.native.Counter.created - s.native.Counter.dropped; };
+  const live = () => {
+    const s = stats();
+    return s.native.Counter.created - s.native.Counter.dropped;
+  };
   // Counters stay referenced until the suite ends, so drop counts change only where a
   // check releases a counter on purpose.
   const retained: object[] = [];
-  const keep = <T extends object>(value: T): T => { retained.push(value); return value; };
+  const keep = <T extends object>(value: T): T => {
+    retained.push(value);
+    return value;
+  };
   const make = (initial: number) => keep(main.create(initial));
 
   async function check(name: string, body: () => Promise<string | void> | string | void) {
     const start = now();
     try {
       const detail = (await body()) ?? '';
-      results.push({name, ok: true, ms: now() - start, detail});
+      results.push({ name, ok: true, ms: now() - start, detail });
     } catch (error) {
-      results.push({name, ok: false, ms: now() - start, detail: String(error instanceof Error ? error.message : error)});
+      results.push({
+        name,
+        ok: false,
+        ms: now() - start,
+        detail: String(error instanceof Error ? error.message : error),
+      });
     }
   }
 
@@ -97,7 +115,14 @@ export async function runConformance(env: ConformanceEnv): Promise<CheckResult[]
     expect(make(Infinity).add(1) === Infinity, 'infinity');
     throws(() => c.add('1' as any), /number/);
     // A forged receiver: a wrapper-shaped object whose handle is not a native wrapper.
-    throws(() => Counter.prototype.add.call({host: (main as any).host, handle: {}} as unknown as Counter, 1), /Counter|expected|invalid/i);
+    throws(
+      () =>
+        Counter.prototype.add.call(
+          { host: (main as any).host, handle: {} } as unknown as Counter,
+          1,
+        ),
+      /Counter|expected|invalid/i,
+    );
   });
 
   await check('async method resolves with the Rust result', async () => {
@@ -126,31 +151,46 @@ export async function runConformance(env: ConformanceEnv): Promise<CheckResult[]
 
   await check('GC finalization releases wrapper handles', async () => {
     const before = dropped();
-    const createUnreferenced = (n: number) => { for (let i = 0; i < n; i++) main.create(i); };
+    const createUnreferenced = (n: number) => {
+      for (let i = 0; i < n; i++) main.create(i);
+    };
     createUnreferenced(20);
     createUnreferenced(0);
     const trace: number[] = [];
     try {
-      await waitFor('20 finalized counters', () => dropped() >= before + 20, 5000, async () => {
-        await env.collectGarbage();
-        if (trace.length < 5) trace.push(dropped() - before);
-      });
+      await waitFor(
+        '20 finalized counters',
+        () => dropped() >= before + 20,
+        5000,
+        async () => {
+          await env.collectGarbage();
+          if (trace.length < 5) trace.push(dropped() - before);
+        },
+      );
     } catch (error) {
-      throw new CheckFailure(`${(error as Error).message}; dropped after successive GCs: ${trace.join(', ')}`);
+      throw new CheckFailure(
+        `${(error as Error).message}; dropped after successive GCs: ${trace.join(', ')}`,
+      );
     }
     const s = stats();
-    const threads = s.nativeFinalizers === undefined ? '' : `; native finalizers ${s.nativeFinalizers}, off JS thread ${s.nativeFinalizersOffJsThread}`;
+    const threads =
+      s.nativeFinalizers === undefined
+        ? ''
+        : `; native finalizers ${s.nativeFinalizers}, off JS thread ${s.nativeFinalizersOffJsThread}`;
     return `${dropped() - before} dropped; after successive GCs: ${trace.join(', ')}${threads}`;
   });
 
   await check('cooperative cancellation rejects promptly and stops work', async () => {
     const c = make(0);
     const controller = new AbortController();
-    const promise = c.addLater(1, 10_000, false, {signal: controller.signal});
+    const promise = c.addLater(1, 10_000, false, { signal: controller.signal });
     setTimeout(() => controller.abort(), 20);
     const started = now();
     const error = await rejection(promise);
-    expect(error instanceof RnrError && error.code === 'cancelled' && error.name === 'AbortError', `got ${error}`);
+    expect(
+      error instanceof RnrError && error.code === 'cancelled' && error.name === 'AbortError',
+      `got ${error}`,
+    );
     const elapsed = now() - started;
     expect(elapsed < 1000, `took ${elapsed} ms`);
     await waitFor('work exit', () => stats().inFlight === 0, 1000);
@@ -162,7 +202,7 @@ export async function runConformance(env: ConformanceEnv): Promise<CheckResult[]
     const admitted = stats().admitted;
     const controller = new AbortController();
     controller.abort();
-    const error = await rejection(make(0).addLater(1, 10, false, {signal: controller.signal}));
+    const error = await rejection(make(0).addLater(1, 10, false, { signal: controller.signal }));
     expect(error.code === 'cancelled', `got ${error}`);
     expect(stats().admitted === admitted, 'operation was admitted');
   });
@@ -170,7 +210,7 @@ export async function runConformance(env: ConformanceEnv): Promise<CheckResult[]
   await check('abort after completion has no effect', async () => {
     const delivered = stats().delivered;
     const controller = new AbortController();
-    const value = await make(1).addLater(1, 5, false, {signal: controller.signal});
+    const value = await make(1).addLater(1, 5, false, { signal: controller.signal });
     controller.abort();
     await sleep(20);
     expect(value === 2, 'result');
@@ -182,13 +222,16 @@ export async function runConformance(env: ConformanceEnv): Promise<CheckResult[]
     const disposed = make(0);
     const kept = make(0);
     const controller = new AbortController();
-    const a = disposed.addLater(5, 400, true, {signal: controller.signal});
-    const b = kept.addLater(5, 400, true, {signal: controller.signal});
+    const a = disposed.addLater(5, 400, true, { signal: controller.signal });
+    const b = kept.addLater(5, 400, true, { signal: controller.signal });
     disposed.dispose();
     await sleep(30);
     controller.abort();
     const started = now();
-    expect((await rejection(a)).code === 'cancelled' && (await rejection(b)).code === 'cancelled', 'cancel rejections');
+    expect(
+      (await rejection(a)).code === 'cancelled' && (await rejection(b)).code === 'cancelled',
+      'cancel rejections',
+    );
     expect(now() - started < 300, 'rejection was not prompt');
     const during = stats();
     expect(dropped(during) === dropped(before), 'receiver freed while work still runs');
@@ -204,11 +247,17 @@ export async function runConformance(env: ConformanceEnv): Promise<CheckResult[]
     const module = env.makeModule(2);
     const c = keep(module.create(0));
     const controller = new AbortController();
-    const running = [c.addLater(1, 10_000, false, {signal: controller.signal}), c.addLater(1, 10_000, false, {signal: controller.signal})];
+    const running = [
+      c.addLater(1, 10_000, false, { signal: controller.signal }),
+      c.addLater(1, 10_000, false, { signal: controller.signal }),
+    ];
     const error = await rejection(c.addLater(1, 1, false));
     expect(error.code === 'overloaded', `got ${error}`);
     // The native refusal's own message and scope reach JS unchanged.
-    expect(error.scope === 'module' && error.message === 'too many operations in flight on this module', `got ${error.scope}: ${error.message}`);
+    expect(
+      error.scope === 'module' && error.message === 'too many operations in flight on this module',
+      `got ${error.scope}: ${error.message}`,
+    );
     controller.abort();
     await Promise.allSettled(running);
     await waitFor('slots freed', () => module.stats().slots === 0, 1000);
@@ -225,7 +274,10 @@ export async function runConformance(env: ConformanceEnv): Promise<CheckResult[]
     const error = await rejection(c.addLater(1, 0, false));
     expect(error.code === 'overloaded', `got ${error}`);
     if (env.platform === 'android' || env.platform === 'ios') {
-      expect(s.inFlight === 0 && s.queued === 2 && s.slots === 2, `expected finished work with queued outcomes: ${JSON.stringify(s)}`);
+      expect(
+        s.inFlight === 0 && s.queued === 2 && s.slots === 2,
+        `expected finished work with queued outcomes: ${JSON.stringify(s)}`,
+      );
     }
     await Promise.all(done);
     expect(module.stats().slots === 0, 'slots released after delivery');
@@ -238,10 +290,25 @@ export async function runConformance(env: ConformanceEnv): Promise<CheckResult[]
     const module = env.makeModule(2);
     const c = keep(module.create(0));
     const controller = new AbortController();
-    const promise = c.addLater(1, 10_000, false, {signal: controller.signal});
+    const promise = c.addLater(1, 10_000, false, { signal: controller.signal });
     expect(module.stats().admitted === 1, 'fresh adapter: this operation has id 1');
-    const malformed = [1.5, 1 + 1e-12, 0.999999, 0, -0, -1, -0.5, NaN, Infinity, -Infinity, 2 ** 53, 2 ** 64, 1e300];
-    for (const id of malformed) expect((module as any).host.cancel(id) === false, `cancel(${id}) returned true`);
+    const malformed = [
+      1.5,
+      1 + 1e-12,
+      0.999999,
+      0,
+      -0,
+      -1,
+      -0.5,
+      NaN,
+      Infinity,
+      -Infinity,
+      2 ** 53,
+      2 ** 64,
+      1e300,
+    ];
+    for (const id of malformed)
+      expect((module as any).host.cancel(id) === false, `cancel(${id}) returned true`);
     const s = module.stats();
     expect(s.pending === 1 && s.inFlight === 1, `valid operation disturbed: ${JSON.stringify(s)}`);
     controller.abort(); // cancel(1) through the wrapper
@@ -258,42 +325,73 @@ export async function runConformance(env: ConformanceEnv): Promise<CheckResult[]
       for (let i = 0; i < n; i++) {
         const module = env.makeModule(1);
         closedGeneration = module.generation;
-        if (i === 0) void module.create(0).addLater(1, 0, false).catch(() => {}); // pending at teardown
+        if (i === 0)
+          void module
+            .create(0)
+            .addLater(1, 0, false)
+            .catch(() => {}); // pending at teardown
         module.teardown();
       }
     };
     openAndClose(20);
     openAndClose(0);
     if (registered !== undefined) {
-      expect(env.registeredModules!() === registered, `registry ${env.registeredModules!()} != baseline ${registered}`);
+      expect(
+        env.registeredModules!() === registered,
+        `registry ${env.registeredModules!()} != baseline ${registered}`,
+      );
       (globalThis as any).__rnrSettle(closedGeneration, 1, 0, 0, ''); // closed generation: silently ignored
     }
-    await waitFor('20 freed adapters', () => stats().hostsFreed >= freedBefore + 20, 5000, env.collectGarbage);
-    return `registry ${registered === undefined ? 'not used on this backend' : `back to ${registered}`}; ` +
-      `${stats().hostsFreed - freedBefore} adapters freed after GC`;
+    await waitFor(
+      '20 freed adapters',
+      () => stats().hostsFreed >= freedBefore + 20,
+      5000,
+      env.collectGarbage,
+    );
+    return (
+      `registry ${registered === undefined ? 'not used on this backend' : `back to ${registered}`}; ` +
+      `${stats().hostsFreed - freedBefore} adapters freed after GC`
+    );
   });
 
   await check('racing completion and cancellation settle exactly once', async () => {
     // 25 at a time: within the Android executor budget (32) as well as the module's slots.
     const module = env.makeModule(32);
     const c = keep(module.create(0));
-    let resolved = 0, cancelled = 0, settledTwice = 0;
+    let resolved = 0,
+      cancelled = 0,
+      settledTwice = 0;
     for (let batch = 0; batch < 8; batch++) {
-      const operations = Array.from({length: 25}, (_, i) => {
+      const operations = Array.from({ length: 25 }, (_, i) => {
         const controller = new AbortController();
         const delay = (i * 7 + batch) % 15;
         setTimeout(() => controller.abort(), (i * 11 + batch * 3) % 15);
         let settlements = 0;
-        return c.addLater(1, delay, false, {signal: controller.signal}).then(
-          () => { settlements++; resolved++; },
-          error => { settlements++; if (error.code === 'cancelled') cancelled++; else throw error; },
-        ).finally(() => { if (settlements !== 1) settledTwice++; });
+        return c
+          .addLater(1, delay, false, { signal: controller.signal })
+          .then(
+            () => {
+              settlements++;
+              resolved++;
+            },
+            (error) => {
+              settlements++;
+              if (error.code === 'cancelled') cancelled++;
+              else throw error;
+            },
+          )
+          .finally(() => {
+            if (settlements !== 1) settledTwice++;
+          });
       });
       await Promise.all(operations);
     }
     const s = module.stats();
     await waitFor('all work exited', () => module.stats().inFlight === 0, 2000);
-    expect(resolved + cancelled === 200 && settledTwice === 0, `resolved ${resolved} cancelled ${cancelled}`);
+    expect(
+      resolved + cancelled === 200 && settledTwice === 0,
+      `resolved ${resolved} cancelled ${cancelled}`,
+    );
     expect(s.delivered === 200 && s.admitted === 200, `delivered ${s.delivered}`);
     expect(c.value() >= resolved && c.value() <= 200, `value ${c.value()}`);
     expect(module.violations.length === 0, module.violations.join('; '));
@@ -315,11 +413,17 @@ export async function runConformance(env: ConformanceEnv): Promise<CheckResult[]
     }
     throws(() => c.value(), /closed/);
     throws(() => module.create(0), /closed/);
-    expect((await rejection(c.addLater(1, 1, false))).toString().match(/closed/), 'admission after teardown');
+    expect(
+      (await rejection(c.addLater(1, 1, false))).toString().match(/closed/),
+      'admission after teardown',
+    );
     await waitFor('old generation work drained', () => module.stats().inFlight === 0, 2000);
     await sleep(50);
     const s = module.stats();
-    expect(module.violations.length === 0, `late settlement reached JS: ${module.violations.join('; ')}`);
+    expect(
+      module.violations.length === 0,
+      `late settlement reached JS: ${module.violations.join('; ')}`,
+    );
     expect(s.open === 0, 'host still open');
     const next = env.makeModule(8);
     expect(next.generation !== module.generation, 'generation reused');

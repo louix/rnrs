@@ -1,7 +1,7 @@
 // Lab-only fixture for the Worklets proof of concept (docs/research/worklets-poc-plan.md):
 // sync scalar methods a worklet endpoint may expose, a native object for the boxed-handle
 // path, and methods of every other shape that the endpoint must refuse. Not a production module.
-import type {NativeModule, NativeObject} from '@rnrs/runtime/spec';
+import type { NativeModule, NativeObject } from '@rnrs/runtime/spec';
 
 /** A shared accumulator (Rust: `Mutex<f64>` plus atomic counters, Send + Sync). */
 export interface Accumulator extends NativeObject {

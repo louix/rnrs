@@ -7,7 +7,8 @@
 // logged as skipped, never run late (no backlog).
 
 /** performance.now() (monotonic ms; present in React Native, not declared by its types). */
-export const perfNow = (): number => (globalThis as unknown as {performance: {now(): number}}).performance.now();
+export const perfNow = (): number =>
+  (globalThis as unknown as { performance: { now(): number } }).performance.now();
 
 export type Profile = 'control' | 'periodic-100' | 'burst-500';
 export type Placement = 'raf' | 'task';
@@ -36,14 +37,26 @@ export function parseConfig(url: string | null): Config | null {
   }
   const profile = q.get('profile') as Profile;
   const placement = (q.get('placement') ?? 'raf') as Placement;
-  if (!['control', 'periodic-100', 'burst-500'].includes(profile)) throw new Error(`unknown profile ${profile}`);
+  if (!['control', 'periodic-100', 'burst-500'].includes(profile))
+    throw new Error(`unknown profile ${profile}`);
   if (!['raf', 'task'].includes(placement)) throw new Error(`unknown placement ${placement}`);
   const churnText = q.get('churn') ?? '0';
   const churn = churnText.trim() === '' ? NaN : Number(churnText);
-  if (!Number.isInteger(churn) || churn < 0 || churn > 4_000_000) throw new Error(`churn must be an integer from 0 to 4000000 bytes per tick, got ${q.get('churn')}`);
+  if (!Number.isInteger(churn) || churn < 0 || churn > 4_000_000)
+    throw new Error(
+      `churn must be an integer from 0 to 4000000 bytes per tick, got ${q.get('churn')}`,
+    );
   const hermes = (q.get('hermes') ?? 'phase') as Config['hermes'];
   if (!['phase', 'tick'].includes(hermes)) throw new Error(`unknown hermes sampling ${hermes}`);
-  return {run: q.get('run') ?? 'run', profile, placement, instrumented: q.get('instrumented') !== '0', touch: q.get('touch') === '1', churn, hermes};
+  return {
+    run: q.get('run') ?? 'run',
+    profile,
+    placement,
+    instrumented: q.get('instrumented') !== '0',
+    touch: q.get('touch') === '1',
+    churn,
+    hermes,
+  };
 }
 
 export interface PlannedStall {
@@ -58,9 +71,12 @@ export function schedule(profile: Profile, phaseMs: number): PlannedStall[] {
     case 'control':
       return [];
     case 'periodic-100':
-      return Array.from({length: Math.floor((phaseMs - 1) / 1000)}, (_, k) => ({at: 1000 * (k + 1), durationMs: 100}));
+      return Array.from({ length: Math.floor((phaseMs - 1) / 1000) }, (_, k) => ({
+        at: 1000 * (k + 1),
+        durationMs: 100,
+      }));
     case 'burst-500':
-      return phaseMs > 8000 ? [{at: 8000, durationMs: 500}] : [];
+      return phaseMs > 8000 ? [{ at: 8000, durationMs: 500 }] : [];
   }
 }
 
@@ -95,7 +111,13 @@ export class StallRunner {
   private placement: Placement;
   private now: () => number;
 
-  constructor(plan: PlannedStall[], phase: string, startMs: number, placement: Placement, now: () => number) {
+  constructor(
+    plan: PlannedStall[],
+    phase: string,
+    startMs: number,
+    placement: Placement,
+    now: () => number,
+  ) {
     this.plan = plan;
     this.phase = phase;
     this.start = startMs;
@@ -110,7 +132,16 @@ export class StallRunner {
       const i = this.next++;
       const p = this.plan[i];
       const overtaken = this.next < this.plan.length && this.plan[this.next].at <= t;
-      const rec: StallRecord = {index: i, phase: this.phase, placement: this.placement, plannedStart: p.at, durationMs: p.durationMs, actualStart: null, actualEnd: null, skipped: overtaken};
+      const rec: StallRecord = {
+        index: i,
+        phase: this.phase,
+        placement: this.placement,
+        plannedStart: p.at,
+        durationMs: p.durationMs,
+        actualStart: null,
+        actualEnd: null,
+        skipped: overtaken,
+      };
       if (!overtaken) {
         rec.actualStart = this.now() - this.start;
         rec.actualEnd = busyWait(p.durationMs, this.now) - this.start;
@@ -135,7 +166,16 @@ export class StallRunner {
     // Deadlines never reached before the phase ended.
     for (; this.next < this.plan.length; this.next++) {
       const p = this.plan[this.next];
-      this.records.push({index: this.next, phase: this.phase, placement: this.placement, plannedStart: p.at, durationMs: p.durationMs, actualStart: null, actualEnd: null, skipped: true});
+      this.records.push({
+        index: this.next,
+        phase: this.phase,
+        placement: this.placement,
+        plannedStart: p.at,
+        durationMs: p.durationMs,
+        actualStart: null,
+        actualEnd: null,
+        skipped: true,
+      });
     }
   }
 }
@@ -164,7 +204,17 @@ export class TouchLog {
   add(phase: string, nativeTs: number, jsNow: number, x: number): void {
     // A touch not yet used by any step is superseded by this one (latest wins).
     if (this.latest && this.latest.usedAtTick === null) this.latest.superseded = true;
-    const rec: TouchRecord = {seq: this.records.length + 1, phase, nativeTs, jsNow, x, usedAtTick: null, usedAtJs: null, frame: null, superseded: false};
+    const rec: TouchRecord = {
+      seq: this.records.length + 1,
+      phase,
+      nativeTs,
+      jsNow,
+      x,
+      usedAtTick: null,
+      usedAtJs: null,
+      frame: null,
+      superseded: false,
+    };
     this.records.push(rec);
     this.latest = rec;
   }
@@ -207,14 +257,30 @@ export function decodeDrain(buf: ArrayBuffer, jsBefore: number, jsAfter: number)
   const records: number[][] = [];
   for (let i = 0; i < count; i++) {
     const o = 40 + i * 24;
-    records.push([u64(o), v.getUint32(o + 8, true), v.getUint32(o + 12, true), v.getUint32(o + 16, true), v.getUint16(o + 20, true)]);
+    records.push([
+      u64(o),
+      v.getUint32(o + 8, true),
+      v.getUint32(o + 12, true),
+      v.getUint32(o + 16, true),
+      v.getUint16(o + 20, true),
+    ]);
   }
-  return {jsBefore, jsAfter, nowNs: u64(24), count, dropped: u64(16), highWater: v.getUint32(12, true), capacity: v.getUint32(32, true), records};
+  return {
+    jsBefore,
+    jsAfter,
+    nowNs: u64(24),
+    count,
+    dropped: u64(16),
+    highWater: v.getUint32(12, true),
+    capacity: v.getUint32(32, true),
+    records,
+  };
 }
 
 /** Hermes heap/GC counters if this build exposes them; otherwise an explicit "unavailable". */
 export function hermesStats(): unknown {
-  const h = (globalThis as {HermesInternal?: {getInstrumentedStats?: () => unknown}}).HermesInternal;
+  const h = (globalThis as { HermesInternal?: { getInstrumentedStats?: () => unknown } })
+    .HermesInternal;
   return h?.getInstrumentedStats ? h.getInstrumentedStats() : 'unavailable';
 }
 
@@ -224,13 +290,22 @@ export function chunkLines(tag: string, run: string, key: string, value: unknown
   const size = 1800; // a logcat line holds ~4 KB; escaping at most doubles a chunk
   const parts = Math.max(1, Math.ceil(text.length / size));
   const lines: string[] = [];
-  for (let p = 0; p < parts; p++) lines.push(`${tag} ` + JSON.stringify({run, key, part: p, parts, data: text.slice(p * size, (p + 1) * size)}));
+  for (let p = 0; p < parts; p++)
+    lines.push(
+      `${tag} ` +
+        JSON.stringify({ run, key, part: p, parts, data: text.slice(p * size, (p + 1) * size) }),
+    );
   return lines;
 }
 
 /** Emits lines a few at a time: logd drops lines from a burst of hundreds (pilot
  *  20261020T045331Z lost 6 of 81 chunks), so the dump is spread over time. */
-export function pacedLog(lines: string[], log: (line: string) => void, perBatch = 8, intervalMs = 50): void {
+export function pacedLog(
+  lines: string[],
+  log: (line: string) => void,
+  perBatch = 8,
+  intervalMs = 50,
+): void {
   let i = 0;
   const timer = setInterval(() => {
     for (const end = Math.min(lines.length, i + perBatch); i < end; i++) log(lines[i]);
@@ -239,7 +314,13 @@ export function pacedLog(lines: string[], log: (line: string) => void, perBatch 
 }
 
 /** The Hermes counters sampled per tick, in this order after [tBefore, tAfter]. */
-export const SAMPLED_COUNTERS = ['js_numGCs', 'js_gcTime', 'js_gcCPUTime', 'js_allocatedBytes', 'js_totalAllocatedBytes'] as const;
+export const SAMPLED_COUNTERS = [
+  'js_numGCs',
+  'js_gcTime',
+  'js_gcCPUTime',
+  'js_allocatedBytes',
+  'js_totalAllocatedBytes',
+] as const;
 const SAMPLE_WIDTH = 2 + SAMPLED_COUNTERS.length;
 
 /** Per-tick Hermes counter samples in a preallocated Float64Array: [tBefore, tAfter, ...counters]
@@ -257,7 +338,11 @@ export class HermesSampler {
   private read: () => Record<string, unknown> | null;
   private now: () => number;
 
-  constructor(capacity: number, now: () => number, read: () => Record<string, unknown> | null = readHermesStats) {
+  constructor(
+    capacity: number,
+    now: () => number,
+    read: () => Record<string, unknown> | null = readHermesStats,
+  ) {
     this.capacity = capacity;
     this.data = new Float64Array(capacity * SAMPLE_WIDTH);
     this.now = now;
@@ -287,19 +372,23 @@ export class HermesSampler {
   /** Plain arrays for logging (at the phase end only). */
   rows(): number[][] {
     const out: number[][] = [];
-    for (let i = 0; i < this.count; i++) out.push(Array.from(this.data.subarray(i * SAMPLE_WIDTH, (i + 1) * SAMPLE_WIDTH)));
+    for (let i = 0; i < this.count; i++)
+      out.push(Array.from(this.data.subarray(i * SAMPLE_WIDTH, (i + 1) * SAMPLE_WIDTH)));
     return out;
   }
 }
 
 function readHermesStats(): Record<string, unknown> | null {
-  const h = (globalThis as {HermesInternal?: {getInstrumentedStats?: () => Record<string, unknown>}}).HermesInternal;
+  const h = (
+    globalThis as { HermesInternal?: { getInstrumentedStats?: () => Record<string, unknown> } }
+  ).HermesInternal;
   return h?.getInstrumentedStats ? h.getInstrumentedStats() : null;
 }
 
 /** Hermes runtime properties (release version, GC kind, ...) if exposed; otherwise "unavailable". */
 export function hermesRuntimeProperties(): unknown {
-  const h = (globalThis as {HermesInternal?: {getRuntimeProperties?: () => unknown}}).HermesInternal;
+  const h = (globalThis as { HermesInternal?: { getRuntimeProperties?: () => unknown } })
+    .HermesInternal;
   return h?.getRuntimeProperties ? h.getRuntimeProperties() : 'unavailable';
 }
 
@@ -308,6 +397,8 @@ export function hermesRuntimeProperties(): unknown {
  *  non-integer number is a separate boxed heap cell; actual bytes only from Hermes counters. */
 export const CHURN_ARRAY_ELEMENTS = 128;
 export const CHURN_ARRAY_NOMINAL_BYTES = CHURN_ARRAY_ELEMENTS * 8;
+// Intentionally retains each measured allocation until the next iteration.
+// oxlint-disable-next-line no-unused-vars
 let churnSink: number[] | null = null;
 
 /** Allocates short-lived arrays for about `bytes` nominal bytes, dropping each at once; returns the
@@ -315,6 +406,8 @@ let churnSink: number[] | null = null;
 export function churn(bytes: number): number {
   const n = Math.ceil(bytes / CHURN_ARRAY_NOMINAL_BYTES);
   for (let i = 0; i < n; i++) {
+    // Keep the measured allocation/fill workload unchanged.
+    // oxlint-disable-next-line unicorn/no-new-array
     const a = new Array<number>(CHURN_ARRAY_ELEMENTS);
     for (let j = 0; j < CHURN_ARRAY_ELEMENTS; j++) a[j] = j + 0.5;
     churnSink = a;
@@ -346,10 +439,10 @@ export class Session {
   touches = new TouchLog();
   drains: Drain[] = [];
   snapshots: unknown[] = [];
-  hermes: {phase: Phase; perf: number; stats: unknown}[] = [];
-  phases: {phase: Phase; perf: number; date: number}[] = [];
+  hermes: { phase: Phase; perf: number; stats: unknown }[] = [];
+  phases: { phase: Phase; perf: number; date: number }[] = [];
   /** Lifecycle pauses during measured phases (the run is then invalid, not repaired). */
-  pausedDuring: {phase: Phase; perf: number}[] = [];
+  pausedDuring: { phase: Phase; perf: number }[] = [];
   /** Per-tick Hermes samples (`hermes=tick` only). */
   sampler: HermesSampler | null;
   churnTicks = 0;
@@ -361,11 +454,16 @@ export class Session {
   private log: (line: string) => void;
   private emit: (lines: string[]) => void;
 
-  constructor(cfg: Config, now: () => number = perfNow, log: (line: string) => void = l => console.log(l), emit?: (lines: string[]) => void) {
+  constructor(
+    cfg: Config,
+    now: () => number = perfNow,
+    log: (line: string) => void = (l) => console.log(l),
+    emit?: (lines: string[]) => void,
+  ) {
     this.cfg = cfg;
     this.now = now;
     this.log = log;
-    this.emit = emit ?? (lines => pacedLog(lines, log));
+    this.emit = emit ?? ((lines) => pacedLog(lines, log));
     this.sampler = cfg.hermes === 'tick' ? new HermesSampler(SAMPLE_CAPACITY, now) : null;
     this.runtimeProperties = hermesRuntimeProperties();
   }
@@ -383,13 +481,19 @@ export class Session {
   beginTick(running: boolean, drain: () => void): void {
     const t = this.now();
     if (!running) {
-      if (this.measuring && (this.pausedDuring.length === 0 || this.pausedDuring[this.pausedDuring.length - 1].phase !== this.phase)) this.pausedDuring.push({phase: this.phase, perf: t});
+      if (
+        this.measuring &&
+        (this.pausedDuring.length === 0 ||
+          this.pausedDuring[this.pausedDuring.length - 1].phase !== this.phase)
+      )
+        this.pausedDuring.push({ phase: this.phase, perf: t });
       return;
     }
     const elapsed = t - this.phaseStart;
     if (this.phase === 'pending') this.enter('warmup', t);
     else if (this.phase === 'warmup' && elapsed >= WARMUP_MS) this.enter('throughput', t);
-    else if (this.phase === 'throughput' && elapsed >= THROUGHPUT_MS) this.enter(this.cfg.touch ? 'touch' : 'done', t);
+    else if (this.phase === 'throughput' && elapsed >= THROUGHPUT_MS)
+      this.enter(this.cfg.touch ? 'touch' : 'done', t);
     else if (this.phase === 'touch' && elapsed >= TOUCH_MS) this.enter('done', t);
     if (this.phase === 'done' && !this.finished) {
       this.finished = true;
@@ -418,12 +522,20 @@ export class Session {
     }
     this.phase = phase;
     this.phaseStart = t;
-    this.phases.push({phase, perf: t, date: Date.now()});
-    this.hermes.push({phase, perf: t, stats: hermesStats()});
-    this.log('RNR_CONTENTION ' + JSON.stringify({run: this.cfg.run, event: 'phase', phase, perf: t}));
+    this.phases.push({ phase, perf: t, date: Date.now() });
+    this.hermes.push({ phase, perf: t, stats: hermesStats() });
+    this.log(
+      'RNR_CONTENTION ' + JSON.stringify({ run: this.cfg.run, event: 'phase', phase, perf: t }),
+    );
     if (phase === 'throughput' || phase === 'touch') {
       const ms = phase === 'throughput' ? THROUGHPUT_MS : TOUCH_MS;
-      this.runner = new StallRunner(schedule(this.cfg.profile, ms), phase, t, this.cfg.placement, this.now);
+      this.runner = new StallRunner(
+        schedule(this.cfg.profile, ms),
+        phase,
+        t,
+        this.cfg.placement,
+        this.now,
+      );
     }
   }
 
@@ -443,7 +555,15 @@ export class Session {
       this.frame++;
       if (this.phase === 'touch') this.touches.submitted(this.frame);
     }
-    if (this.measuring) this.ticks.push([round3(tTop), round3(rafNow), steps, submitted ? this.frame : 0, round3(droppedS * 1000), this.phase === 'throughput' ? 1 : 2]);
+    if (this.measuring)
+      this.ticks.push([
+        round3(tTop),
+        round3(rafNow),
+        steps,
+        submitted ? this.frame : 0,
+        round3(droppedS * 1000),
+        this.phase === 'throughput' ? 1 : 2,
+      ]);
   }
 
   /** The 1 s timer: a ring drain (instrumented runs) bracketed by performance.now. */
@@ -455,7 +575,7 @@ export class Session {
   }
 
   snapshot(stats: unknown): void {
-    if (this.measuring) this.snapshots.push({perf: round3(this.now()), phase: this.phase, stats});
+    if (this.measuring) this.snapshots.push({ perf: round3(this.now()), phase: this.phase, stats });
   }
 
   private dump(): void {
@@ -471,12 +591,43 @@ export class Session {
     lines.push(...chunkLines(tag, run, 'snapshots', this.snapshots));
     lines.push(...chunkLines(tag, run, 'hermes', this.hermes));
     lines.push(...chunkLines(tag, run, 'pausedDuring', this.pausedDuring));
-    lines.push(...chunkLines(tag, run, 'runtime', {hermesRuntimeProperties: this.runtimeProperties}));
-    lines.push(...chunkLines(tag, run, 'churn', {nominalBytesPerTick: this.cfg.churn, ticks: this.churnTicks, arrays: this.churnArrays, nominalArrayBytes: CHURN_ARRAY_NOMINAL_BYTES}));
+    lines.push(
+      ...chunkLines(tag, run, 'runtime', { hermesRuntimeProperties: this.runtimeProperties }),
+    );
+    lines.push(
+      ...chunkLines(tag, run, 'churn', {
+        nominalBytesPerTick: this.cfg.churn,
+        ticks: this.churnTicks,
+        arrays: this.churnArrays,
+        nominalArrayBytes: CHURN_ARRAY_NOMINAL_BYTES,
+      }),
+    );
     if (this.sampler) {
-      lines.push(...chunkLines(tag, run, 'hermesSamples', {columns: ['tBefore', 'tAfter', ...SAMPLED_COUNTERS], capacity: this.sampler.capacity, count: this.sampler.count, overflow: this.sampler.overflow, missing: this.sampler.missing, missingCounters: this.sampler.missingCounters, rows: this.sampler.rows()}));
+      lines.push(
+        ...chunkLines(tag, run, 'hermesSamples', {
+          columns: ['tBefore', 'tAfter', ...SAMPLED_COUNTERS],
+          capacity: this.sampler.capacity,
+          count: this.sampler.count,
+          overflow: this.sampler.overflow,
+          missing: this.sampler.missing,
+          missingCounters: this.sampler.missingCounters,
+          rows: this.sampler.rows(),
+        }),
+      );
     }
-    lines.push('RNR_CONTENTION ' + JSON.stringify({run, event: 'done', frames: this.frame, ticks: this.ticks.length, stalls: this.stalls.length, touches: this.touches.records.length, drains: this.drains.length, paused: this.pausedDuring.length}));
+    lines.push(
+      'RNR_CONTENTION ' +
+        JSON.stringify({
+          run,
+          event: 'done',
+          frames: this.frame,
+          ticks: this.ticks.length,
+          stalls: this.stalls.length,
+          touches: this.touches.records.length,
+          drains: this.drains.length,
+          paused: this.pausedDuring.length,
+        }),
+    );
     this.emit(lines);
   }
 }
