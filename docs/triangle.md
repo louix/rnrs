@@ -191,8 +191,45 @@ Android and iOS builds use the [normal native setup](quickstart.md#4-use-it-in-a
 
 ## Browser initialization
 
-Use a React web app with `react-dom` and `react-native-web`. Configure the bundler to
-resolve `react-native` to `react-native-web`; for Vite:
+In a fresh app directory, create a package manifest and install the web dependencies:
+
+```sh
+npm init -y
+npm pkg set type=module
+npm install --save-exact @rnrs/runtime@0.1.0 @rnrs/surface@0.1.0 react@19.3.0 react-dom@19.3.0 react-native-web@0.21.4
+npm install --save-dev --save-exact vite@6.4.4 typescript@6.0.3 @types/react@19.3.0 @types/react-dom@19.3.0
+npm install /absolute/path/to/demo-triangle-0.1.0.tgz
+```
+
+For local framework testing, install the runtime, CLI, surface and module archives in
+**one npm install command**, replacing the registry framework install above. This keeps
+npm from looking up a matching framework dependency before its local archive is installed.
+
+Save the component above as `TriangleView.tsx`. Configure TypeScript in `tsconfig.json`:
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "lib": ["ES2022", "DOM", "DOM.Iterable", "ESNext.Disposable"],
+    "types": ["react", "react-dom", "vite/client"],
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "noEmit": true
+  },
+  "include": ["*.ts", "*.tsx"]
+}
+```
+
+`ESNext.Disposable` supplies disposal types used by the generated wrapper; you still
+call `dispose()` explicitly. `skipLibCheck` avoids checking conflicting browser and
+React Native ambient declarations; your application code remains strictly checked.
+
+Configure Vite in `vite.config.ts` to resolve `react-native` to `react-native-web`:
 
 ```ts
 import { defineConfig } from 'vite';
@@ -221,6 +258,7 @@ Build the Rust bundle before the web app:
 
 ```sh
 npx rnrs build --target web --app .
+npx tsc --noEmit
 npx vite build
 npx vite preview
 ```
