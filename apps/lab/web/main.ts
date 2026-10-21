@@ -4,13 +4,13 @@ import {
   checkWasmAdapter,
   installWebBackend,
   type RnrsWasm,
-} from '../packages/runtime/src/web-backend';
+} from '../../../packages/runtime/src/web-backend';
 import { runProtocolSuite } from '../src/rnrs/protocol-suite';
 import { runConformance } from '../src/rnrs/conformance';
 import { runMeterSuite } from '../src/rnrs/meter-suite';
 import { runValuesSuite } from '../src/rnrs/values-suite';
 import { runBlake3Suite } from '../src/rnrs/blake3-suite';
-import { counterModule, createCounterModuleForTesting } from '../.generated/rnrs/counter';
+import { counterModule, createCounterModuleForTesting } from '../../../.generated/rnrs/counter';
 
 const output = document.getElementById('out')!;
 const gc = (globalThis as any).gc as (() => void) | undefined;

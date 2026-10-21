@@ -1,4 +1,4 @@
-// Runs the browser harness (web/) in headless Chromium and prints the conformance result.
+// Runs the browser harness (apps/lab/web/) in headless Chromium and prints the conformance result.
 // Usage (inside `nix develop .#web`, after scripts/build-web.sh):
 //   node scripts/web-test.mjs [results/web-run.json]
 // RNRS_WEB_ROOT selects another static directory to serve (the Vite consumer's dist/).
@@ -17,7 +17,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const root = path.resolve(process.env.RNRS_WEB_ROOT ?? 'web');
+const root = path.resolve(process.env.RNRS_WEB_ROOT ?? 'apps/lab/web');
 const types = {
   '.html': 'text/html',
   '.js': 'text/javascript',

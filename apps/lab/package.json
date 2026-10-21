@@ -1,0 +1,29 @@
+{
+  "name": "rnrs-lab",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "start": "react-native start",
+    "android": "react-native run-android"
+  },
+  "codegenConfig": {
+    "name": "LabSpecs",
+    "type": "modules",
+    "jsSrcsDir": "specs",
+    "android": {
+      "javaPackageName": "com.helloworld"
+    }
+  },
+  "dependencies": {
+    "@rnrs/example-blake3": "file:../../packages/blake3",
+    "@rnrs/example-counter": "file:../../packages/counter",
+    "@rnrs/example-http": "file:../../packages/http",
+    "@rnrs/example-kv": "file:../../packages/kv",
+    "@rnrs/labs-bench": "file:../../packages/bench",
+    "@rnrs/labs-meter": "file:../../packages/meter",
+    "@rnrs/labs-values": "file:../../packages/values",
+    "@rnrs/runtime": "file:../../packages/runtime",
+    "react": "19.3.0",
+    "react-native": "0.88.0"
+  }
+}

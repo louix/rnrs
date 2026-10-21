@@ -1,4 +1,4 @@
-// metro.config.js blockList: generated module wrappers (.generated/rnrs/) stay visible to Metro,
+// apps/lab/metro.config.js blockList: generated module wrappers (.generated/rnrs/) stay visible to Metro,
 // including the bare directory (Metro 0.87's crawler tests directory paths without a trailing
 // slash), while the other build caches under .generated/ are blocked.
 import { test } from 'node:test';
@@ -8,7 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const config = createRequire(import.meta.url)(path.join(ROOT, 'metro.config.js'));
+const config = createRequire(import.meta.url)(path.join(ROOT, 'apps/lab/metro.config.js'));
 const blocked = (rel) => config.resolver.blockList.some((re) => re.test(path.join(ROOT, rel)));
 
 test('generated wrappers and their directories are not blocked', () => {
@@ -31,5 +31,5 @@ test('other generated caches are blocked', () => {
 });
 
 test('ordinary sources are not blocked', () => {
-  assert.equal(blocked('src/rnrsAndroid.ts'), false);
+  assert.equal(blocked('apps/lab/src/rnrsAndroid.ts'), false);
 });

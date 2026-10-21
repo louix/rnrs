@@ -37,7 +37,7 @@ for (const [name, write] of [
           // Relative to this tsconfig (no baseUrl, which TypeScript 6 deprecates).
           paths: Object.fromEntries(Object.entries(PATHS).map(([k, v]) => [k, [rel(v)]])),
         },
-        include: ['.', rel('src/rn-globals.d.ts')],
+        include: ['.', rel('apps/lab/src/rn-globals.d.ts')],
       },
       null,
       2,

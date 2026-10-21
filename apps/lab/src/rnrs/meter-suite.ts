@@ -3,9 +3,9 @@
 // sync, void and boolean methods, per-runtime module state, native objects as arguments,
 // async methods on the module itself, an async result that is a native object, and an
 // async error path.
-import { RnrsError } from '../../packages/runtime/src/runtime';
-import { counterModule } from '../../.generated/rnrs/counter';
-import { Gauge, createMeterModuleForTesting, meterModule } from '../../.generated/rnrs/meter';
+import { RnrsError } from '../../../../packages/runtime/src/runtime';
+import { counterModule } from '../../../../.generated/rnrs/counter';
+import { Gauge, createMeterModuleForTesting, meterModule } from '../../../../.generated/rnrs/meter';
 import type { CheckResult } from './conformance';
 
 export interface MeterEnv {

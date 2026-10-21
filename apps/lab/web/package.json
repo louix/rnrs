@@ -1,0 +1,15 @@
+{
+  "name": "rnrs-lab-web",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The lab's browser harness as its own app for rnrs: its dependency graph lists only web-targeted modules (the lab app's, apps/lab/package.json, also includes Android-only ones). Packages resolve from the root node_modules.",
+  "dependencies": {
+    "@rnrs/example-blake3": "file:../../../packages/blake3",
+    "@rnrs/example-counter": "file:../../../packages/counter",
+    "@rnrs/example-http": "file:../../../packages/http",
+    "@rnrs/labs-bench": "file:../../../packages/bench",
+    "@rnrs/labs-meter": "file:../../../packages/meter",
+    "@rnrs/labs-values": "file:../../../packages/values",
+    "@rnrs/runtime": "file:../../../packages/runtime"
+  }
+}

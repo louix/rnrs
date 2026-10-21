@@ -1,7 +1,7 @@
 // One Counter/async contract suite, run unchanged against each backend, over the
 // generated Counter module (packages/counter/counter.spec.ts).
-import { RnrsError, type AdapterStats } from '../../packages/runtime/src/runtime';
-import { Counter, type CounterModule } from '../../.generated/rnrs/counter';
+import { RnrsError, type AdapterStats } from '../../../../packages/runtime/src/runtime';
+import { Counter, type CounterModule } from '../../../../.generated/rnrs/counter';
 
 export interface ConformanceEnv {
   platform: string;

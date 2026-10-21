@@ -24,7 +24,7 @@
     "**/*.min.js",
     "packages/*/rnrs/**",
     "packages/fixtures/*/rnrs/**",
-    "web/rnrs/**",
+    "apps/lab/web/rnrs/**",
     "fixtures/*/rnrs/**",
     "**/package-lock.json",
     "**/Cargo.lock",

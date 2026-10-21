@@ -1,8 +1,8 @@
 // Framework/backend version-mismatch diagnostics, run on both platforms: wrappers generated
 // for a newer call protocol, and native/Wasm adapters built by an older @rnrs/runtime, fail
 // with actionable errors instead of a TypeError on first call.
-import { checkWrapperProtocol, RUNTIME_PROTOCOL } from '../../packages/runtime/src/runtime';
-import { refuseWasmAdapter } from '../../packages/runtime/src/web-backend';
+import { checkWrapperProtocol, RUNTIME_PROTOCOL } from '../../../../packages/runtime/src/runtime';
+import { refuseWasmAdapter } from '../../../../packages/runtime/src/web-backend';
 import type { CheckResult } from './conformance';
 
 export function runProtocolSuite(

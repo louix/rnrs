@@ -1,7 +1,15 @@
 apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
-react { autolinkLibrariesWithApp() }
+react {
+    autolinkLibrariesWithApp()
+    // npm workspace: packages are installed in the repository root's node_modules.
+    def modules = file("../../../../node_modules")
+    reactNativeDir = new File(modules, "react-native")
+    codegenDir = new File(modules, "@react-native/codegen")
+    cliFile = new File(modules, "react-native/cli.js")
+    hermesCommand = new File(modules, "hermes-compiler/hermesc/%OS-BIN%/hermesc").path
+}
 android {
     ndkVersion rootProject.ext.ndkVersion
     buildToolsVersion rootProject.ext.buildToolsVersion

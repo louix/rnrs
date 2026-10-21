@@ -2,7 +2,7 @@
 // conformance suite; background/foreground; Activity destruction without runtime
 // destruction; RN reload with in-flight and queued work; repeated reloads with
 // non-cooperative work; ReactHost.destroy() and recreation. The app's step loop
-// (src/rnrsAndroid.ts) asks this runner for each step.
+// (apps/lab/src/rnrsAndroid.ts) asks this runner for each step.
 // Usage (inside `nix develop`, release APK installed): node scripts/rnrs-device-test.mjs [out.json]
 import http from 'node:http';
 import { execFileSync } from 'node:child_process';

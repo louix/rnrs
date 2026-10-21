@@ -13,12 +13,12 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 export const SUITES = ['conformance', 'meter-suite', 'values-suite', 'blake3-suite'];
 /** Repository import -> installed package, as an app sees them. */
 const IMPORTS = {
-  '../../packages/runtime/src/runtime': '@rnrs/runtime',
-  '../../.generated/rnrs/counter': '@rnrs/example-counter',
-  '../../.generated/rnrs/meter': '@rnrs/labs-meter',
-  '../../.generated/rnrs/values': '@rnrs/labs-values',
-  '../../.generated/rnrs/rnrs_blake3': '@rnrs/example-blake3',
-  '../../fixtures/blake3/test_vectors.json': '../test_vectors.json',
+  '../../../../packages/runtime/src/runtime': '@rnrs/runtime',
+  '../../../../.generated/rnrs/counter': '@rnrs/example-counter',
+  '../../../../.generated/rnrs/meter': '@rnrs/labs-meter',
+  '../../../../.generated/rnrs/values': '@rnrs/labs-values',
+  '../../../../.generated/rnrs/rnrs_blake3': '@rnrs/example-blake3',
+  '../../../../fixtures/blake3/test_vectors.json': '../test_vectors.json',
 };
 
 export function writeIosFixture(app) {
@@ -30,7 +30,7 @@ export function writeIosFixture(app) {
   );
   mkdirSync(path.join(app, 'suites'), { recursive: true });
   for (const suite of SUITES) {
-    let text = readFileSync(path.join(ROOT, 'src/rnrs', `${suite}.ts`), 'utf8');
+    let text = readFileSync(path.join(ROOT, 'apps/lab/src/rnrs', `${suite}.ts`), 'utf8');
     for (const [from, to] of Object.entries(IMPORTS))
       text = text.replaceAll(`'${from}'`, `'${to}'`);
     if (/from '\.\.\/\.\.\//.test(text))

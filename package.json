@@ -2,39 +2,24 @@
   "name": "rust-jsi-lab",
   "version": "0.0.1",
   "private": true,
+  "workspaces": [
+    "apps/lab"
+  ],
   "scripts": {
-    "lint": "oxlint --deny-warnings src specs packages scripts tools fixtures web *.js",
+    "lint": "oxlint --deny-warnings apps packages scripts tools fixtures",
     "lint:fix": "npm run lint -- --fix",
-    "fmt": "oxfmt --write \"{src,specs,packages,scripts,tools,fixtures,web}/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}\" \"*.js\" package.json .oxfmtrc.json .oxlintrc.json renovate.json",
-    "fmt:check": "oxfmt --check \"{src,specs,packages,scripts,tools,fixtures,web}/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}\" \"*.js\" package.json .oxfmtrc.json .oxlintrc.json renovate.json",
-    "start": "react-native start",
-    "android": "react-native run-android",
+    "fmt": "oxfmt --write \"{apps,packages,scripts,tools,fixtures}/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}\" package.json apps/lab/package.json .oxfmtrc.json .oxlintrc.json renovate.json",
+    "fmt:check": "oxfmt --check \"{apps,packages,scripts,tools,fixtures}/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}\" package.json apps/lab/package.json .oxfmtrc.json .oxlintrc.json renovate.json",
+    "start": "npm run start -w apps/lab --",
+    "android": "npm run android -w apps/lab --",
     "test": "node --test scripts/*.test.mjs tools/rnrs-gen/test/*.test.mjs",
     "test:rnrs-offline": "cargo fetch --locked && RNRS_REQUIRE_CARGO=1 node --test tools/rnrs-gen/test/rnrs-offline.test.mjs",
     "typecheck": "node tools/rnrs-gen/cli.mjs generate && node node_modules/typescript/bin/tsc --noEmit && node scripts/typecheck-ios-fixture.mjs",
     "rnrs:gen": "node tools/rnrs-gen/cli.mjs generate",
     "rnrs:check": "node tools/rnrs-gen/cli.mjs check"
   },
-  "codegenConfig": {
-    "name": "LabSpecs",
-    "type": "modules",
-    "jsSrcsDir": "specs",
-    "android": {
-      "javaPackageName": "com.helloworld"
-    }
-  },
   "dependencies": {
-    "@rnrs/cli": "file:packages/cli",
-    "@rnrs/example-blake3": "file:packages/blake3",
-    "@rnrs/example-counter": "file:packages/counter",
-    "@rnrs/example-http": "file:packages/http",
-    "@rnrs/example-kv": "file:packages/kv",
-    "@rnrs/labs-bench": "file:packages/bench",
-    "@rnrs/labs-meter": "file:packages/meter",
-    "@rnrs/labs-values": "file:packages/values",
-    "@rnrs/runtime": "file:packages/runtime",
-    "react": "19.3.0",
-    "react-native": "0.88.0"
+    "@rnrs/cli": "file:packages/cli"
   },
   "devDependencies": {
     "@react-native-community/cli": "20.2.0",

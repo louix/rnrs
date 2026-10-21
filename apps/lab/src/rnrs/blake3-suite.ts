@@ -1,7 +1,7 @@
 // Shared BLAKE3 suite (packages/blake3), run unchanged on Android and in the browser against
 // the official test vectors (fixtures/blake3/test_vectors.json, BLAKE3 1.8.2).
-import { Hasher, blake3Module } from '../../.generated/rnrs/rnrs_blake3';
-import vectors from '../../fixtures/blake3/test_vectors.json';
+import { Hasher, blake3Module } from '../../../../.generated/rnrs/rnrs_blake3';
+import vectors from '../../../../fixtures/blake3/test_vectors.json';
 import type { CheckResult } from './conformance';
 
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());

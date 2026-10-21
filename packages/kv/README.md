@@ -2,7 +2,7 @@
 
 An author package: a TS spec (`packages/kv/kv.spec.ts`), a Rust crate wrapping sled 0.34, and the generated interface. It has no platform code. Its targets are `android` and `ios`:
 - There is no browser backend and no fallback. An app whose dependency graph selects it for the web is refused by `rnrs build --target web`, naming the chain (`scripts/consumer/kv-web-rejected.sh`), and the packaged `rnrs/web.ts` throws at import.
-- The lab therefore builds its browser harness from its own graph (`web/package.json`, lock `web/rnrs-web.Cargo.lock`), which does not include kv.
+- The lab therefore builds its browser harness from its own graph (`apps/lab/web/package.json`, lock `apps/lab/web/rnrs-web.Cargo.lock`), which does not include kv.
 - On iOS the same crate runs unchanged; the framework supplies `<Application Support>/rnrs` (see [iOS](#ios)).
 
 sled 0.34 is old (2021) and still pre-1.0. It was chosen as requested for this example, not as a recommendation.

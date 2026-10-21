@@ -9,20 +9,20 @@ import {
   installAndroidBackend,
   registeredModuleCount,
   runtimeBindings,
-} from '../packages/runtime/src/jsi-backend';
+} from '../../../packages/runtime/src/jsi-backend';
 import { runProtocolSuite } from './rnrs/protocol-suite';
 import {
   CounterModule,
   counterModule,
   createCounterModuleForTesting,
   type Counter,
-} from '../.generated/rnrs/counter';
+} from '../../../.generated/rnrs/counter';
 import { runMeterSuite } from './rnrs/meter-suite';
 import { runValuesSuite } from './rnrs/values-suite';
 import { runBlake3Suite } from './rnrs/blake3-suite';
-import { valuesModule } from '../.generated/rnrs/values';
-import { httpModule } from '../.generated/rnrs/rnrs_http';
-import { kvModule } from '../.generated/rnrs/rnrs_kv';
+import { valuesModule } from '../../../.generated/rnrs/values';
+import { httpModule } from '../../../.generated/rnrs/rnrs_http';
+import { kvModule } from '../../../.generated/rnrs/rnrs_kv';
 
 // The lab's own test databases (deleted by the runner's last step; nothing else is touched).
 const KV_LIFECYCLE = 'rnrs-lab-lifecycle';
