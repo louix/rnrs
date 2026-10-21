@@ -3,17 +3,8 @@ name = "rnr-webgpu-triangle"
 version = "0.1.0"
 edition = "2021"
 publish = false
-description = "Lab fixture: one wgpu (WebGPU) triangle presented into an rnr-surface browser canvas."
+description = "Lab fixture: one wgpu triangle through the rnrs wgpu adapter (rnrs::gpu) on Android, iOS and the browser."
 
 [dependencies]
-rnr-core = "0.1"
-rnr-surface = "0.1"
-
-# Web only. The pinned wgpu with only its browser WebGPU backend: no wgpu-core, no WebGL, and
-# nothing GPU-related for consumers that do not install this package.
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-wgpu = { version = "=30.0.1", default-features = false, features = ["std", "wgsl", "webgpu"] }
-web-sys = { version = "=0.3.106", features = ["HtmlCanvasElement", "Navigator", "Window"] }
-wasm-bindgen = "=0.2.129"
-wasm-bindgen-futures = "=0.4.79"
-js-sys = "=0.3.106"
+# Everything comes through the facade: rnr-core, rnr-surface and the pinned wgpu (rnrs::gpu::wgpu).
+rnrs = { version = "0.1", features = ["wgpu"] }

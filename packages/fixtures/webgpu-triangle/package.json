@@ -2,9 +2,11 @@
   "name": "@rnrs/labs-webgpu-triangle",
   "version": "0.1.0",
   "private": true,
-  "description": "Lab-only browser fixture: one wgpu (WebGPU) triangle drawn by Rust straight into an @rnrs/surface canvas, with no CPU pixel path. Web only; optional, never a fallback.",
+  "description": "Lab fixture: one wgpu triangle drawn by Rust through the rnrs wgpu adapter into an @rnrs/surface view (Android: Vulkan, iOS: Metal, browser: WebGPU). No fallback.",
   "rustNative": {
     "targets": [
+      "android",
+      "ios",
       "web"
     ],
     "spec": "webgpu-triangle.spec.ts",

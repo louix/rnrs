@@ -732,6 +732,10 @@ pub mod platform {
     }
 }
 
+/// The wgpu adapter (feature `wgpu`): renderers implement [`gpu::Renderer`].
+#[cfg(feature = "wgpu")]
+pub mod gpu;
+
 #[cfg(test)]
 mod tests;
 

@@ -130,7 +130,7 @@ edition = "2021"
 
 [dependencies]
 # Provided by @rnrs/runtime (not on crates.io): \`rnrs test\` and app builds resolve it there.
-# Renderers add features = ["surface"] (and the app installs @rnrs/surface).
+# Renderers add features = ["wgpu"] (rnrs::gpu) or ["surface"]; the app then installs @rnrs/surface.
 rnrs = "${rnrsRequirement()}"
 `;
   const lib = `// The trait generated from ${n.spec} (by \`rnrs generate\`, \`rnrs test\` and \`npm pack\`).

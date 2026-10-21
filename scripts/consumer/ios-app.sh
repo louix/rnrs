@@ -27,7 +27,10 @@
 #   RNR_IOS_FIXTURE=bevy                      the Bevy example (fixtures/bevy-consumer: App.tsx, smoke.ts) with
 #                                             @rnrs/surface and @rnrs/example-bevy3d; needs RUSTUP_TOOLCHAIN=1.97.1
 #                                             (Bevy 0.20 MSRV); run by scripts/consumer/ios-bevy-sim-test.mjs
-#   RNR_IOS_FIXTURE=smoke                     a JS smoke fixture: RNR_IOS_SMOKE_DIR's smoke.ts (repo-relative
+#   RNR_IOS_FIXTURE=triangle                  the rnrs::gpu triangle (fixtures/triangle-consumer: App.tsx, smoke.ts)
+#                                             with @rnrs/surface and @rnrs/labs-webgpu-triangle; run by
+#                                             scripts/consumer/ios-triangle-sim-test.mjs
+#   RNR_IOS_FIXTURE=smoke                    a JS smoke fixture: RNR_IOS_SMOKE_DIR's smoke.ts (repo-relative
 #                                             directory exporting runSmoke(); e.g. fixtures/scheduler-probe) under
 #                                             fixtures/consumer/ios/SmokeApp.tsx, with @rnrs/<m> for each m in
 #                                             RNR_IOS_SMOKE_MODULES (default example-counter); run by
@@ -88,6 +91,9 @@ elif [ "${RNR_IOS_FIXTURE:-}" = touch-probe ]; then
 elif [ "${RNR_IOS_FIXTURE:-}" = bevy ]; then
   cp "$ROOT/fixtures/bevy-consumer/App.tsx" "$ROOT/fixtures/bevy-consumer/smoke.ts" "$APP/"
   (cd "$APP" && npm install --no-audit --no-fund "$P/rnrs-cli-0.1.0.tgz" "$P/rnrs-runtime-0.1.0.tgz" "$P/rnrs-surface-0.1.0.tgz" "$P/rnrs-example-bevy3d-0.1.0.tgz")
+elif [ "${RNR_IOS_FIXTURE:-}" = triangle ]; then
+  cp "$ROOT/fixtures/triangle-consumer/App.tsx" "$ROOT/fixtures/triangle-consumer/smoke.ts" "$APP/"
+  (cd "$APP" && npm install --no-audit --no-fund "$P/rnrs-cli-0.1.0.tgz" "$P/rnrs-runtime-0.1.0.tgz" "$P/rnrs-surface-0.1.0.tgz" "$P/rnrs-labs-webgpu-triangle-0.1.0.tgz")
 elif [ "${RNR_IOS_FIXTURE:-}" = smoke ]; then
   cp "$ROOT/${RNR_IOS_SMOKE_DIR:?set RNR_IOS_SMOKE_DIR with RNR_IOS_FIXTURE=smoke}/smoke.ts" "$APP/smoke.ts"
   cp "$ROOT/fixtures/consumer/ios/SmokeApp.tsx" "$APP/App.tsx"

@@ -301,9 +301,9 @@ fn a_layer_window_refuses_raw_handles_and_exposes_its_layer() {
 }
 
 /// The asynchronous revocations below share process-wide retirement statistics: every test in
-/// this file that calls `revoke_async` or reads `retirement_stats` holds this lock, so the
+/// this crate that calls `revoke_async` or reads `retirement_stats` holds this lock, so the
 /// exact-count assertions cannot race (tests run on parallel threads).
-static RETIREMENT: Mutex<()> = Mutex::new(());
+pub(crate) static RETIREMENT: Mutex<()> = Mutex::new(());
 
 #[test]
 fn revoke_async_without_leases_releases_at_once_and_is_not_a_detach_timeout() {

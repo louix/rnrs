@@ -346,6 +346,113 @@ async function webgpu() {
   }
 }
 
+/** Polls navigator.gpu.requestAdapter() until it returns an adapter (at most 20 s). */
+async function adapterAvailable() {
+  const end = performance.now() + 20_000;
+  while (performance.now() < end) {
+    if (await (navigator as any).gpu?.requestAdapter()) return;
+    await sleep(250);
+  }
+  throw new Error('no WebGPU adapter offered again within 20 s');
+}
+
+/** ?expect=reentrancy: rnrs::gpu's hook reentrancy and setup interleaving, in a launch of its own
+ *  (this headless SwiftShader Chromium stops offering adapters after enough device churn, so
+ *  these do not share a page with the lifecycle checks above). */
+async function reentrancy() {
+  const h = setup();
+  try {
+    await test('a setup interleaved with a detach and re-attach (setups held) is discarded; the new one installs', async () => {
+      const t = h.module.create();
+      const k = t.surfaceKey();
+      const canvas = document.createElement('canvas');
+      const discarded = t.stats().initsDiscarded;
+      wasm.rnr_surface_hold_gpu_setups_for_testing(true);
+      try {
+        const a = wasm.rnr_surface_attach(k, 64, 48, 1) as number;
+        assert(wasm.rnr_surface_bind_canvas(k, a, canvas) === 'ok', 'first bound');
+        await until(
+          'first setup past create, at the gate',
+          () =>
+            wasm.rnr_surface_hold_gpu_setups_for_testing(true) === 1 ||
+            t.stats().gpuState === 'failed',
+        );
+        assert(
+          t.stats().gpuState === 'initializing',
+          'first setup held, not failed: ' + JSON.stringify(t.stats()),
+        );
+        wasm.rnr_surface_detach(k, a);
+        const b = wasm.rnr_surface_attach(k, 64, 48, 1) as number;
+        assert(b > 0 && wasm.rnr_surface_bind_canvas(k, b, canvas) === 'ok', 'second bound');
+        await until(
+          'second setup at the gate too (the renderer was there)',
+          () => wasm.rnr_surface_hold_gpu_setups_for_testing(true) === 2,
+        );
+        wasm.rnr_surface_hold_gpu_setups_for_testing(false);
+        await until('setup finished', () => t.stats().gpuState !== 'initializing');
+        const st = t.stats();
+        assert(
+          st.gpuState === 'ready' && st.lastError === null,
+          'the re-attached setup installs: ' + JSON.stringify(st),
+        );
+        assert(
+          st.initsDiscarded === discarded + 1,
+          'the first setup was discarded: ' + st.initsDiscarded,
+        );
+        assert(
+          wasm.rnr_surface_render(k, b, true).status === 'submitted',
+          'the new attachment draws',
+        );
+        assert(wasm.rnr_surface_render(k, a, true).status === 'stale', 'the old token is stale');
+        wasm.rnr_surface_detach(k, b);
+      } finally {
+        wasm.rnr_surface_hold_gpu_setups_for_testing(false);
+        t.close();
+      }
+    });
+
+    // This headless SwiftShader Chromium offers no adapter for a while after devices are destroyed
+    // (environment, not the adapter under test): wait until it offers one again.
+    await adapterAvailable();
+    await test('hooks call back into their own surface: set_state from create; set_state, then close from draw', async () => {
+      const t = h.module.create();
+      const k = t.surfaceKey();
+      assert(t.armHookProbeForTesting('create'), 'create probe armed');
+      const token = wasm.rnr_surface_attach(k, 64, 48, 1) as number;
+      assert(
+        wasm.rnr_surface_bind_canvas(k, token, document.createElement('canvas')) === 'ok',
+        'bound',
+      );
+      await until('setup finished', () => t.stats().gpuState !== 'initializing');
+      assert(t.stats().gpuState === 'ready', 'ready after the create hook: ' + t.stats().lastError);
+      assert(t.hookProbeLog() === 'create: set_state=true', 'create hook: ' + t.hookProbeLog());
+      assert(
+        wasm.rnr_surface_render(k, token, true).status === 'submitted',
+        'first frame submitted',
+      );
+      const submitted = t.stats().framesSubmitted;
+      assert(t.armHookProbeForTesting('draw'), 'draw probe armed');
+      assert(t.setBackground(1, 0, 0), 'a change requests the draw');
+      const r = wasm.rnr_surface_render(k, token, false);
+      assert(r.status === 'closed', 'the close from inside draw is applied: ' + r.status);
+      assert(
+        t.hookProbeLog().endsWith('draw: set_state=true, closed'),
+        'draw hook: ' + t.hookProbeLog(),
+      );
+      const st = t.stats();
+      assert(
+        st.state === 'closed' && st.framesSubmitted === submitted,
+        'nothing submitted for the attachment closed by its own hook: ' + JSON.stringify(st),
+      );
+      assert(!t.setBackground(0, 0, 0), 'closed: false');
+      assert(wasm.rnr_surface_render(k, token, true).status === 'closed', 'stays closed');
+    });
+  } finally {
+    notes.hostErrors = h.errors;
+    h.cleanup();
+  }
+}
+
 /** ?expect=view: headed manual check. Mounts one triangle and keeps it on screen; shows live
  *  diagnostics (also copyable as JSON). No automated checks and no pixel readback. */
 async function view() {
@@ -405,6 +512,7 @@ async function main() {
   notes.navigatorGpu = 'gpu' in navigator;
   if (expect === 'unsupported') await unsupported();
   else if (expect === 'webgpu') await webgpu();
+  else if (expect === 'reentrancy') await reentrancy();
   else if (expect === 'view') {
     await view();
     return;
@@ -422,7 +530,7 @@ main()
       checks,
       notes,
       label:
-        (expect === 'webgpu'
+        (expect === 'webgpu' || expect === 'reentrancy'
           ? 'software WebGPU (SwiftShader, --enable-unsafe-webgpu, test only); correctness only, no GPU performance claim'
           : 'default launch') +
         (blocked ? '; prototype: visible presentation unproven (BLOCKED)' : ''),

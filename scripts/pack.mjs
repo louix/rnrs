@@ -30,6 +30,7 @@ const MODULES = [
   'fixtures/worklets-probe',
   'fixtures/teardown-probe',
   'fixtures/touch-probe',
+  'fixtures/webgpu-triangle',
   'vello2d',
   'bevy3d',
 ];
@@ -124,7 +125,7 @@ expectFiles(
     /^src\/browser\/[\w-]+\.ts$/,
     /^src\/specs\/RnrSurfaceViewNativeComponent\.ts$/,
     /^rust\/Cargo\.toml$/,
-    /^rust\/src\/\w+\.rs$/,
+    /^rust\/src\/(\w+\/)*\w+\.rs$/,
     /^android\/(build\.gradle|consumer-rules\.pro)$/,
     /^android\/src\/main\/java\/dev\/rustjsilab\/rnr\/surface\/\w+\.kt$/,
     /^ios\/\w+\.(h|mm)$/,

@@ -23,6 +23,7 @@ members = [
   "packages/rnr-surface/rust",
   "packages/vello2d/rust",
   "packages/fixtures/touch-probe/rust",
+  "packages/fixtures/webgpu-triangle/rust",
 ]
 # Scratch consumers and author packages built by scripts/consumer are standalone.
 # packages/bevy3d needs Rust 1.97.1 (Bevy 0.20), above the workspace toolchain; built per app.

@@ -115,6 +115,8 @@ pub fn keep_exports() {
         rnr_surface_presentation as *const (), rnr_surface_bind_canvas as *const (),
         rnr_surface_touch as *const (), rnr_surface_touch_counters as *const (),
     ]);
+    #[cfg(feature = "lab-hooks")]
+    std::hint::black_box(rnr_surface_hold_gpu_setups_for_testing as *const ());
 }
 
 thread_local! {
@@ -130,4 +132,47 @@ pub(crate) fn released(key: u64, token: u64) {
         // Framework callback only queues retries. No Surface/index lock or borrow held.
         let _ = listener.call2(&JsValue::UNDEFINED, &JsValue::from_f64(key as f64), &JsValue::from_f64(token as f64));
     }
+}
+
+/// Lab only: while held, every GPU setup (rnr_surface::gpu, browser) pauses after the renderer's
+/// `create` and before its validation result is awaited, so a test can detach and re-attach in a
+/// deterministic interleaving; releasing resumes them in order. Returns the number of setups
+/// waiting at the gate before this call (released ones included). Lab only: never needed by
+/// apps, and any page script could stall GPU setups with it (it is not a security boundary).
+#[cfg(feature = "lab-hooks")]
+#[wasm_bindgen]
+pub fn rnr_surface_hold_gpu_setups_for_testing(hold: bool) -> u32 {
+    SETUP_HOLD.with(|h| h.set(hold));
+    let waiting = SETUP_WAITERS.with(|w| w.borrow().len()) as u32;
+    if !hold {
+        for waker in SETUP_WAITERS.with(|w| std::mem::take(&mut *w.borrow_mut())) {
+            waker.wake();
+        }
+    }
+    waiting
+}
+
+#[cfg(feature = "lab-hooks")]
+thread_local! {
+    static SETUP_HOLD: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static SETUP_WAITERS: std::cell::RefCell<Vec<std::task::Waker>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Resolves at once unless setups are held (rnr_surface_hold_gpu_setups_for_testing, feature
+/// `lab-hooks`); without that feature it always resolves at once.
+#[cfg(feature = "lab-hooks")]
+pub(crate) fn setup_gate() -> impl std::future::Future<Output = ()> {
+    std::future::poll_fn(|cx| {
+        if SETUP_HOLD.with(|h| h.get()) {
+            SETUP_WAITERS.with(|w| w.borrow_mut().push(cx.waker().clone()));
+            std::task::Poll::Pending
+        } else {
+            std::task::Poll::Ready(())
+        }
+    })
+}
+
+#[cfg(all(feature = "wgpu", not(feature = "lab-hooks")))]
+pub(crate) fn setup_gate() -> std::future::Ready<()> {
+    std::future::ready(())
 }

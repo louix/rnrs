@@ -680,8 +680,13 @@ version = "0.1.0"
 dependencies = [
  "js-sys",
  "log",
+ "pollster",
  "raw-window-handle",
+ "rnr-core",
  "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+ "wgpu",
 ]
 
 [[package]]
@@ -713,13 +718,15 @@ dependencies = [
 name = "rnr-webgpu-triangle"
 version = "0.1.0"
 dependencies = [
- "js-sys",
+ "rnrs",
+]
+
+[[package]]
+name = "rnrs"
+version = "0.1.0"
+dependencies = [
  "rnr-core",
  "rnr-surface",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
- "wgpu",
 ]
 
 [[package]]

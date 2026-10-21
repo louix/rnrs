@@ -107,6 +107,41 @@ Tests:
 - rnr-android, through the C ABI that Android (JNI) and iOS share: explicit `rnr_adapter_teardown`, the free-only (destructor) path, and a failing instantiate.
 - vello2d: a retained renderer closed by teardown, and a late attach to its key refused.
 
+## The wgpu adapter (rnrs::gpu)
+
+A renderer that draws with wgpu writes only its pipeline and draw; `rnrs::gpu` (rnr-surface's
+`wgpu` feature, `rnrs = { version = "0.1", features = ["wgpu"] }`) owns the surface, render loop,
+device, swapchain, window lease, teardown and failure handling on Android (Vulkan), iOS (Metal)
+and the browser (WebGPU, no fallback). The API and its lifecycle rules are documented in
+`packages/rnr-surface/rust/src/gpu/mod.rs`; the maintained example is the triangle fixture
+(`packages/fixtures/webgpu-triangle/rust/src/lib.rs`):
+
+```rust
+use rnrs::gpu::{self, wgpu, Frame, Gpu, GpuSurface, Next, Options, TargetInfo};
+
+struct Draw;
+impl gpu::Renderer for Draw {
+    type State = wgpu::Color;                 // latest value from JS (set_state)
+    type Resources = wgpu::RenderPipeline;    // per attachment, dropped before the swapchain
+    fn create(&mut self, gpu: &Gpu, target: &TargetInfo) -> Result<Self::Resources, String> { /* pipeline for target.format */ }
+    fn draw(&mut self, pipeline: &mut Self::Resources, frame: &mut Frame<'_>, bg: &wgpu::Color) -> Result<Next, String> {
+        /* one render pass on frame.view, recorded into frame.encoder */
+        Ok(Next::Wait)                        // redraw on the next change; Next::Animate to keep drawing
+    }
+}
+// In the module's create(): GpuSurface::spawn(&scope, Options::default(), wgpu::Color::BLACK, || Draw)?
+```
+
+- Each attachment gets new resources (`create`, then `resized` on every size change). A failure
+  ends rendering for that attachment with no retry; a new attachment tries once.
+- Native frames are capped at `Options::max_frame_rate` (default 60); the browser draws once per
+  `requestAnimationFrame`. Hooks never run under an adapter, surface or host lock.
+- vello2d and bevy3d keep their own render loops (vello's CPU raster and recovery backoff, Bevy's
+  offscreen render and blit); they do not use the adapter.
+- Checked by rnr-surface's host tests (a fake GPU backend and a virtual clock), the triangle's
+  browser fixture (`fixtures/web-webgpu`, software WebGPU), `scripts/consumer/triangle-device-test.mjs`
+  (Android) and `scripts/consumer/ios-triangle-sim-test.mjs` (iOS simulator).
+
 ## Renderer (vello2d)
 
 - **Submit.** `submit` checks `closed` and stores the frame under the inbox lock that `close` takes, so a call that finishes after close writes nothing. It returns `false` only when closed. While the GPU is recovering or has failed it returns `true` and the frame waits (latest wins).
@@ -139,8 +174,8 @@ Tests:
 
 **Direction.** WebGPU (wgpu's `webgpu` backend, Rust drawing into the canvas) is the primary
 browser GPU path. It is optional only in the sense that consumers without a GPU renderer
-depend on no GPU code: `rnr-surface` gains no wgpu dependency, and wgpu enters a bundle only
-through a renderer package. The Canvas 2D transport (Rust returns owned RGBA pixels and the host
+depend on no GPU code: wgpu is an optional dependency of `rnr-surface` (feature `wgpu`, the
+adapter below), and it enters a bundle only through a renderer package that enables it. The Canvas 2D transport (Rust returns owned RGBA pixels and the host
 calls `putImageData`) is a stopgap specific to the CPU renderer (vello2d's vello_cpu raster).
 It is not the default game architecture, and it is not a GPU fallback. It is kept working as a
 regression target, with no further investment. WebGL2 would come later as an explicit

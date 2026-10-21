@@ -4,12 +4,36 @@ version = "0.1.0"
 edition = "2021"
 description = "Framework rendering surfaces for @rnrs/surface: opaque surface keys, platform window attachment, leases and lifecycle; renderers depend on it by version."
 
+# `wgpu`: the reusable wgpu adapter (src/gpu): a render loop that owns the window lease,
+# swapchain and device and calls a renderer's hooks. Off by default: a surface without it, and
+# every app that does not enable it, depends on no GPU crate (disabled optional dependencies are
+# not resolved). One pinned wgpu with one backend per target: Vulkan (Android, host tests),
+# Metal (iOS), the browser's WebGPU (wasm32; no WebGL, no fallback).
+[features]
+wgpu = ["dep:wgpu", "dep:rnr-core", "dep:pollster", "dep:web-sys", "dep:wasm-bindgen-futures"]
+# Lab only: the browser test hooks of the adapter (rnr_surface_hold_gpu_setups_for_testing).
+# Never enabled by a package; fixtures/web-webgpu enables it with
+# RNR_BUNDLE_FEATURES=rnr-surface/lab-hooks. Without it no such export exists.
+lab-hooks = ["wgpu"]
+
 [dependencies]
 log = "0.4"
+# The adapter registers its surfaces with the runtime teardown scope.
+rnr-core = { version = "0.1", optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 raw-window-handle = { version = "0.6.2", features = ["std"] }
+pollster = { version = "0.4", optional = true }
+
+[target.'cfg(target_os = "ios")'.dependencies]
+wgpu = { version = "=30.0.1", default-features = false, features = ["std", "wgsl", "metal"], optional = true }
+
+[target.'cfg(not(any(target_os = "ios", target_arch = "wasm32")))'.dependencies]
+wgpu = { version = "=30.0.1", default-features = false, features = ["std", "wgsl", "vulkan"], optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = "=0.2.129"
 js-sys = "=0.3.106"
+wgpu = { version = "=30.0.1", default-features = false, features = ["std", "wgsl", "webgpu"], optional = true }
+web-sys = { version = "=0.3.106", features = ["HtmlCanvasElement", "Navigator", "Window"], optional = true }
+wasm-bindgen-futures = { version = "=0.4.79", optional = true }

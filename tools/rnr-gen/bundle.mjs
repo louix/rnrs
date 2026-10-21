@@ -206,7 +206,7 @@ export const KNOWN_LIBRARIES = { 'rnr-surface': '@rnrs/surface' };
 export const isFrameworkNamespace = (name) => /^rnr[-_]/.test(name) || sameCrate(name, 'rnrs');
 
 /** Library crates the rnrs facade's features pull in (rust/rnrs/Cargo.toml [features]). */
-const RNRS_FEATURE_CRATES = { surface: 'rnr-surface' };
+const RNRS_FEATURE_CRATES = { surface: 'rnr-surface', wgpu: 'rnr-surface' };
 
 /** Framework-namespace packages a parsed manifest depends on (normal and build dependencies,
  *  any target; dev-dependencies are not part of the bundle). */
@@ -767,8 +767,8 @@ export function buildBundle(
       `cargo could not resolve the bundle's dependencies:\n${resolved.stderr.trim()}`,
     );
   }
-  // RNR_BUNDLE_FEATURES (diagnostics builds only, e.g. "rnr-web/diagnostics" or
-  // "rnr-android/diagnostics" for the native JSI backend crate).
+  // RNR_BUNDLE_FEATURES (diagnostics and lab builds only, e.g. "rnr-web/diagnostics",
+  // "rnr-android/diagnostics" for the native JSI backend crate, or "rnr-surface/lab-hooks").
   const features = env.RNR_BUNDLE_FEATURES ? ['--features', env.RNR_BUNDLE_FEATURES] : [];
   const lockArgs = [...(hadLock ? ['--locked'] : []), ...cargoFlags({ offline }), ...features];
   if (appLogging(appDir)?.mode === 'managed') {

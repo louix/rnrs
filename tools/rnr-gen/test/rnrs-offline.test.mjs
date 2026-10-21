@@ -188,7 +188,24 @@ test(
       assert.deepEqual(
         [...pkgs.keys()].filter((n) => /^(wgpu.*|naga|pollster|ash)$/.test(n)),
         [],
+        'surface alone pulls in no GPU crate (rnr-surface/wgpu is off)',
       );
+      // rnrs's "wgpu" feature: the adapter's wgpu enters the lock, exactly as rnr-surface pins it.
+      writeFileSync(
+        toml,
+        readFileSync(toml, 'utf8').replace(
+          'version = "0.1", features = ["surface"] }',
+          'version = "0.1", features = ["wgpu"] }',
+        ),
+      );
+      r = rnrs('lock', '--target', 'android', '--app', app, '--offline');
+      assert.equal(r.code, 0, r.out);
+      const gpuLock = readFileSync(path.join(app, 'rnr-android.Cargo.lock'), 'utf8');
+      assert.match(
+        gpuLock,
+        /\[\[package\]\]\nname = "wgpu"\nversion = "30\.0\.1"\nsource = "registry\+/,
+      );
+      assert.equal(lockPackages(gpuLock).get('rnr-surface'), null);
     } finally {
       rmSync(work, { recursive: true, force: true });
     }

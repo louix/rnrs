@@ -1,7 +1,8 @@
 // Run from the repository root after npm ci, inside nix develop .#web with scripts/rust-env.sh sourced.
-// --test runs both browser cases: the default launch (WebGPU unavailable: expects a terminal
-// unsupported error, no fallback) and the test-only SwiftShader launch (software WebGPU).
-import { existsSync, mkdirSync, realpathSync, symlinkSync } from 'node:fs';
+// --test runs three browser cases: the default launch (WebGPU unavailable: expects a terminal
+// unsupported error, no fallback), the test-only SwiftShader launch (software WebGPU), and the
+// rnrs::gpu reentrancy and setup-interleaving checks in a SwiftShader launch of their own.
+import { existsSync, mkdirSync, readFileSync, realpathSync, symlinkSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -28,11 +29,26 @@ for (const dir of ['vello2d', 'fixtures/webgpu-triangle']) {
     if (!out.committed && out.file.endsWith('/index.ts')) writeAtomic(out.file, out.content);
   }
 }
+// The reentrancy checks use rnr-surface's lab-only test hooks (feature lab-hooks), which no
+// package enables; this fixture's bundle does, unless --default-exports builds it as an app would
+// (then the hook must be absent; only the build and that check run).
+const defaultExports = process.argv.includes('--default-exports');
+if (!defaultExports) process.env.RNR_BUNDLE_FEATURES ??= 'rnr-surface/lab-hooks';
 buildBundle(fixture, 'web', {
   out: path.join(fixture, 'rnr'),
   locked: existsSync(lockFile(fixture, 'web')),
   offline: process.env.RNR_OFFLINE !== '0',
 });
+const bindings = readFileSync(path.join(fixture, 'rnr/pkg/rnr_bundle.js'), 'utf8');
+const hasHook = /export function rnr_surface_hold_gpu_setups_for_testing\b/.test(bindings);
+if (hasHook === defaultExports)
+  throw new Error(
+    `rnr_surface_hold_gpu_setups_for_testing is ${hasHook ? 'exported' : 'missing'} in a ${defaultExports ? 'default' : 'lab'} build`,
+  );
+console.log(
+  `exports: rnr_surface_hold_gpu_setups_for_testing ${hasHook ? 'present (lab build)' : 'absent (default build)'}`,
+);
+if (defaultExports) process.exit(0);
 const run = (cmd, args, env = process.env) => {
   const result = spawnSync(cmd, args, { stdio: 'inherit', env });
   if (result.error) throw result.error;
@@ -54,6 +70,12 @@ if (process.argv.includes('--test')) {
   run('node', ['scripts/web-test.mjs', path.join(fixture, 'result-swiftshader.json')], {
     ...env,
     RNR_WEB_QUERY: 'expect=webgpu',
+    RNR_WEB_UNSAFE_WEBGPU: '1',
+  });
+  // Hook reentrancy and setup interleaving (rnrs::gpu), in a fresh browser.
+  run('node', ['scripts/web-test.mjs', path.join(fixture, 'result-reentrancy.json')], {
+    ...env,
+    RNR_WEB_QUERY: 'expect=reentrancy',
     RNR_WEB_UNSAFE_WEBGPU: '1',
   });
 }
