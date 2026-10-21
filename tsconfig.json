@@ -11,5 +11,5 @@
     "allowSyntheticDefaultImports": true,
     "resolveJsonModule": true
   },
-  "include": ["src", "specs", ".generated/rnr", "packages/rnr-runtime/src"]
+  "include": ["src", "specs", ".generated/rnr", "packages/runtime/src"]
 }

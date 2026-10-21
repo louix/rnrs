@@ -14,13 +14,13 @@ For a complete first renderer, follow [Draw a triangle](triangle.md).
 
 | Path | Owner | Contents |
 | --- | --- | --- |
-| `packages/rnr-surface` (`@rnrs/surface`) | framework | `<SurfaceView surfaceKey>` Fabric component (codegen spec, Kotlin `SurfaceView` + view manager, autolinking), and the Rust library crate `rnrs-surface`: surface registry, window ownership, admission protocol, `WindowLease`, Android JNI entry points |
+| `packages/surface` (`@rnrs/surface`) | framework | `<SurfaceView surfaceKey>` Fabric component (codegen spec, Kotlin `SurfaceView` + view manager, autolinking), and the Rust library crate `rnrs-surface`: surface registry, window ownership, admission protocol, `WindowLease`, Android JNI entry points |
 | `rust/rnrs-core/src/lifecycle.rs` (shared core) | framework | runtime-teardown hook: `TeardownScope`, `Retire` |
 | `packages/vello2d` (`@rnrs/example-vello2d`) | example renderer module | TS spec, Rust renderer (render thread, GPU state machine, vello_cpu raster, wgpu present), `frame.ts` frame writer |
 | `fixtures/gpu-probe`, `fixtures/gpu-probe-pr10291` | lab | headless device probes, `run.sh` |
 | `fixtures/surface-consumer` | lab | clean consumer app: in-app lifecycle sequence (`smoke.ts`) and steady-state stats |
 | `scripts/consumer/surface-device-test.mjs` | lab | device driver (explicit serial) into `results/surface/runs/<UTC>-<serial>/` |
-| `tools/rnr-gen`, root `Cargo.toml`/`Cargo.lock`, `scripts/pack.mjs`, `scripts/consumer/rn-app.sh` | shared | library packages, namespace and direct-dependency rules, packing, `PACKS` and build provenance |
+| `tools/rnrs-gen`, root `Cargo.toml`/`Cargo.lock`, `scripts/pack.mjs`, `scripts/consumer/rn-app.sh` | shared | library packages, namespace and direct-dependency rules, packing, `PACKS` and build provenance |
 
 ## Generator rules
 
@@ -45,7 +45,7 @@ Crates named `rnrs`, `rnrs-*` (or `rnrs_*`) and the former `rnr-*` (or `rnr_*`) 
 
 React Native autolinking links native code (Android libraries, codegen components, iOS pods) only for the app's **direct** dependencies. Resolving a transitive library for Cargo is therefore not enough: the view manager and component would be missing at run time. For Android and iOS bundles, a selected package with native platform code (`react-native.config.js`, `android/build.gradle` or a podspec) must be listed in the app's `dependencies`. Otherwise the build fails, naming the chain and the package to add. `@rnrs/example-vello2d` depends on `@rnrs/surface`, and the app must still list `@rnrs/surface` itself.
 
-Tests (`tools/rnr-gen/test/library.test.mjs`, `bundle.test.mjs`):
+Tests (`tools/rnrs-gen/test/library.test.mjs`, `bundle.test.mjs`):
 - real offline Cargo resolution of a module depending on a library by version;
 - relocation with an unchanged lock;
 - an incompatible installed version;
@@ -115,7 +115,7 @@ A renderer that draws with wgpu writes only its pipeline and draw; `rnrs::gpu` (
 `wgpu` feature, `rnrs = { version = "0.1", features = ["wgpu"] }`) owns the surface, render loop,
 device, swapchain, window lease, teardown and failure handling on Android (Vulkan), iOS (Metal)
 and the browser (WebGPU, no fallback). The API and its lifecycle rules are documented in
-`packages/rnr-surface/rust/src/gpu/mod.rs`; the maintained example is the triangle fixture
+`packages/surface/rust/src/gpu/mod.rs`; the maintained example is the triangle fixture
 (`packages/fixtures/webgpu-triangle/rust/src/lib.rs`):
 
 ```rust

@@ -3,7 +3,7 @@ import {
   type CanvasBridge,
   type HostEnvironment,
   browser,
-} from '../../packages/rnr-surface/src/browser/canvas-host';
+} from '../../packages/surface/src/browser/canvas-host';
 
 const checks: { name: string; ok: boolean; detail: string }[] = [];
 function assert(ok: unknown, message: string): asserts ok {

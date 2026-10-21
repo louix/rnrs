@@ -4,7 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 out=.generated/native-tests
 mkdir -p "$out"
-cpp=packages/rnr-runtime/cpp
+cpp=packages/runtime/cpp
 clang++ -std=c++20 -g -O1 -fsanitize=thread -Wall -Wextra -I "$cpp" \
   native/tests/rnr_scope_test.cpp "$cpp/RnrScope.cpp" "$cpp/RnrPlatform.cpp" -o "$out/rnr_scope_test"
 "$out/rnr_scope_test"

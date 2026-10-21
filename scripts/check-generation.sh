@@ -14,12 +14,12 @@ touch packages/meter/meter.spec.ts
 cargo build -p bind-tests -q
 echo "3/4 deleting the app bundle crate, then regenerating it from the dependency graph"
 rm -rf .rnr/android/bundle
-node packages/rnr-cli/bin/rnrs.mjs bundle --target android --app . >/dev/null
+node packages/cli/bin/rnrs.mjs bundle --target android --app . >/dev/null
 test -f .rnr/android/bundle/src/lib.rs
 echo "4/4 concurrent bundle generators"
-for i in 1 2 3 4; do node packages/rnr-cli/bin/rnrs.mjs bundle --target android --app . >/dev/null & done
+for i in 1 2 3 4; do node packages/cli/bin/rnrs.mjs bundle --target android --app . >/dev/null & done
 wait
 ! find .rnr/android/bundle -name '*.tmp-*' | grep -q .
 cargo test -p bind-tests -q 2>&1 | grep -E "test result" | head -3
-node tools/rnr-gen/cli.mjs generate >/dev/null  # restore the TS wrappers for tsc/Metro
+node tools/rnrs-gen/cli.mjs generate >/dev/null  # restore the TS wrappers for tsc/Metro
 echo "generation checks passed"

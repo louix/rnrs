@@ -27,5 +27,5 @@ test('other generated caches are blocked', () => {
 });
 
 test('ordinary sources are not blocked', () => {
-  assert.equal(blocked('src/rnrAndroid.ts'), false);
+  assert.equal(blocked('src/rnrsAndroid.ts'), false);
 });

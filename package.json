@@ -9,12 +9,12 @@
     "fmt:check": "oxfmt --check \"{src,specs,packages,scripts,tools,fixtures,web}/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}\" \"*.js\" package.json .oxfmtrc.json .oxlintrc.json renovate.json",
     "start": "react-native start",
     "android": "react-native run-android",
-    "test": "node --test scripts/*.test.mjs tools/rnr-gen/test/*.test.mjs",
-    "test:rnrs-offline": "cargo fetch --locked && RNR_REQUIRE_CARGO=1 node --test tools/rnr-gen/test/rnrs-offline.test.mjs",
-    "typecheck": "node tools/rnr-gen/cli.mjs generate && tsc --noEmit && node scripts/typecheck-ios-fixture.mjs",
+    "test": "node --test scripts/*.test.mjs tools/rnrs-gen/test/*.test.mjs",
+    "test:rnrs-offline": "cargo fetch --locked && RNR_REQUIRE_CARGO=1 node --test tools/rnrs-gen/test/rnrs-offline.test.mjs",
+    "typecheck": "node tools/rnrs-gen/cli.mjs generate && tsc --noEmit && node scripts/typecheck-ios-fixture.mjs",
     "summarize": "node scripts/summarize.mjs",
-    "rnr:gen": "node tools/rnr-gen/cli.mjs generate",
-    "rnr:check": "node tools/rnr-gen/cli.mjs check"
+    "rnrs:gen": "node tools/rnrs-gen/cli.mjs generate",
+    "rnrs:check": "node tools/rnrs-gen/cli.mjs check"
   },
   "codegenConfig": {
     "name": "LabSpecs",
@@ -25,7 +25,7 @@
     }
   },
   "dependencies": {
-    "@rnrs/cli": "file:packages/rnr-cli",
+    "@rnrs/cli": "file:packages/cli",
     "@rnrs/example-blake3": "file:packages/blake3",
     "@rnrs/example-counter": "file:packages/counter",
     "@rnrs/example-http": "file:packages/http",
@@ -33,7 +33,7 @@
     "@rnrs/labs-bench": "file:packages/bench",
     "@rnrs/labs-meter": "file:packages/meter",
     "@rnrs/labs-values": "file:packages/values",
-    "@rnrs/runtime": "file:packages/rnr-runtime",
+    "@rnrs/runtime": "file:packages/runtime",
     "react": "19.3.0",
     "react-native": "0.88.0"
   },

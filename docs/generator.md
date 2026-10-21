@@ -122,7 +122,7 @@ The following are rejected with diagnostics:
 
 ## Conversion semantics and safety (after the generator review)
 
-These rules are shared by both backends. They are implemented with framework helpers (`conversionHelpers` in `packages/rnr-runtime/src/runtime.ts`) whose intrinsics are captured when that module initializes. The Android adapter receives the helpers with every call; JSI alone has no own-property read or define.
+These rules are shared by both backends. They are implemented with framework helpers (`conversionHelpers` in `packages/runtime/src/runtime.ts`) whose intrinsics are captured when that module initializes. The Android adapter receives the helpers with every call; JSI alone has no own-property read or define.
 
 - **Scope.** These rules resist inherited data properties and inherited setters (prototype pollution). They are not a hardened sandbox. Code in the same JS realm can still monkey-patch functions the backends look up when called: wasm-bindgen's `Array.of`, `Function.prototype.call` and `Reflect.get` imports on the web, and the writable `__rnrSettle` global on Android.
 - **Own properties only.** A record field, union tag or array element is read only if it is an own property (`hasOwnProperty`). Own getters and proxy traps run, and their exceptions propagate unchanged. Inherited values never fill a missing field or an array hole: a polluted `Object.prototype.note` or `Array.prototype[1]` is ignored.
@@ -174,10 +174,10 @@ Converted strings, records and arrays have value semantics: mutating a Rust valu
 ## Runtime structure
 
 ```text
-JS wrapper (generated TS) ─┬─ src/rnr/runtime.ts (promises, cancellation, singletons)
+JS wrapper (generated TS) ─┬─ packages/runtime/src/runtime.ts (promises, cancellation, singletons)
                            ├─ Android: __rnrRuntime.install → cpp/RnrJsi.cpp (generic JSI adapter, shared with iOS)
                            │            → rust/rnrs-android C ABI → generated glue
-                           └─ Browser: src/rnr/web-backend.ts → rust/rnrs-web (wasm-bindgen)
+                           └─ Browser: packages/runtime/src/web-backend.ts → rust/rnrs-web (wasm-bindgen)
                                         → generated glue
 generated glue ── rnrs_core::bind::Env ── author traits ── rnrs-core Host / Budget / Native
 ```
@@ -201,8 +201,8 @@ Since the review, the Rust glue is written by each bundle crate's `build.rs` int
 
 Earlier description (still accurate apart from the glue location):
 
-- `node tools/rnr-gen/cli.mjs generate` writes the interfaces and the hidden outputs. Unchanged files are not rewritten.
-- `node tools/rnr-gen/cli.mjs check` fails if a committed interface differs from what the spec produces.
+- `node tools/rnrs-gen/cli.mjs generate` writes the interfaces and the hidden outputs. Unchanged files are not rewritten.
+- `node tools/rnrs-gen/cli.mjs check` fails if a committed interface differs from what the spec produces.
 - The `build.rs` of `bind-tests` (formerly also `lab-android` and `web-bundle`, now replaced by per-app bundles) calls `rnrs-build`. That runs `rnr-gen build-outputs`, which regenerates the hidden glue from the checked-in inputs, fails the build if a committed interface is stale, and declares cargo dependencies on the specs, packages and generator.
 - Verified from a clean export of the tree with no `.generated/`: `rnr-gen check`, `cargo test --workspace --all-features` (which regenerated all hidden glue) and `tsc` all passed.
 

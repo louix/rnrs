@@ -1,4 +1,4 @@
-// Host tests for the runtime identity rule (packages/rnr-runtime/cpp/RnrRuntimeIdentity.h),
+// Host tests for the runtime identity rule (packages/runtime/cpp/RnrRuntimeIdentity.h),
 // which is pure C++. A "runtime" here is a slot of storage plus the data a JSI runtime would
 // hold for it: destroying the runtime releases its RuntimeIdentityHolder, as the runtime-data
 // slot does. Run: bash scripts/test-native.sh (ThreadSanitizer build).

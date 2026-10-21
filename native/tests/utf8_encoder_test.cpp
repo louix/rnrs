@@ -1,4 +1,4 @@
-// Host tests for the shared JSI string encoder (packages/rnr-runtime/cpp/
+// Host tests for the shared JSI string encoder (packages/runtime/cpp/
 // Utf8Encoder.h): fragment splitting (including surrogate pairs straddling fragments and
 // ASCII fragments between UTF-16 ones), the U+FFFD policy, and the capacity cap.
 #include "Utf8Encoder.h"

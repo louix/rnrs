@@ -1,4 +1,4 @@
-// Host tests for the shared runtime scope (packages/rnr-runtime/cpp/RnrScope.cpp), which is
+// Host tests for the shared runtime scope (packages/runtime/cpp/RnrScope.cpp), which is
 // pure C++. Run: bash scripts/test-native.sh (builds with ThreadSanitizer).
 #include "RnrScope.h"
 #include <atomic>

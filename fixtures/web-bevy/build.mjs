@@ -18,8 +18,8 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { loadPackage, plan, writeAtomic } from '../../tools/rnr-gen/cli.mjs';
-import { buildBundle, lockFile } from '../../tools/rnr-gen/bundle.mjs';
+import { loadPackage, plan, writeAtomic } from '../../tools/rnrs-gen/cli.mjs';
+import { buildBundle, lockFile } from '../../tools/rnrs-gen/bundle.mjs';
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const fixture = fileURLToPath(new URL('.', import.meta.url));
 const app = path.join(fixture, 'bundle');
@@ -31,7 +31,7 @@ const run = (cmd, args, env = process.env) => {
   if (result.status !== 0) throw new Error(cmd + ' exited ' + result.status);
 };
 for (const [name, dir] of [
-  ['@rnrs/surface', 'rnr-surface'],
+  ['@rnrs/surface', 'surface'],
   ['@rnrs/example-bevy3d', 'bevy3d'],
 ]) {
   const link = path.join(root, 'node_modules', name),

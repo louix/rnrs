@@ -4,13 +4,13 @@ import { existsSync, mkdirSync, realpathSync, symlinkSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { loadPackage, plan, writeAtomic } from '../../tools/rnr-gen/cli.mjs';
-import { buildBundle, lockFile } from '../../tools/rnr-gen/bundle.mjs';
+import { loadPackage, plan, writeAtomic } from '../../tools/rnrs-gen/cli.mjs';
+import { buildBundle, lockFile } from '../../tools/rnrs-gen/bundle.mjs';
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const fixture = fileURLToPath(new URL('.', import.meta.url));
 process.chdir(root);
 for (const [name, dir] of [
-  ['@rnrs/surface', 'rnr-surface'],
+  ['@rnrs/surface', 'surface'],
   ['@rnrs/labs-touch-probe', 'fixtures/touch-probe'],
 ]) {
   const link = path.join(root, 'node_modules', name),

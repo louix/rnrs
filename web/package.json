@@ -10,6 +10,6 @@
     "@rnrs/labs-bench": "file:../packages/bench",
     "@rnrs/labs-meter": "file:../packages/meter",
     "@rnrs/labs-values": "file:../packages/values",
-    "@rnrs/runtime": "file:../packages/rnr-runtime"
+    "@rnrs/runtime": "file:../packages/runtime"
   }
 }

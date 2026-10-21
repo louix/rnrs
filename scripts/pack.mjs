@@ -1,7 +1,7 @@
 // Builds npm tarballs (no publishing) for the framework and the module packages:
-//   @rnrs/runtime: staged from its canonical sources (packages/rnr-runtime incl. cpp/ and ios/,
+//   @rnrs/runtime: staged from its canonical sources (packages/runtime incl. cpp/ and ios/,
 //                 rust/rnrs-{core,android,web,log}, rust/rnrs) into one self-contained package.
-//   @rnrs/cli:     the rnrs CLI, staged from packages/rnr-cli and the generator (tools/rnr-gen).
+//   @rnrs/cli:     the rnrs CLI, staged from packages/cli and the generator (tools/rnrs-gen).
 //   modules:      `rnrs pack-js` writes each package's JS wrapper, then `npm pack` (its
 //                 package.json `files` list) takes manifest, spec, Rust crate and wrapper.
 //   @rnrs/surface: framework rendering surface (Rust library package + Android view), `npm pack`.
@@ -40,19 +40,19 @@ rmSync(OUT, { recursive: true, force: true });
 mkdirSync(STAGE, { recursive: true });
 
 // --- @rnrs/runtime --------------------------------------------------------------------
-const rt = path.join(STAGE, 'rnr-runtime');
+const rt = path.join(STAGE, 'runtime');
 const copy = (from, to, filter) =>
   cpSync(path.join(ROOT, from), path.join(rt, to), { recursive: true, filter });
-copy('packages/rnr-runtime/package.json', 'package.json');
-copy('packages/rnr-runtime/react-native.config.js', 'react-native.config.js');
-copy('packages/rnr-runtime/src', 'src');
-copy('packages/rnr-runtime/cli', 'cli');
-copy('packages/rnr-runtime/android/build.gradle', 'android/build.gradle');
-copy('packages/rnr-runtime/android/CMakeLists.txt', 'android/CMakeLists.txt');
-copy('packages/rnr-runtime/android/src', 'android/src');
-copy('packages/rnr-runtime/cpp', 'cpp');
-copy('packages/rnr-runtime/ios', 'ios');
-copy('packages/rnr-runtime/RnrRuntime.podspec', 'RnrRuntime.podspec');
+copy('packages/runtime/package.json', 'package.json');
+copy('packages/runtime/react-native.config.js', 'react-native.config.js');
+copy('packages/runtime/src', 'src');
+copy('packages/runtime/cli', 'cli');
+copy('packages/runtime/android/build.gradle', 'android/build.gradle');
+copy('packages/runtime/android/CMakeLists.txt', 'android/CMakeLists.txt');
+copy('packages/runtime/android/src', 'android/src');
+copy('packages/runtime/cpp', 'cpp');
+copy('packages/runtime/ios', 'ios');
+copy('packages/runtime/RnrRuntime.podspec', 'RnrRuntime.podspec');
 for (const crate of ['rnrs-core', 'rnrs-android', 'rnrs-web', 'rnrs-log', 'rnrs']) {
   copy(`rust/${crate}/Cargo.toml`, `rust/${crate}/Cargo.toml`);
   copy(`rust/${crate}/src`, `rust/${crate}/src`);
@@ -97,12 +97,12 @@ results.push(runtime);
 
 // --- @rnrs/cli: the bin and the generator, nothing else (the framework spec and Rust crates
 // are its peer @rnrs/runtime's).
-const cli = path.join(STAGE, 'rnr-cli');
-cpSync(path.join(ROOT, 'packages/rnr-cli/package.json'), path.join(cli, 'package.json'));
-cpSync(path.join(ROOT, 'packages/rnr-cli/bin'), path.join(cli, 'bin'), { recursive: true });
+const cli = path.join(STAGE, 'cli');
+cpSync(path.join(ROOT, 'packages/cli/package.json'), path.join(cli, 'package.json'));
+cpSync(path.join(ROOT, 'packages/cli/bin'), path.join(cli, 'bin'), { recursive: true });
 mkdirSync(path.join(cli, 'generator'), { recursive: true });
-for (const f of readdirSync(path.join(ROOT, 'tools/rnr-gen')).filter((f) => f.endsWith('.mjs')))
-  cpSync(path.join(ROOT, 'tools/rnr-gen', f), path.join(cli, 'generator', f));
+for (const f of readdirSync(path.join(ROOT, 'tools/rnrs-gen')).filter((f) => f.endsWith('.mjs')))
+  cpSync(path.join(ROOT, 'tools/rnrs-gen', f), path.join(cli, 'generator', f));
 const cliPack = pack(cli);
 expectFiles(
   '@rnrs/cli',
@@ -114,7 +114,7 @@ results.push(cliPack);
 // --- @rnrs/surface: a Rust library package (no spec, no JS wrapper) with an Android library
 // whose JNI entry points are Rust (no C++ or CMake of its own), and an iOS pod (the Fabric
 // component view; its C entry points are Rust too).
-const surface = pack(path.join(ROOT, 'packages/rnr-surface'));
+const surface = pack(path.join(ROOT, 'packages/surface'));
 expectFiles(
   '@rnrs/surface',
   surface.files.map((f) => f.path),
@@ -137,7 +137,7 @@ results.push(surface);
 // --- module packages: manifest, README, spec, Rust crate and generated JS wrapper.
 for (const m of MODULES) {
   const dir = path.join(ROOT, 'packages', m);
-  sh('node', [path.join(ROOT, 'packages/rnr-cli/bin/rnrs.mjs'), 'pack-js', dir]);
+  sh('node', [path.join(ROOT, 'packages/cli/bin/rnrs.mjs'), 'pack-js', dir]);
   const info = pack(dir);
   expectFiles(
     info.name,

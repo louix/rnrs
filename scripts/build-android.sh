@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-node tools/rnr-gen/cli.mjs generate
+node tools/rnrs-gen/cli.mjs generate
 export RUSTUP_HOME="$PWD/.generated/rustup"
 export CARGO_HOME="$PWD/.generated/cargo"
 export GRADLE_USER_HOME="$PWD/.generated/gradle"

@@ -20,7 +20,7 @@ members = [
   "packages/fixtures/log-probe/rust",
   "packages/fixtures/worklets-probe/rust",
   "packages/fixtures/teardown-probe/rust",
-  "packages/rnr-surface/rust",
+  "packages/surface/rust",
   "packages/vello2d/rust",
   "packages/fixtures/touch-probe/rust",
   "packages/fixtures/webgpu-triangle/rust",
@@ -33,7 +33,7 @@ resolver = "2"
 [patch.crates-io]
 rnrs-core = { path = "rust/rnrs-core" }
 rnrs = { path = "rust/rnrs" }
-rnrs-surface = { path = "packages/rnr-surface/rust" }
+rnrs-surface = { path = "packages/surface/rust" }
 
 [profile.release]
 opt-level = 3

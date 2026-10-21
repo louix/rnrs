@@ -16,8 +16,8 @@
 /packages/*/rnr/
 /packages/fixtures/*/rnr/
 /fixtures/*/node_modules/
-/packages/rnr-runtime/android/build/
-/packages/rnr-runtime/android/.cxx/
+/packages/runtime/android/build/
+/packages/runtime/android/.cxx/
 
 # Persistent companion notes and recorded run outputs
 /.project-notes/

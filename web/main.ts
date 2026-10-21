@@ -4,12 +4,12 @@ import {
   checkWasmAdapter,
   installWebBackend,
   type RnrWasm,
-} from '../packages/rnr-runtime/src/web-backend';
-import { runProtocolSuite } from '../src/rnr/protocol-suite';
-import { runConformance } from '../src/rnr/conformance';
-import { runMeterSuite } from '../src/rnr/meter-suite';
-import { runValuesSuite } from '../src/rnr/values-suite';
-import { runBlake3Suite } from '../src/rnr/blake3-suite';
+} from '../packages/runtime/src/web-backend';
+import { runProtocolSuite } from '../src/rnrs/protocol-suite';
+import { runConformance } from '../src/rnrs/conformance';
+import { runMeterSuite } from '../src/rnrs/meter-suite';
+import { runValuesSuite } from '../src/rnrs/values-suite';
+import { runBlake3Suite } from '../src/rnrs/blake3-suite';
 import { counterModule, createCounterModuleForTesting } from '../.generated/rnr/counter';
 
 const output = document.getElementById('out')!;

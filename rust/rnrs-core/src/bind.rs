@@ -1,5 +1,5 @@
 //! Framework side of generated bindings: the contract between generated per-module glue
-//! (emitted by `tools/rnr-gen`) and the handwritten platform backends.
+//! (emitted by `tools/rnrs-gen`) and the handwritten platform backends.
 //!
 //! Generated glue converts arguments and results through [`Env`], an object-safe view of
 //! one JS call (or one settlement turn) on the JS thread. Each backend implements it once:

@@ -4,7 +4,7 @@
   "private": true,
   "dependencies": {
     "@rnrs/example-vello2d": "file:../../packages/vello2d",
-    "@rnrs/runtime": "file:../../packages/rnr-runtime",
-    "@rnrs/surface": "file:../../packages/rnr-surface"
+    "@rnrs/runtime": "file:../../packages/runtime",
+    "@rnrs/surface": "file:../../packages/surface"
   }
 }

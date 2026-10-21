@@ -6,13 +6,13 @@ import { existsSync, mkdirSync, readFileSync, realpathSync, symlinkSync } from '
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { loadPackage, plan, writeAtomic } from '../../tools/rnr-gen/cli.mjs';
-import { buildBundle, lockFile } from '../../tools/rnr-gen/bundle.mjs';
+import { loadPackage, plan, writeAtomic } from '../../tools/rnrs-gen/cli.mjs';
+import { buildBundle, lockFile } from '../../tools/rnrs-gen/bundle.mjs';
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const fixture = fileURLToPath(new URL('.', import.meta.url));
 process.chdir(root);
 const packages = [
-  ['@rnrs/surface', 'rnr-surface'],
+  ['@rnrs/surface', 'surface'],
   ['@rnrs/example-vello2d', 'vello2d'],
   ['@rnrs/labs-webgpu-triangle', 'fixtures/webgpu-triangle'],
 ];

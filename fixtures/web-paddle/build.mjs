@@ -37,7 +37,7 @@ for (const [name, file] of [
   ['@rnrs/surface', 'src/index.web.tsx'],
   ['@rnrs/runtime', 'src/runtime.ts'],
 ]) {
-  const pkg = name === '@rnrs/surface' ? 'rnr-surface' : 'rnr-runtime';
+  const pkg = name === '@rnrs/surface' ? 'surface' : 'runtime';
   const installed = path.join(fixture, 'node_modules', name, file);
   if (
     !realpathSync(installed).startsWith(fixture) ||

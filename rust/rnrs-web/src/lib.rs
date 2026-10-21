@@ -1,6 +1,6 @@
 //! Framework browser backend (handwritten, module-independent).
 //!
-//! The JS side (`packages/rnr-runtime/src/web-backend.ts`) constructs one [`RnrWebAdapter`] per
+//! The JS side (`packages/runtime/src/web-backend.ts`) constructs one [`RnrWebAdapter`] per
 //! `(module, generation)`. Generated module glue converts values through [`WebEnv`], an
 //! `Env` over `js_sys`. Native objects live in a slab here; their JS wrappers are plain
 //! frozen objects that the JS side maps to `(slot, version)` through a module-private

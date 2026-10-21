@@ -1,7 +1,7 @@
 // Type-checks the iOS consumer apps' JS (scripts/consumer/ios-fixture.mjs: the counter/blake3
 // app and the http/kv app) in the repository: the same files the apps get, with the package
 // names mapped to the repository's runtime and generated module wrappers (run
-// `node tools/rnr-gen/cli.mjs generate` first).
+// `node tools/rnrs-gen/cli.mjs generate` first).
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -10,8 +10,8 @@ import { writeIosFixture, writeIosModulesFixture } from './consumer/ios-fixture.
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PATHS = {
-  '@rnrs/runtime': 'packages/rnr-runtime/src/index.ts',
-  '@rnrs/runtime/testing': 'packages/rnr-runtime/src/testing.ts',
+  '@rnrs/runtime': 'packages/runtime/src/index.ts',
+  '@rnrs/runtime/testing': 'packages/runtime/src/testing.ts',
   '@rnrs/example-counter': '.generated/rnr/counter/index.ts',
   '@rnrs/labs-meter': '.generated/rnr/meter/index.ts',
   '@rnrs/labs-values': '.generated/rnr/values/index.ts',

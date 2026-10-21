@@ -13,7 +13,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 export const SUITES = ['conformance', 'meter-suite', 'values-suite', 'blake3-suite'];
 /** Repository import -> installed package, as an app sees them. */
 const IMPORTS = {
-  '../../packages/rnr-runtime/src/runtime': '@rnrs/runtime',
+  '../../packages/runtime/src/runtime': '@rnrs/runtime',
   '../../.generated/rnr/counter': '@rnrs/example-counter',
   '../../.generated/rnr/meter': '@rnrs/labs-meter',
   '../../.generated/rnr/values': '@rnrs/labs-values',
@@ -30,7 +30,7 @@ export function writeIosFixture(app) {
   );
   mkdirSync(path.join(app, 'suites'), { recursive: true });
   for (const suite of SUITES) {
-    let text = readFileSync(path.join(ROOT, 'src/rnr', `${suite}.ts`), 'utf8');
+    let text = readFileSync(path.join(ROOT, 'src/rnrs', `${suite}.ts`), 'utf8');
     for (const [from, to] of Object.entries(IMPORTS))
       text = text.replaceAll(`'${from}'`, `'${to}'`);
     if (/from '\.\.\/\.\.\//.test(text))

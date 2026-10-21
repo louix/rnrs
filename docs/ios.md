@@ -6,11 +6,11 @@ iOS uses the same runtime as Android: the generic JSI adapter, the runtime scope
 
 | Path | Role |
 | --- | --- |
-| `packages/rnr-runtime/cpp/` | Shared framework C++ for Android and iOS: `RnrJsi.cpp` (JSI adapter), `RnrScope.cpp` (runtime scope), `RnrBindings.cpp` (`globalThis.__rnrRuntime`), `RnrPlatform.cpp` (thread ids and names, logging: logcat, os_log or stderr). Moved from `android/src/main/jni/` unchanged apart from the platform calls. |
-| `packages/rnr-runtime/ios/RnrRuntimeModule.mm` | The `RnrRuntime` TurboModule: `RCTTurboModuleWithJSIBindings` installs the bindings, `RCTInvalidating` invalidates the scope. Framework code; no module-specific code. |
-| `packages/rnr-runtime/RnrRuntime.podspec` | Autolinked pod: the sources above, `install_modules_dependencies`, the bundle script phase, and the app-target link flag for the bundle. |
-| `packages/rnr-runtime/ios/build-rust-bundle.sh` | Script phase: `rnrs build --target ios --sdk $PLATFORM_NAME --arch $ARCHS`. |
-| `packages/rnr-runtime/src/jsi-backend.ts` | The JS backend, shared by Android and iOS (was `android-backend.ts`). |
+| `packages/runtime/cpp/` | Shared framework C++ for Android and iOS: `RnrJsi.cpp` (JSI adapter), `RnrScope.cpp` (runtime scope), `RnrBindings.cpp` (`globalThis.__rnrRuntime`), `RnrPlatform.cpp` (thread ids and names, logging: logcat, os_log or stderr). Moved from `android/src/main/jni/` unchanged apart from the platform calls. |
+| `packages/runtime/ios/RnrRuntimeModule.mm` | The `RnrRuntime` TurboModule: `RCTTurboModuleWithJSIBindings` installs the bindings, `RCTInvalidating` invalidates the scope. Framework code; no module-specific code. |
+| `packages/runtime/RnrRuntime.podspec` | Autolinked pod: the sources above, `install_modules_dependencies`, the bundle script phase, and the app-target link flag for the bundle. |
+| `packages/runtime/ios/build-rust-bundle.sh` | Script phase: `rnrs build --target ios --sdk $PLATFORM_NAME --arch $ARCHS`. |
+| `packages/runtime/src/jsi-backend.ts` | The JS backend, shared by Android and iOS (was `android-backend.ts`). |
 | `scripts/consumer/ios-app.sh`, `scripts/consumer/ios-device-test.mjs`, `fixtures/consumer/ios/` | Clean consumer build and the device test (`--simulator` runs it on a simulator). |
 | `scripts/consumer/expo-app.sh`, `scripts/consumer/ios-smoke-sim-test.mjs`, `fixtures/expo-consumer/` | Fresh Expo SDK 58 consumer, and the simulator runner for it and for `RNR_IOS_FIXTURE=smoke` builds. |
 

@@ -1,4 +1,4 @@
-// The iOS bundle script phase (packages/rnr-runtime/ios/build-rust-bundle.sh) sources the app's
+// The iOS bundle script phase (packages/runtime/ios/build-rust-bundle.sh) sources the app's
 // ios/.xcode.env and .xcode.env.local like React Native's own loader does: user lines that read
 // unset variables or run a missing optional nvm.sh must not abort it. Runs with a stub node.
 import test from 'node:test';
@@ -8,7 +8,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync 
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-const SCRIPT = path.resolve('packages/rnr-runtime/ios/build-rust-bundle.sh');
+const SCRIPT = path.resolve('packages/runtime/ios/build-rust-bundle.sh');
 // Absolute bash from the caller's PATH: the test's own PATH is deliberately minimal.
 const BASH = spawnSync('bash', ['-c', 'command -v bash'], { encoding: 'utf8' }).stdout.trim();
 

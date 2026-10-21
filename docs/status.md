@@ -16,7 +16,7 @@
 
 ## Worklets limits
 
-Opt-in endpoints expose allow-listed synchronous methods with scalar values and boxed native objects. Methods run on the calling runtime thread and must be bounded and non-blocking. Async methods and general value conversions are unsupported. Worklets must catch `ERR_RNR_CLOSED` after teardown; an uncaught UI-worklet error can crash the app, and `$open` is only advisory. See [the runtime API](../packages/rnr-runtime/src/worklets.ts) and [fixture](../fixtures/worklets-lab).
+Opt-in endpoints expose allow-listed synchronous methods with scalar values and boxed native objects. Methods run on the calling runtime thread and must be bounded and non-blocking. Async methods and general value conversions are unsupported. Worklets must catch `ERR_RNR_CLOSED` after teardown; an uncaught UI-worklet error can crash the app, and `$open` is only advisory. See [the runtime API](../packages/runtime/src/worklets.ts) and [fixture](../fixtures/worklets-lab).
 
 ## Spec types
 

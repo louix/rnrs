@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Button, SafeAreaView, ScrollView, Text } from 'react-native';
-import { runRnrPrototype } from './rnrAndroid';
+import { runRnrPrototype } from './rnrsAndroid';
 
 export default function App() {
   const [status, setStatus] = useState('Waiting for startup to settle…');

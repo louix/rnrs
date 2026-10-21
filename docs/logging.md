@@ -128,5 +128,5 @@ The layer does no filtering of its own: it formats and writes every event it rec
 | Managed install, each in its own process: `Full` with 4 concurrent installers, `log::max_level`, identical and conflicting repeats, target filtering of `tracing` and bridged `log` records (`sled=warn`, `noisy=off`), conflicts in the order rnr-first (later installers refused), 8 threads × 250 lines all delivered whole | `tests/install_full.rs` |
 | Tracing occupied first: `NotInstalled`, `log` slot and level untouched, one direct warning | `tests/install_tracing_occupied.rs` |
 | Log occupied first: `Partial`, their logger and level kept, one direct warning | `tests/install_log_occupied.rs` |
-| Config validation, generated bundles per mode and target, `log-always` attribution, invalid and valid filters through a real `cargo check` of the generated build script | `tools/rnr-gen/test/logging.test.mjs` |
+| Config validation, generated bundles per mode and target, `log-always` attribution, invalid and valid filters through a real `cargo check` of the generated build script | `tools/rnrs-gen/test/logging.test.mjs` |
 All Rust tests run with the pinned Rust 1.90.0.

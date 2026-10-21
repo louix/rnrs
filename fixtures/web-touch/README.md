@@ -26,7 +26,7 @@ All runs used the worktree-local toolchain (`scripts/rust-env.sh`, Rust 1.90.0).
 | This fixture | 12/12 |
 | `fixtures/web-surface` | 22/22 |
 | `fixtures/web-surface-host-tests` | 26/26 |
-| `cargo test -p rnr-surface` | 37 pass |
+| `cargo test -p rnrs-surface` | 37 pass |
 | `cargo test -p touch-probe` | 4 pass |
 | `tsc --noEmit` | clean |
 | `npm test` | 212/212 |
