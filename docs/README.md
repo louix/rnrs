@@ -10,3 +10,5 @@
 - [Maintainer tests and reproduction](lab.md).
 
 Dated reports and recorded outputs are preserved outside the tracked source in the companion archive. New test runs write ignored output; keep their provenance with the run.
+
+- [Draw a triangle](triangle.md): a complete Rust GPU renderer and React component.
