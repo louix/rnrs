@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Meter module: second generator fixture. Rust implementation in rust/meter.",
+  "license": "MIT",
   "rustNative": {
     "targets": [
       "android",
@@ -37,6 +38,5 @@
   },
   "peerDependencies": {
     "@rnrs/runtime": "0.1.0"
-  },
-  "license": "UNLICENSED"
+  }
 }

@@ -2,6 +2,10 @@
 name = "rnrs-build"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+repository = "https://github.com/louix/rnrs"
+# Shipped inside the @rnrs npm packages; not published to crates.io.
+publish = false
 description = "Build-script helper: runs tools/rnrs-gen so hidden glue is regenerated, never stale."
 
 [dependencies]

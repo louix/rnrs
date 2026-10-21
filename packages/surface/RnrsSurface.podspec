@@ -11,11 +11,11 @@ Pod::Spec.new do |s|
   s.name         = "RnrsSurface"
   s.version      = package["version"]
   s.summary      = "Framework rendering surface for React Native modules written in Rust (iOS view)"
-  s.homepage     = "https://example.invalid/rnrs"
+  s.homepage     = "https://github.com/louix/rnrs"
   s.license      = package["license"]
-  s.authors      = "rnrs"
+  s.authors      = "louix"
   s.platforms    = { :ios => min_ios_version_supported }
-  s.source       = { :git => "https://example.invalid/rnrs.git", :tag => s.version.to_s }
+  s.source       = { :git => "https://github.com/louix/rnrs.git", :tag => "v#{s.version}" }
 
   s.source_files = "ios/*.{h,mm}"
   s.private_header_files = "ios/RnrsSurfaceRust.h"

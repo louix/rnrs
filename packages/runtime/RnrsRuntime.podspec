@@ -10,11 +10,11 @@ Pod::Spec.new do |s|
   s.name         = "RnrsRuntime"
   s.version      = package["version"]
   s.summary      = "Framework runtime for React Native modules written as TypeScript specs plus Rust"
-  s.homepage     = "https://example.invalid/rnrs"
+  s.homepage     = "https://github.com/louix/rnrs"
   s.license      = package["license"]
-  s.authors      = "rnrs"
+  s.authors      = "louix"
   s.platforms    = { :ios => min_ios_version_supported }
-  s.source       = { :git => "https://example.invalid/rnrs.git", :tag => s.version.to_s }
+  s.source       = { :git => "https://github.com/louix/rnrs.git", :tag => "v#{s.version}" }
 
   s.source_files = "ios/*.{h,mm}", "cpp/*.{h,cpp}"
   s.private_header_files = "cpp/*.h"

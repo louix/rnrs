@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Counter example module: TS spec here, Rust implementation in rust/.",
+  "license": "MIT",
   "rustNative": {
     "targets": [
       "android",
@@ -37,6 +38,5 @@
   },
   "peerDependencies": {
     "@rnrs/runtime": "0.1.0"
-  },
-  "license": "UNLICENSED"
+  }
 }

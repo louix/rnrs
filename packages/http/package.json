@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "HTTP client for React Native (Android and iOS, reqwest on Tokio) and browser Wasm (reqwest over fetch), implemented in Rust. Experimental.",
+  "license": "MIT",
   "rustNative": {
     "targets": [
       "android",
@@ -37,6 +38,5 @@
   },
   "peerDependencies": {
     "@rnrs/runtime": "0.1.0"
-  },
-  "license": "UNLICENSED"
+  }
 }

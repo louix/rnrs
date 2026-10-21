@@ -2,6 +2,10 @@
 name = "rnrs-surface"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+repository = "https://github.com/louix/rnrs"
+# Shipped inside the @rnrs npm packages; not published to crates.io.
+publish = false
 description = "Framework rendering surfaces for @rnrs/surface: opaque surface keys, platform window attachment, leases and lifecycle; renderers depend on it by version."
 
 # `wgpu`: the reusable wgpu adapter (src/gpu): a render loop that owns the window lease,

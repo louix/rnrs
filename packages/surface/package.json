@@ -1,8 +1,17 @@
 {
   "name": "@rnrs/surface",
   "version": "0.1.0",
-  "private": true,
   "description": "Experimental framework rendering surface for React Native (Android, iOS): the <RnrsSurfaceView> Fabric component and the rnrs-surface Rust crate that renderer modules depend on. Platform glue is framework code; renderer authors write TypeScript and Rust only.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/louix/rnrs.git",
+    "directory": "packages/surface"
+  },
+  "homepage": "https://github.com/louix/rnrs/tree/main/packages/surface#readme",
+  "bugs": {
+    "url": "https://github.com/louix/rnrs/issues"
+  },
   "main": "src/index.ts",
   "types": "src/index.ts",
   "react-native": "src/index.ts",
@@ -56,9 +65,16 @@
   ],
   "peerDependencies": {
     "@rnrs/runtime": "0.1.0",
-    "react": "*",
-    "react-native": "0.88.0"
+    "react": "^19.3.0",
+    "react-native": "^0.88.0"
   },
-  "license": "UNLICENSED",
-  "browser": "src/index.web.tsx"
+  "browser": "src/index.web.tsx",
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependenciesMeta": {
+    "react-native": {
+      "optional": true
+    }
+  }
 }

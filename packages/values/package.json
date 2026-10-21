@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Value-conversion fixture module (generator M2/M3). Rust implementation in rust/values.",
+  "license": "MIT",
   "rustNative": {
     "targets": [
       "android",
@@ -38,6 +39,5 @@
   },
   "peerDependencies": {
     "@rnrs/runtime": "0.1.0"
-  },
-  "license": "UNLICENSED"
+  }
 }

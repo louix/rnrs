@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Persistent key-value store for React Native on Android and iOS, implemented in Rust with sled. No browser backend. Experimental.",
+  "license": "MIT",
   "rustNative": {
     "targets": [
       "android",
@@ -36,6 +37,5 @@
   },
   "peerDependencies": {
     "@rnrs/runtime": "0.1.0"
-  },
-  "license": "UNLICENSED"
+  }
 }

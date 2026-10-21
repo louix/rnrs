@@ -4,10 +4,12 @@
 //   @rnrs/cli:     the rnrs CLI, staged from packages/cli and the generator (tools/rnrs-gen).
 //   modules:      `rnrs pack-js` writes each package's JS wrapper, then `npm pack` (its
 //                 package.json `files` list) takes manifest, spec, Rust crate and wrapper.
-//   @rnrs/surface: framework rendering surface (Rust library package + Android view), `npm pack`.
-// Each tarball's file list is checked. Output: .generated/pack/*.tgz (or $RNRS_PACK_OUT)
+//   @rnrs/surface: framework rendering surface (Rust library package + Android view), staged
+//                 from packages/surface.
+// The three framework packages (the published ones) also get the repository LICENSE and their
+// README.md. Each tarball's file list is checked. Output: .generated/pack/*.tgz (or $RNRS_PACK_OUT)
 // Usage (inside `nix develop`): node scripts/pack.mjs
-import { cpSync, existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -43,6 +45,8 @@ const rt = path.join(STAGE, 'runtime');
 const copy = (from, to, filter) =>
   cpSync(path.join(ROOT, from), path.join(rt, to), { recursive: true, filter });
 copy('packages/runtime/package.json', 'package.json');
+copy('packages/runtime/README.md', 'README.md');
+copy('LICENSE', 'LICENSE');
 copy('packages/runtime/react-native.config.js', 'react-native.config.js');
 copy('packages/runtime/src', 'src');
 copy('packages/runtime/cli', 'cli');
@@ -72,12 +76,21 @@ function expectFiles(name, files, allowed) {
     throw new Error(`${name}: unexpected files in the tarball:\n  ${bad.join('\n  ')}`);
 }
 
+// Each framework package carries the license and its README.
+const LICENSE_README = [/^LICENSE$/, /^README\.md$/];
+function expectLicenseReadme(info) {
+  for (const f of ['LICENSE', 'README.md'])
+    if (!info.files.some((x) => x.path === f))
+      throw new Error(`${info.name}: ${f} missing from the tarball`);
+}
+
 const results = [];
 const runtime = pack(rt);
 expectFiles(
   '@rnrs/runtime',
   runtime.files.map((f) => f.path),
   [
+    ...LICENSE_README,
     /^package\.json$/,
     /^react-native\.config\.js$/,
     /^src\/[\w-]+\.ts$/,
@@ -92,12 +105,15 @@ expectFiles(
     /^RnrsRuntime\.podspec$/,
   ],
 );
+expectLicenseReadme(runtime);
 results.push(runtime);
 
 // --- @rnrs/cli: the bin and the generator, nothing else (the framework spec and Rust crates
 // are its peer @rnrs/runtime's).
 const cli = path.join(STAGE, 'cli');
 cpSync(path.join(ROOT, 'packages/cli/package.json'), path.join(cli, 'package.json'));
+cpSync(path.join(ROOT, 'packages/cli/README.md'), path.join(cli, 'README.md'));
+cpSync(path.join(ROOT, 'LICENSE'), path.join(cli, 'LICENSE'));
 cpSync(path.join(ROOT, 'packages/cli/bin'), path.join(cli, 'bin'), { recursive: true });
 mkdirSync(path.join(cli, 'generator'), { recursive: true });
 for (const f of readdirSync(path.join(ROOT, 'tools/rnrs-gen')).filter((f) => f.endsWith('.mjs')))
@@ -106,18 +122,26 @@ const cliPack = pack(cli);
 expectFiles(
   '@rnrs/cli',
   cliPack.files.map((f) => f.path),
-  [/^package\.json$/, /^bin\/rnrs\.mjs$/, /^generator\/[\w-]+\.mjs$/],
+  [...LICENSE_README, /^package\.json$/, /^bin\/rnrs\.mjs$/, /^generator\/[\w-]+\.mjs$/],
 );
+expectLicenseReadme(cliPack);
 results.push(cliPack);
 
 // --- @rnrs/surface: a Rust library package (no spec, no JS wrapper) with an Android library
 // whose JNI entry points are Rust (no C++ or CMake of its own), and an iOS pod (the Fabric
-// component view; its C entry points are Rust too).
-const surface = pack(path.join(ROOT, 'packages/surface'));
+// component view; its C entry points are Rust too). Staged from its package.json `files`.
+const sf = path.join(STAGE, 'surface');
+const surfaceSrc = path.join(ROOT, 'packages/surface');
+const surfaceFiles = JSON.parse(readFileSync(path.join(surfaceSrc, 'package.json'), 'utf8')).files;
+for (const f of ['package.json', 'README.md', ...surfaceFiles])
+  cpSync(path.join(surfaceSrc, f), path.join(sf, f), { recursive: true });
+cpSync(path.join(ROOT, 'LICENSE'), path.join(sf, 'LICENSE'));
+const surface = pack(sf);
 expectFiles(
   '@rnrs/surface',
   surface.files.map((f) => f.path),
   [
+    ...LICENSE_README,
     /^package\.json$/,
     /^react-native\.config\.js$/,
     /^src\/index(?:\.web)?\.tsx?$/,
@@ -131,6 +155,7 @@ expectFiles(
     /^RnrsSurface\.podspec$/,
   ],
 );
+expectLicenseReadme(surface);
 results.push(surface);
 
 // --- module packages: manifest, README, spec, Rust crate and generated JS wrapper.

@@ -2,6 +2,7 @@
   "name": "@rnrs/labs-android-only",
   "version": "0.0.1",
   "private": true,
+  "license": "MIT",
   "rustNative": {
     "targets": ["android"]
   }

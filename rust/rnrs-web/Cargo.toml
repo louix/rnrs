@@ -2,6 +2,10 @@
 name = "rnrs-web"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+repository = "https://github.com/louix/rnrs"
+# Shipped inside the @rnrs npm packages; not published to crates.io.
+publish = false
 description = "Framework browser backend: wasm-bindgen adapter and Env for generated module glue."
 
 [features]

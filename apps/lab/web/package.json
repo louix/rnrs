@@ -2,6 +2,7 @@
   "name": "rnrs-lab-web",
   "version": "0.0.0",
   "private": true,
+  "license": "MIT",
   "description": "The lab's browser harness as its own app for rnrs: its dependency graph lists only web-targeted modules (the lab app's, apps/lab/package.json, also includes Android-only ones). Packages resolve from the root node_modules.",
   "dependencies": {
     "@rnrs/example-blake3": "file:../../../packages/blake3",

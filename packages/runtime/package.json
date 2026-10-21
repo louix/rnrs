@@ -1,8 +1,17 @@
 {
   "name": "@rnrs/runtime",
   "version": "0.1.0",
-  "private": true,
   "description": "Experimental framework for React Native modules written as TypeScript specs plus Rust: JS runtime, Android and iOS (JSI) backends, the browser Wasm backend, the framework spec and Rust crates. The rnrs CLI is @rnrs/cli.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/louix/rnrs.git",
+    "directory": "packages/runtime"
+  },
+  "homepage": "https://github.com/louix/rnrs/tree/main/packages/runtime#readme",
+  "bugs": {
+    "url": "https://github.com/louix/rnrs/issues"
+  },
   "main": "src/index.ts",
   "types": "src/index.ts",
   "react-native": "src/native.ts",
@@ -61,12 +70,14 @@
     "@rnrs/cli": "0.1.0"
   },
   "peerDependencies": {
-    "react-native": "0.88.0"
+    "react-native": "^0.88.0"
   },
-  "license": "UNLICENSED",
   "peerDependenciesMeta": {
     "react-native": {
       "optional": true
     }
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

@@ -2,6 +2,10 @@
 name = "rnrs-log"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+repository = "https://github.com/louix/rnrs"
+# Shipped inside the @rnrs npm packages; not published to crates.io.
+publish = false
 description = "Framework logging: a tracing Layer writing to the platform log (Android logcat, Apple unified logging, browser console), and an opt-in managed install with a log-to-tracing bridge."
 
 [dependencies]

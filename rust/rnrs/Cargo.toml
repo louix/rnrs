@@ -2,6 +2,10 @@
 name = "rnrs"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+repository = "https://github.com/louix/rnrs"
+# Shipped inside the @rnrs npm packages; not published to crates.io.
+publish = false
 description = "The Rust crate module authors depend on: rnrs-core re-exported, plus optional framework parts behind features. Provided by @rnrs/runtime (not on crates.io)."
 
 # Headless by default. Disabled optional dependencies are neither resolved nor locked for apps

@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Lab-only fixture for the Worklets proof of concept: scalar sync methods, one native object, and shapes the worklet endpoint refuses.",
+  "license": "MIT",
   "rustNative": {
     "targets": [
       "android"
@@ -33,6 +34,5 @@
   },
   "peerDependencies": {
     "@rnrs/runtime": "0.1.0"
-  },
-  "license": "UNLICENSED"
+  }
 }
