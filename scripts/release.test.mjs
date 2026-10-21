@@ -203,10 +203,12 @@ test('finds framework version literals in scripts and generator texts', () => {
     'cp "$tarball" "$C/demo-crc-0.1.0.tgz"', // an author's own package: not the framework's
     'react-native-community-template-0.88.0.tgz',
     '# Modules depend on rnrs-core = "0.1" or rnrs = "0.1"',
+    'npm install --save-exact @rnrs/runtime@0.1.0 @rnrs/surface@0.1.0 react@19.3.0',
+    '"peerDependencies": {"@rnrs/runtime": "0.1.0"}, "@rnrs/example-kv": "0.1.0"',
   ].join('\n');
   assert.deepEqual(
     versionLiterals(text).map((l) => l.version ?? `req ${l.requirement}`),
-    ['0.1.0', '0.1.0', '0.1.0', '0.1.0', 'req 0.1', 'req 0.1'],
+    ['0.1.0', '0.1.0', '0.1.0', '0.1.0', '0.1.0', '0.1.0', '0.1.0', 'req 0.1', 'req 0.1'],
   );
 });
 

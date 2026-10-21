@@ -180,6 +180,11 @@ export function versionLiterals(text) {
   const found = [];
   for (const m of text.matchAll(/(?:rnrs-[\w${}.-]*?|\$\{?\w+\}?|')-(\d+\.\d+\.\d+)\.tgz/g))
     found.push({ literal: m[0], version: m[1] });
+  // Install specs and manifest requirements on the framework packages.
+  for (const m of text.matchAll(/@rnrs\/(?:runtime|cli|surface)@(\d+\.\d+\.\d+)\b/g))
+    found.push({ literal: m[0], version: m[1] });
+  for (const m of text.matchAll(/"@rnrs\/(?:runtime|cli|surface)": "(\d+\.\d+\.\d+)"/g))
+    found.push({ literal: m[0], version: m[1] });
   for (const m of text.matchAll(/rnrs(?:-core|-surface)? = \\?"(\d+\.\d+(?:\.\d+)?)\\?"/g))
     found.push({ literal: m[0], requirement: m[1] });
   return found;

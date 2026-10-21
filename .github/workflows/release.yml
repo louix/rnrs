@@ -19,8 +19,9 @@ on:
 
 permissions: {}
 
+# One run per ref: a manual dry run on main never displaces a queued tag release.
 concurrency:
-  group: npm-release
+  group: npm-release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -47,7 +48,8 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: '24'
+          # Exact: `npm pack` output must not change when a release is rebuilt to resume it.
+          node-version: '24.21.0'
           package-manager-cache: false # no caches in release builds
       - name: Source commit
         id: source
@@ -101,7 +103,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: '24'
+          node-version: '24.21.0'
           package-manager-cache: false
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -127,7 +129,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
-          node-version: '24'
+          node-version: '24.21.0'
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
       - name: npm supports trusted publishing (>= 11.5.1)
