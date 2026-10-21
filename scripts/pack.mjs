@@ -134,8 +134,7 @@ expectFiles(
 );
 results.push(surface);
 
-// --- module packages: only manifest, spec, Rust crate (with its committed interface) and
-// the generated JS wrapper.
+// --- module packages: manifest, README, spec, Rust crate and generated JS wrapper.
 for (const m of MODULES) {
   const dir = path.join(ROOT, 'packages', m);
   sh('node', [path.join(ROOT, 'packages/rnr-cli/bin/rnrs.mjs'), 'pack-js', dir]);
@@ -145,6 +144,7 @@ for (const m of MODULES) {
     info.files.map((f) => f.path),
     [
       /^package\.json$/,
+      /^README\.md$/,
       /^[\w-]+\.spec\.ts$/,
       /^shared\.ts$/,
       /^frame\.ts$/,
