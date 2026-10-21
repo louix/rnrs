@@ -2,7 +2,7 @@
 
 | Platform | Support |
 | --- | --- |
-| React Native | 0.88.0, New Architecture (bridgeless), Hermes. Older versions are not supported. |
+| React Native | 0.88.0, New Architecture (bridgeless), Hermes. The packages accept later 0.88 patch releases, which are not individually tested. Older versions are not supported. |
 | Android | arm64 release builds. Native libraries are linked 16 KB page-aligned, but have only run on 4 KB-page devices. |
 | iOS | arm64 release builds, CocoaPods, React Native's prebuilt core. React Native 0.88.0 has run on the simulator only; physical-iPhone runs used 0.83.1. No `use_frameworks!` or Swift Package Manager. See [iOS](ios.md). |
 | Browser | Wasm on the main thread, initialized with `initRnrs`. No workers, WASI or Node.js. |

@@ -29,11 +29,12 @@ install the toolchain there. Shells are described in [setup](setup.md#nix-shells
 | `npm test` | any | Node. Lock-file tests skip without cargo; run `source scripts/rust-env.sh && cargo fetch --locked` first for the full set. |
 | `npm run typecheck`, `npm run rnrs:check` | any | Node |
 | `node scripts/pack.mjs` | any | Node; writes `.generated/pack/` ([local packages](setup.md#local-framework-packages)) |
+| `node scripts/release.mjs check` | any | Node; packs and checks the publishable packages ([releasing](releasing.md)) |
 | `npm run test:rnrs-offline` | Rust environment | packaged framework resolution without a registry |
 | `bash scripts/build-android.sh` | `nix develop` | network on first run. Also runs the Rust workspace tests. |
 | `bash scripts/build-web.sh`, then `node scripts/web-test.mjs` | `nix develop .#web` | |
 | `node scripts/rnrs-device-test.mjs` | `nix develop` | lab APK installed, authorized device |
-| `scripts/check-generation.sh`, `scripts/test-native.sh` | `nix develop` | |
+| `scripts/check-generation.sh`, `scripts/test-native.sh` | `nix develop` or `nix develop .#host` | |
 | `scripts/consumer/{author,web-app}.sh` | `nix develop .#web` | toolchain and wasm32 target (run `build-web.sh` once) |
 | `scripts/consumer/fresh-author.sh web\|android` | as above | creates a new module outside the repository |
 | `scripts/consumer/rn-app.sh` + `rn-smoke.mjs` | `nix develop` | toolchain and Android target (run `build-android.sh` once), device |
@@ -54,4 +55,21 @@ Direct npm dependencies are pinned to exact versions (`.npmrc` saves exact versi
 updates wait 14 days after publication; Renovate enforces this once enabled, but it does not block
 a manual `npm install` and does not cover Cargo. Security fixes may skip the wait: record the
 advisory and reason in the update, install the exact fixed version, and run the relevant checks.
-Review release notes and test results, and commit lock-file changes.
+Review release notes and test results, and commit lock-file changes. The React Native 0.88.0 and
+Expo SDK 58 baseline was adopted under a one-time, approved exception to the wait.
+
+Published packages pin their own dependencies exactly but declare peer ranges: React Native
+`^0.88.0` (0.88.0 is the tested baseline; later patch releases are accepted, not individually
+tested) and, for `@rnrs/surface`, React `^19.3.0`.
+
+## CI
+
+`.github/workflows/ci.yml` runs on pull requests and `main`. Required on pull requests: lint,
+format, types, `npm test` and the [release check](releasing.md) (`host`); the Rust workspace,
+offline packaged resolution, generation and sanitizer C++ tests (`rust`, `nix develop .#host`);
+the browser harness and clean web, author and `rnrs init` consumers (`web`); and a clean Android
+consumer APK with its relocated `--locked` build and 16 KB alignment check (`android`). The iOS
+simulator consumer build and smoke run (`ios`, macOS, Xcode 26.6) runs on `main`, manual runs and
+releases. Toolchains (Nix store, rustup, cargo downloads, Gradle) are cached; build outputs are
+not. Device suites (`rnrs-device-test.mjs`, `rn-smoke.mjs`, `ios-device-test.mjs`, the GPU and
+touch runners) stay manual.

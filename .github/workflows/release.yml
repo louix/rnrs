@@ -1,0 +1,149 @@
+# Publishes @rnrs/cli, @rnrs/runtime and @rnrs/surface to npm (docs/releasing.md).
+#   push of a v* tag on main            CI (iOS included), build, verify, publish
+#   manual run on a v* tag, publish     the same (e.g. to resume an interrupted release)
+#   manual run otherwise                CI, build, verify and `npm publish --dry-run`
+# The tarballs are built and verified once; the publish job uploads exactly those files. It is
+# the only job with id-token: write (npm trusted publishing, provenance) and runs in the `npm`
+# environment. The trusted publisher on npmjs.com names this file and that environment.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish to npm (only from a v* tag; otherwise a dry run)
+        type: boolean
+        default: false
+
+permissions: {}
+
+concurrency:
+  group: npm-release
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+    with:
+      ios: true
+    permissions:
+      contents: read
+
+  build:
+    name: Build and verify the release tarballs
+    needs: ci
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    outputs:
+      tag: ${{ steps.source.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false # no caches in release builds
+      - name: Source commit
+        id: source
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="$(node -p 'require("./packages/runtime/package.json").version')"
+          if [ "$REF_TYPE" = tag ]; then
+            tag="$REF_NAME"
+            [ "$(git rev-parse "refs/tags/$tag^{commit}")" = "$GITHUB_SHA" ]
+            # Releases come from main's history only.
+            git merge-base --is-ancestor "$GITHUB_SHA" origin/main ||
+              { echo "::error::$tag ($GITHUB_SHA) is not on main"; exit 1; }
+          else
+            tag="v$version"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "release $tag from $GITHUB_SHA ($REF_TYPE $REF_NAME)"
+      - run: npm ci --ignore-scripts
+      - name: Pack and check
+        run: node scripts/release.mjs check --dir .generated/release
+      - name: Plan against the registry
+        env:
+          TAG: ${{ steps.source.outputs.tag }}
+        run: node scripts/release.mjs plan --dir .generated/release --tag "$TAG" --sha "$GITHUB_SHA"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: npm-packages
+          path: |
+            .generated/release/rnrs-cli-*.tgz
+            .generated/release/rnrs-runtime-*.tgz
+            .generated/release/rnrs-surface-*.tgz
+            .generated/release/release.json
+            .generated/release/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 90
+
+  dry-run:
+    name: npm publish --dry-run
+    needs: build
+    if: ${{ !(github.ref_type == 'tag' && (github.event_name == 'push' || inputs.publish)) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: npm-packages
+          path: dist
+      - env:
+          TAG: ${{ needs.build.outputs.tag }}
+        run: node scripts/release.mjs publish --dir dist --tag "$TAG" --sha "$GITHUB_SHA" --dry-run
+
+  publish:
+    name: Publish to npm
+    needs: build
+    if: ${{ github.ref_type == 'tag' && (github.event_name == 'push' || inputs.publish) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - name: npm supports trusted publishing (>= 11.5.1)
+        run: |
+          npm --version
+          node -e 'const [a, b, c] = process.argv[1].split(".").map(Number); process.exit(a > 11 || (a === 11 && (b > 5 || (b === 5 && c >= 1))) ? 0 : 1)' "$(npm --version)"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: npm-packages
+          path: dist
+      - name: Publish the verified tarballs (cli, runtime, surface)
+        env:
+          TAG: ${{ needs.build.outputs.tag }}
+          NPM_CONFIG_PROVENANCE: 'true'
+          # npm authenticates with OIDC (trusted publishing) first. Only for the first publish,
+          # before trusted publishers can exist, an `npm` environment secret may supply a
+          # short-lived granular token; delete it afterwards (docs/releasing.md).
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_BOOTSTRAP_TOKEN }}
+        run: node scripts/release.mjs publish --dir dist --tag "$TAG" --sha "$GITHUB_SHA"

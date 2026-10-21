@@ -16,4 +16,4 @@ Reference:
 - [Rendering surfaces](surface.md), [logging](logging.md) and [iOS integration](ios.md).
 - Example module guides: [HTTP](../packages/http/README.md), [key-value storage](../packages/kv/README.md), [BLAKE3](../packages/blake3/README.md), [Bevy](../packages/bevy3d/README.md).
 
-Working on rnrs itself: [development](development.md).
+Working on rnrs itself: [development](development.md) and [releasing](releasing.md).

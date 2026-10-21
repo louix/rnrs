@@ -30,6 +30,10 @@
     JAVA_HOME = "${pkgs.jdk17}";
     GRADLE_OPTS = "-Dorg.gradle.project.android.aapt2FromMavenOverride=${android.androidsdk}/libexec/android-sdk/build-tools/37.0.0/aapt2";
   };
+  # Host-only checks (CI): Rust workspace tests and the framework C++ tests, no Android SDK.
+  host = pkgs.mkShell {
+    packages = with pkgs; [ nodejs_24 rustup clang cmake pkg-config python3 ];
+  };
   # Browser Wasm prototype: wasm-bindgen CLI must match the crate pin (=0.2.129).
   web = pkgs.mkShell {
     packages = with pkgs; [ nodejs_24 rustup wasm-bindgen-cli esbuild chromium ];

@@ -1,0 +1,197 @@
+# Pull requests and main: host checks, Rust and C++ tests, the packed framework packages, clean
+# web and Android consumers built from them, and (main, manual and release runs) a clean iOS
+# simulator consumer. Physical-device suites stay manual (docs/development.md).
+# Actions are pinned to commit SHAs (tag in the comment); update them deliberately, at least
+# 14 days after their release.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      ios:
+        description: Build and run the iOS simulator consumer
+        type: boolean
+        default: true
+  workflow_call:
+    inputs:
+      ios:
+        type: boolean
+        default: true
+
+permissions: {}
+
+concurrency:
+  # Called from the release workflow, github.workflow is the caller's name: its own group.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  RUSTUP_TOOLCHAIN: '1.90.0'
+
+jobs:
+  host:
+    name: Lint, types, unit tests, packages
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run fmt:check
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run rnrs:check
+      - name: Release check (pack, metadata, versions)
+        run: node scripts/release.mjs check --dir .generated/release
+
+  rust:
+    name: Rust workspace, generation and native C++ tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/nix
+        with:
+          shell: host
+      - uses: ./.github/actions/rust-cache
+        with:
+          key: rust
+      - run: npm ci --ignore-scripts
+      - name: Rust workspace tests
+        shell: nix develop .#host --command bash -euo pipefail {0}
+        run: |
+          source scripts/rust-env.sh
+          rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal
+          cargo test --workspace --locked --features rnrs-core/tokio,rnrs-core/smol
+      - name: Packaged framework resolution, offline
+        shell: nix develop .#host --command bash -euo pipefail {0}
+        run: source scripts/rust-env.sh && npm run test:rnrs-offline
+      - name: Lock-file tests with cargo
+        shell: nix develop .#host --command bash -euo pipefail {0}
+        run: source scripts/rust-env.sh && npm test
+      - name: Generation reliability
+        shell: nix develop .#host --command bash -euo pipefail {0}
+        run: bash scripts/check-generation.sh
+      - name: Framework C++ (TSan, ASan, UBSan)
+        shell: nix develop .#host --command bash -euo pipefail {0}
+        run: bash scripts/test-native.sh
+
+  web:
+    name: Browser harness and clean web consumers
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/nix
+        with:
+          shell: web
+      - uses: ./.github/actions/rust-cache
+        with:
+          key: web
+      - run: npm ci --ignore-scripts
+      - name: Browser harness
+        shell: nix develop .#web --command bash -euo pipefail {0}
+        run: bash scripts/build-web.sh && node scripts/web-test.mjs
+      - name: Clean Vite consumer (packed tarballs, --locked relocation)
+        shell: nix develop .#web --command bash -euo pipefail {0}
+        run: bash scripts/consumer/web-app.sh
+      - name: Author workflow outside the repository
+        shell: nix develop .#web --command bash -euo pipefail {0}
+        run: bash scripts/consumer/author.sh
+      - name: Fresh module from rnrs init, consumed by a fresh app
+        shell: nix develop .#web --command bash -euo pipefail {0}
+        run: bash scripts/consumer/fresh-author.sh web
+
+  android:
+    name: Clean Android consumer build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    permissions:
+      contents: read
+    steps:
+      - name: Free disk space (preinstalled SDKs this job does not use)
+        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/nix
+        with:
+          shell: default
+      - uses: ./.github/actions/rust-cache
+        with:
+          key: android
+          gradle: true
+      - run: npm ci --ignore-scripts
+      - name: Rust Android target
+        shell: nix develop --command bash -euo pipefail {0}
+        run: |
+          source scripts/rust-env.sh
+          rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal --target aarch64-linux-android
+      - name: RN template consumer from the packed tarballs (APK, relocated --locked build)
+        shell: nix develop --command bash -euo pipefail {0}
+        run: bash scripts/consumer/rn-app.sh
+      - name: 16 KB page alignment of the APK's native libraries
+        shell: nix develop --command bash -euo pipefail {0}
+        run: node scripts/check-page-size.mjs .generated/consumer/rn-app/android/app/build/outputs/apk/release/app-release.apk
+
+  ios:
+    name: Clean iOS simulator consumer
+    if: github.event_name == 'push' || inputs.ios
+    runs-on: macos-26
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: ./.github/actions/rust-cache
+        with:
+          key: ios
+      - run: npm ci --ignore-scripts
+      - name: RN template consumer for the simulator (pods, Rust bundle, relocated --locked build)
+        env:
+          RNRS_IOS_SDKS: iphonesimulator
+          RNRS_IOS_SIM_ARCHS: arm64
+          RNRS_IOS_FIXTURE: smoke
+          RNRS_IOS_SMOKE_DIR: fixtures/scheduler-probe
+          RNRS_TEST_HOOKS: '0'
+        run: bash scripts/consumer/ios-app.sh
+      - name: Smoke run on a booted simulator
+        run: |
+          # The simulator runtime of the SDK the app was built with.
+          sdk="$(xcrun --sdk iphonesimulator --show-sdk-version)"
+          runtime="$(xcrun simctl list runtimes -j | SDK="$sdk" node -e '
+            const rs = JSON.parse(require("fs").readFileSync(0, "utf8")).runtimes;
+            const r = rs.find((r) => r.platform === "iOS" && r.isAvailable && r.version.startsWith(process.env.SDK));
+            if (!r) throw new Error("no available iOS " + process.env.SDK + " simulator runtime");
+            process.stdout.write(r.identifier);')"
+          udid="$(xcrun simctl create rnrs-ci 'iPhone 17' "$runtime")"
+          xcrun simctl boot "$udid"
+          xcrun simctl bootstatus "$udid"
+          node scripts/consumer/ios-smoke-sim-test.mjs --device "$udid" --consumer .generated/consumer-ios --commit "$GITHUB_SHA"

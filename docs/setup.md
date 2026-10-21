@@ -32,6 +32,7 @@ This repository's flake provides the system tools, but **not** Rust toolchains o
 | --- | --- | --- |
 | `nix develop "$REPO"` | x86_64 Linux | Node 24, rustup, JDK 17, Android SDK/NDK/CMake, adb |
 | `nix develop "$REPO#web"` | x86_64 Linux | Node 24, rustup, wasm-bindgen, esbuild, Chromium |
+| `nix develop "$REPO#host"` | x86_64 Linux | Node 24, rustup, clang, CMake: Rust and C++ tests without the Android SDK |
 | `nix develop "$REPO#ios"` | macOS | Node 24, rustup, CocoaPods. Xcode comes from the system. |
 
 - Set `REPO` to the absolute path of this checkout. Your module and apps live outside it, so `.` does not work.
