@@ -4,8 +4,8 @@ use super::*;
 use crate::timing::EventRing;
 use crate::frame::encode;
 use raw_window_handle::{AndroidDisplayHandle, AndroidNdkWindowHandle, RawDisplayHandle, RawWindowHandle};
-use rnr_surface::platform::{self, AttachError, Detached};
-use rnr_surface::PlatformWindow;
+use rnrs_surface::platform::{self, AttachError, Detached};
+use rnrs_surface::PlatformWindow;
 use std::collections::VecDeque;
 use std::sync::atomic::AtomicBool;
 use std::ptr::NonNull;
@@ -102,9 +102,9 @@ struct Ctl {
     readbacks: Mutex<VecDeque<bool>>,
 }
 
-/// A layer transaction whose read-back is scripted (rnr_surface::layer).
+/// A layer transaction whose read-back is scripted (rnrs_surface::layer).
 struct FakeTx(bool);
-impl rnr_surface::layer::LayerTransaction for FakeTx {
+impl rnrs_surface::layer::LayerTransaction for FakeTx {
     fn begin(&mut self) {}
     fn disable_actions(&mut self) {}
     fn allow_drawable_timeout(&mut self) {}
@@ -139,7 +139,7 @@ impl Presenter for Fake {
         }
         // The configure runs in the scripted layer transaction, as on iOS.
         let readback = lock(&self.ctl.readbacks).pop_front().unwrap_or(true);
-        let configured = rnr_surface::layer::configure_in_transaction(&mut FakeTx(readback), || Ok::<(), String>(()));
+        let configured = rnrs_surface::layer::configure_in_transaction(&mut FakeTx(readback), || Ok::<(), String>(()));
         configured.result?;
         self.acquire_allowed = configured.acquire_allowed;
         self.events.send(Event::Bind(lease.attachment(), extent.width)).unwrap();

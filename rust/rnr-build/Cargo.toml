@@ -1,7 +1,0 @@
-[package]
-name = "rnr-build"
-version = "0.1.0"
-edition = "2021"
-description = "Build-script helper: runs tools/rnr-gen so hidden glue is regenerated, never stale."
-
-[dependencies]

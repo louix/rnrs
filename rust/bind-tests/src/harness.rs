@@ -4,9 +4,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 
-use rnr_core::bind::{Adapter, BindError, ModuleDef, Spawner, Val};
-use rnr_core::exec::TokioSpawner;
-use rnr_core::{Budget, Notify};
+use rnrs_core::bind::{Adapter, BindError, ModuleDef, Spawner, Val};
+use rnrs_core::exec::TokioSpawner;
+use rnrs_core::{Budget, Notify};
 
 use crate::{MockEnv, V};
 

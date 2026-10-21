@@ -8,7 +8,7 @@ This repository contains the framework and its regression harnesses. App authors
 | --- | --- |
 | `packages/rnr-runtime` | Framework package `@rnrs/runtime`: JS runtime, Android/iOS native library, shared JSI C++ (`cpp/`). |
 | `packages/rnr-cli`, `tools/rnr-gen` | `@rnrs/cli`: the `rnrs` command and shipped `generator/`. |
-| `rust/rnr-*` | Framework crates. `rnr-android` is the native backend for **both** Android and iOS. |
+| `rust/rnrs-*` | Framework crates. `rnrs-android` is the native backend for **both** Android and iOS. |
 | `packages/*` | Example module packages ([status](status.md#example-modules)). |
 | `android/`, `src/`, `specs/`, `native/` | Android conformance and lifecycle runner; test-only GC hook. |
 | `web/` | Browser harness (its own app graph, without `kv`). |

@@ -1,5 +1,5 @@
 [package]
-name = "rnr-web-surface-probe"
+name = "rnrs-web-surface-probe"
 version = "0.0.0"
 edition = "2021"
 publish = false

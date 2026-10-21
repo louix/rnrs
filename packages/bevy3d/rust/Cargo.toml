@@ -1,20 +1,20 @@
 [package]
-name = "rnr-bevy3d"
+name = "rnrs-bevy3d"
 version = "0.1.0"
 edition = "2021"
 # Bevy 0.20.0's MSRV. Apps bundling this module build their whole Rust bundle with 1.97.1
 # (RUSTUP_TOOLCHAIN=1.97.1); the framework's default toolchain is unchanged.
 rust-version = "1.97.1"
-description = "Bounded Bevy example module for @rnrs/example-bevy3d: a Rust-owned Bevy scene rendered offscreen and presented with wgpu on an rnr-surface (Android: Vulkan; iOS: Metal, ported but not rendering on the simulator; browser: WebGPU prototype; see docs/bevy3d.md)."
+description = "Bounded Bevy example module for @rnrs/example-bevy3d: a Rust-owned Bevy scene rendered offscreen and presented with wgpu on an rnrs-surface (Android: Vulkan; iOS: Metal, ported but not rendering on the simulator; browser: WebGPU prototype; see docs/bevy3d.md)."
 
 [dependencies]
-rnr-core = "0.1"
-rnr-surface = "0.1"
+rnrs-core = "0.1"
+rnrs-surface = "0.1"
 log = "0.4"
 # Bevy 0.20.0 uses wgpu ^30, the same 30.0.1 the framework's renderers pin. Only the plugins a
-# lit cube needs; no winit (Bevy never sees the window), no log plugin (rnr-log owns logging),
+# lit cube needs; no winit (Bevy never sees the window), no log plugin (rnrs-log owns logging),
 # no multi_threaded (one render thread; no pipelined rendering), no file assets. `touch` gives
-# Bevy's TouchInput message and Touches resource, fed from rnr-surface's touch queue (scene.rs).
+# Bevy's TouchInput message and Touches resource, fed from rnrs-surface's touch queue (scene.rs).
 bevy = { version = "=0.20.0", default-features = false, features = ["std", "bevy_render", "bevy_core_pipeline", "bevy_pbr", "bevy_mesh", "bevy_camera", "bevy_asset", "touch"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

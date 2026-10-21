@@ -5,7 +5,7 @@ import com.facebook.proguard.annotations.DoNotStrip
 import com.facebook.soloader.SoLoader
 
 /**
- * JNI entry points implemented in Rust (rnr-surface crate, src/android.rs), exported from the
+ * JNI entry points implemented in Rust (rnrs-surface crate, src/android.rs), exported from the
  * framework's librnr.so. All are called on the UI thread and never call into JS.
  */
 @DoNotStrip

@@ -66,7 +66,7 @@ def rnrBuildRustBundle = tasks.register("rnrBuildRustBundle", Exec) {
   group = "rnr"
   description = "Generate and build the app's Rust module bundle"
   workingDir appRoot
-  if (diagnostics) environment "RNR_BUNDLE_FEATURES", "rnr-android/diagnostics"
+  if (diagnostics) environment "RNR_BUNDLE_FEATURES", "rnrs-android/diagnostics"
   doFirst {
     def ndk = android.ndkDirectory
     def host = System.getProperty("os.name").toLowerCase().contains("mac") ? "darwin-x86_64" : "linux-x86_64"

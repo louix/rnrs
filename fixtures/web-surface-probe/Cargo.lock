@@ -210,7 +210,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rnr-web-surface-probe"
+name = "rnrs-web-surface-probe"
 version = "0.0.0"
 dependencies = [
  "vello_cpu",

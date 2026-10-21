@@ -1,6 +1,6 @@
 //! Measurement-only module for the conversion pilot (docs/pilot.md). Each method's work
 //! depends on its input, so results are verifiable and the call cannot be skipped.
-use rnr_core::{CancelToken, Native};
+use rnrs_core::{CancelToken, Native};
 
 pub mod rnr_interface;
 use rnr_interface as spec;

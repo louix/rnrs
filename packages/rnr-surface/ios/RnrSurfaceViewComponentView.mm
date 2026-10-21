@@ -54,13 +54,13 @@ using namespace facebook::react;
 static const double kMaxSafeInteger = 9007199254740991.0;
 static const double kRetryFirst = 0.016;
 static const double kRetryMax = 1.0;
-// rnr_surface_touch phases (rnr-surface touch.rs Phase::from_code).
+// rnr_surface_touch phases (rnrs-surface touch.rs Phase::from_code).
 static const int32_t kTouchDown = 0;
 static const int32_t kTouchMove = 1;
 static const int32_t kTouchUp = 2;
 static const int32_t kTouchCancel = 3;
 static const int32_t kTouchCancelAll = 4;
-/// Slots per attachment: rnr-surface touch.rs MAX_POINTERS.
+/// Slots per attachment: rnrs-surface touch.rs MAX_POINTERS.
 static const int kTouchSlots = 10;
 /// Owned touches retained at most (current slots plus stale touches still down).
 static const NSUInteger kMaxOwned = 20;

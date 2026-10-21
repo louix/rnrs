@@ -1,0 +1,22 @@
+[package]
+name = "rnrs-core"
+version = "0.1.0"
+edition = "2021"
+description = "Prototype ownership/async core for Rust native modules: handles, operations, cancellation, admission, teardown."
+
+[features]
+tokio = ["dep:tokio"]
+smol = ["dep:async-executor"]
+# Attribution counters and a counting global allocator (docs/optimization.md); for
+# diagnostics builds only, never for measurements.
+diagnostics = []
+
+[dependencies]
+# "time": the delivery monitor's timer (TokioSpawner as host::Timer), independent of module features.
+tokio = { version = "1.47", default-features = false, features = ["rt", "rt-multi-thread", "time"], optional = true }
+async-executor = { version = "1.13", optional = true }
+
+[dev-dependencies]
+tokio = { version = "1.47", default-features = false, features = ["rt", "rt-multi-thread", "time", "macros"] }
+futures-lite = "2.6"
+async-executor = "1.13"

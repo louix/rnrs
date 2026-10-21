@@ -1,15 +1,15 @@
 #pragma once
-// C ABI of the Rust backend (rust/rnr-android), shared by the framework's JSI adapter
+// C ABI of the Rust backend (rust/rnrs-android), shared by the framework's JSI adapter
 // (RnrJsi.cpp) and the optional worklet endpoint (RnrWorklets.cpp). Private to the framework.
 // Call contexts: the adapter's is used on its RN runtime's JS thread; the endpoint's on the
 // thread of whichever runtime calls it. Each context serves one call on one thread; values
-// are rooted in it (arena or fixed slots) for that call. See rust/rnr-android/src/lib.rs.
+// are rooted in it (arena or fixed slots) for that call. See rust/rnrs-android/src/lib.rs.
 #include <cstddef>
 #include <cstdint>
 
 extern "C" {
 #ifdef RNR_DIAGNOSTICS
-void rnr_diagnostics(uint64_t* out);  // rust/rnr-android, feature "diagnostics"
+void rnr_diagnostics(uint64_t* out);  // rust/rnrs-android, feature "diagnostics"
 #endif
 struct RnrAdapter;
 typedef void (*RnrCallback)(void*);

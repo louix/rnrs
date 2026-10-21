@@ -10,7 +10,7 @@ import { writeFile } from 'node:fs/promises';
 
 const PACKAGE = 'dev.rustjsilab';
 const ACTIVITY = `${PACKAGE}/com.helloworld.MainActivity`;
-const BUDGET = 32; // default executor budget in rust/rnr-core
+const BUDGET = 32; // default executor budget in rust/rnrs-core
 const adb = (...args) => execFileSync('adb', args, { encoding: 'utf8', timeout: 20000 }).trim();
 const pid = () => {
   try {

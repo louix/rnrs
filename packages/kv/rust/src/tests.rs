@@ -21,7 +21,7 @@ fn setup() -> Kv {
     let dir = DIR.get_or_init(|| {
         let dir = std::env::temp_dir().join(format!("rnr-kv-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        rnr_core::platform::set_app_data_dir(dir.clone()).unwrap();
+        rnrs_core::platform::set_app_data_dir(dir.clone()).unwrap();
         dir
     });
     assert!(dir.is_dir());

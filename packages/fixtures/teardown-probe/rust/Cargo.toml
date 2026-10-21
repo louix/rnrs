@@ -6,4 +6,4 @@ publish = false
 description = "Lab fixture: resources registered with the runtime teardown scope."
 
 [dependencies]
-rnr-core = "0.1"
+rnrs-core = "0.1"

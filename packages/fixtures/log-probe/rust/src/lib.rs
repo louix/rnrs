@@ -2,7 +2,7 @@
 //! only emits `tracing` events and `log` records, like any crate an app depends on; where they
 //! go is the app's choice. The smoke's filter is expected to keep the `info` events of target
 //! `log_probe` and suppress the rest (lower levels, and target `log_probe::noisy`).
-use rnr_core::CancelToken;
+use rnrs_core::CancelToken;
 
 pub mod rnr_interface;
 use rnr_interface as spec;

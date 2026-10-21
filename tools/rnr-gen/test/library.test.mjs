@@ -100,8 +100,8 @@ test('library manifests: schema, reserved names, Cargo package name and path con
   withApp(
     (app) => {
       library(app, 'ok', { crate: 'lib-ok' });
-      library(app, 'reserved', { crate: 'rnr-core' });
-      library(app, 'reserved-underscore', { crate: 'rnr_log' });
+      library(app, 'reserved', { crate: 'rnrs-core' });
+      library(app, 'reserved-underscore', { crate: 'rnrs_log' });
       library(app, 'mismatch', { crate: 'lib-a', cargoName: 'lib-b' });
       library(app, 'unknown-key', {
         crate: 'lib-u',
@@ -124,11 +124,11 @@ test('library manifests: schema, reserved names, Cargo package name and path con
       assert.equal(loadPackage(dir('ok')).crate, 'lib-ok');
       assert.throws(
         () => loadPackage(dir('reserved')),
-        /rustNative.library.crate rnr-core is reserved for the framework/,
+        /rustNative.library.crate rnrs-core is reserved for the framework/,
       );
       assert.throws(
         () => loadPackage(dir('reserved-underscore')),
-        /rnr_log is reserved for the framework/,
+        /rnrs_log is reserved for the framework/,
       );
       assert.throws(
         () => loadPackage(dir('mismatch')),
@@ -150,14 +150,14 @@ test('a module crate may not use a framework crate name either', () =>
   withApp(
     (app) => {
       json(path.join(app, 'package.json'), { name: 'app', dependencies: { 'fake-log': '1' } });
-      moduleUsing(app, 'fake-log', { crate: 'rnr-log', requirement: '', dependsOn: {} });
+      moduleUsing(app, 'fake-log', { crate: 'rnrs-log', requirement: '', dependsOn: {} });
     },
     (app) => {
       assert.throws(
         () => selectModules(app, 'android'),
         (error) =>
           error instanceof BundleError &&
-          /app -> fake-log: the Rust crate name rnr-log is reserved for the framework/.test(
+          /app -> fake-log: the Rust crate name rnrs-log is reserved for the framework/.test(
             error.message,
           ),
       );
@@ -285,13 +285,13 @@ test(
       });
       assert.deepEqual(
         result.modules.map((m) => m.crate),
-        ['rnr-vello2d'],
+        ['rnrs-vello2d'],
       );
       const lock = readFileSync(lockFile(app, 'android'), 'utf8');
       const entry = lock.match(
-        /\[\[package\]\]\nname = "rnr-surface"\nversion = "([^"]+)"(\nsource = [^\n]+)?/,
+        /\[\[package\]\]\nname = "rnrs-surface"\nversion = "([^"]+)"(\nsource = [^\n]+)?/,
       );
-      assert.ok(entry, 'rnr-surface resolved');
+      assert.ok(entry, 'rnrs-surface resolved');
       assert.equal(entry[2], undefined, 'from the installed package path, not a registry');
       assert.ok(!lock.includes(work), 'no machine paths');
     } finally {
@@ -300,12 +300,76 @@ test(
   },
 );
 
-test('a module crate needing an rnr-* library that no installed package provides is refused before cargo runs', () =>
+test('a module crate needing an rnrs-* library that no installed package provides is refused before cargo runs', () =>
   withApp(
     (app) => {
       json(path.join(app, 'package.json'), { name: 'app', dependencies: { renderer: '1' } });
       moduleUsing(app, 'renderer', {
         crate: 'renderer_mod',
+        requirement: 'rnrs-surface = "0.1"',
+        dependsOn: {},
+      });
+    },
+    (app) => {
+      assert.throws(
+        () => selectModules(app, 'android'),
+        (error) =>
+          error instanceof BundleError &&
+          /app -> renderer: its crate depends on rnrs-surface, which no installed package provides \(rnrs-\* and rnr-\* crates are never taken from crates.io\); add @rnrs\/surface to the app's dependencies/.test(
+            error.message,
+          ),
+      );
+    },
+  ));
+
+test('rnrs-* and former rnr-* crates resolved from a registry or git are refused even if no package declared them', async () => {
+  const { checkProvenance } = await import('../bundle.mjs');
+  for (const source of [
+    'registry+https://github.com/rust-lang/crates.io-index',
+    'git+https://example.invalid/x#abc',
+  ]) {
+    const foreign = (name) => ({
+      name,
+      version: '0.1.0',
+      source,
+      manifest_path: '/elsewhere/Cargo.toml',
+    });
+    // Framework crates: compared with this framework's copies.
+    for (const name of ['rnrs', 'rnrs-core', 'rnrs-android', 'rnrs-web', 'rnrs-log'])
+      assert.throws(
+        () => checkProvenance({ packages: [foreign(name)] }),
+        new RegExp(`\\b${name} 0\\.1\\.0 resolved from .*, not the framework's`),
+      );
+    // Anything else in the namespace, current or former, declared by a package or not.
+    for (const name of [
+      'rnrs-surface',
+      'rnrs-unknown',
+      'rnrs_unknown',
+      'rnr-core',
+      'rnr-surface',
+      'rnr_log',
+    ])
+      assert.throws(
+        () => checkProvenance({ packages: [foreign(name)] }),
+        new RegExp(
+          `\\b${name} 0\\.1\\.0 resolved from .*\\nCrates named rnrs-\\* \\(and the former rnr-\\* names\\) are reserved for the framework`,
+        ),
+      );
+  }
+  for (const name of ['rnrx', 'rnrsx', 'xrnrs-core'])
+    assert.doesNotThrow(() =>
+      checkProvenance({
+        packages: [{ name, version: '1.0.0', source: 'registry+x', manifest_path: '/x' }],
+      }),
+    );
+});
+
+test('a module crate depending on a former rnr-* framework name is refused with the new name', () =>
+  withApp(
+    (app) => {
+      json(path.join(app, 'package.json'), { name: 'app', dependencies: { old: '1' } });
+      moduleUsing(app, 'old', {
+        crate: 'old_mod',
         requirement: 'rnr-surface = "0.1"',
         dependsOn: {},
       });
@@ -315,38 +379,14 @@ test('a module crate needing an rnr-* library that no installed package provides
         () => selectModules(app, 'android'),
         (error) =>
           error instanceof BundleError &&
-          /app -> renderer: its crate depends on rnr-surface, which no installed package provides \(rnr-\* crates are never taken from crates.io\); add @rnrs\/surface to the app's dependencies/.test(
+          /app -> old: its crate depends on rnr-surface, which no installed package provides \(rnrs-\* and rnr-\* crates are never taken from crates.io\); rnr-surface was renamed rnrs-surface/.test(
             error.message,
           ),
       );
     },
   ));
 
-test('rnr-* crates resolved from a registry or git are refused even if no package declared them', async () => {
-  const { checkProvenance } = await import('../bundle.mjs');
-  for (const source of [
-    'registry+https://github.com/rust-lang/crates.io-index',
-    'git+https://example.invalid/x#abc',
-  ]) {
-    const pkg = {
-      name: 'rnr-surface',
-      version: '0.1.0',
-      source,
-      manifest_path: '/elsewhere/Cargo.toml',
-    };
-    assert.throws(
-      () => checkProvenance({ packages: [pkg] }),
-      /rnr-surface 0\.1\.0 resolved from .*\nCrates named rnr-\* are reserved for the framework/,
-    );
-  }
-  assert.doesNotThrow(() =>
-    checkProvenance({
-      packages: [{ name: 'rnrx', version: '1.0.0', source: 'registry+x', manifest_path: '/x' }],
-    }),
-  );
-});
-
-test('rnr-* dependency scanning covers dependency tables, renames and target tables, not dev-dependencies', async () => {
+test('rnrs-* and rnr-* dependency scanning covers dependency tables, renames and target tables, not dev-dependencies', async () => {
   const { rnrCrateDependencies } = await import('../bundle.mjs');
   const dir = mkdtempSync(path.join(tmpdir(), 'rnr-deps-'));
   try {
@@ -358,12 +398,13 @@ test('rnr-* dependency scanning covers dependency tables, renames and target tab
         'name = "x"',
         '',
         '[dependencies]',
-        'rnr-core = "0.1"',
-        'surface = { package = "rnr-surface", version = "0.1" }',
+        'rnrs-core = "0.1"',
+        'surface = { package = "rnrs-surface", version = "0.1" }',
         'serde = "1"',
         '',
         '[target.\'cfg(target_os = "android")\'.dependencies]',
         'rnr_extra = "0.1"',
+        'rnrs_other = "0.1"',
         '',
         '[dependencies.rnr-table]',
         'version = "0.1"',
@@ -372,15 +413,16 @@ test('rnr-* dependency scanning covers dependency tables, renames and target tab
         'rnr-test-only = "0.1"',
         '',
         '[build-dependencies]',
-        'rnr-build = "0.1"',
+        'rnrs-build = "0.1"',
       ].join('\n'),
     );
     assert.deepEqual(rnrCrateDependencies(file).sort(), [
-      'rnr-build',
-      'rnr-core',
-      'rnr-surface',
       'rnr-table',
       'rnr_extra',
+      'rnrs-build',
+      'rnrs-core',
+      'rnrs-surface',
+      'rnrs_other',
     ]);
   } finally {
     rmSync(dir, { recursive: true, force: true });

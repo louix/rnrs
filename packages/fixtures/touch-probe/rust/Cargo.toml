@@ -3,11 +3,11 @@ name = "touch-probe"
 version = "0.1.0"
 edition = "2021"
 publish = false
-description = "Lab fixture: a GPU-free rnr-surface touch consumer, drained explicitly from JS."
+description = "Lab fixture: a GPU-free rnrs-surface touch consumer, drained explicitly from JS."
 
 [dependencies]
-rnr-core = "0.1"
-rnr-surface = "0.1"
+rnrs-core = "0.1"
+rnrs-surface = "0.1"
 
 [dev-dependencies]
 raw-window-handle = "0.6.2"

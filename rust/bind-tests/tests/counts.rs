@@ -2,7 +2,7 @@
 use bind_tests::harness::Harness;
 use bind_tests::modules::counter;
 use bind_tests::{dispose, V};
-use rnr_core::live_counts_by_name;
+use rnrs_core::live_counts_by_name;
 
 const NONE: V = V::Undefined;
 

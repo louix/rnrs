@@ -42,7 +42,7 @@
 //!   that never finishes keeps that thread, and its slot of [`MAX_RENDER_THREADS`], forever
 //!   (the cap is process-wide and stays bounded: a new surface beyond it fails at once). Close
 //!   and drop never wait for it.
-//! - Hooks never run under a lock of this adapter, of rnr-surface or of the host: a hook may
+//! - Hooks never run under a lock of this adapter, of rnrs-surface or of the host: a hook may
 //!   call [`GpuSurface::set_state`] or [`GpuSurface::close`].
 //!
 //! # Frames
@@ -69,7 +69,7 @@
 //!   dropped, which can be after the swapchain is gone; destroying it then is wgpu's
 //!   responsibility, not this adapter's.
 //! Keep GPU objects in [`Renderer::Resources`] and nothing from a [`Frame`] beyond `draw`.
-use rnr_core::bind::MaybeSend;
+use rnrs_core::bind::MaybeSend;
 
 use crate::touch::TouchRecord;
 use crate::Extent;
@@ -170,7 +170,7 @@ pub trait Renderer: 'static {
         Ok(())
     }
     fn draw(&mut self, resources: &mut Self::Resources, frame: &mut Frame<'_>, state: &Self::State) -> Result<Next, String>;
-    /// Touch records (rnr_surface::touch) since the last call, with [`Options::touch`]; called
+    /// Touch records (rnrs_surface::touch) since the last call, with [`Options::touch`]; called
     /// on every wake, also while detached or paused, so resets arrive promptly.
     fn touch(&mut self, _records: &[TouchRecord]) {}
 }
@@ -251,7 +251,7 @@ pub struct Status {
     pub setups_started: u64,
     pub setups_discarded: u64,
     pub device_losses: u64,
-    /// Platform detaches that returned before the adapter released the window (rnr-surface's
+    /// Platform detaches that returned before the adapter released the window (rnrs-surface's
     /// bounded wait; always 0 in the browser).
     pub detach_timeouts: u64,
     /// Adapter name, labelled when it is a software (fallback) adapter.

@@ -30,4 +30,4 @@ Browser backend replacement retires the old adapters and module cache. Retained 
 
 ## Validation
 
-Run `cargo test -p rnr-core`, `scripts/test-native.sh`, and the consumer suites in [lab](lab.md). Tests cover disposal, cancellation, late completion and runtime identity; foreign platform lifecycle assumptions still require device validation.
+Run `cargo test -p rnrs-core`, `scripts/test-native.sh`, and the consumer suites in [lab](lab.md). Tests cover disposal, cancellation, late completion and runtime identity; foreign platform lifecycle assumptions still require device validation.

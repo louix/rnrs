@@ -53,7 +53,7 @@ export const RUNTIME_DIR = PACKAGED
   ? packagedRuntime()
   : path.resolve(HERE, '../../packages/rnr-runtime');
 export const FRAMEWORK_SPEC = path.join(RUNTIME_DIR, 'src/spec.ts');
-/** Framework Rust crates (rnr-core, rnr-android, rnr-web, rnr-log, rnrs). */
+/** Framework Rust crates (rnrs-core, rnrs-android, rnrs-web, rnrs-log, rnrs). */
 export const FRAMEWORK_RUST = PACKAGED
   ? path.join(RUNTIME_DIR, 'rust')
   : path.resolve(HERE, '../../rust');
@@ -107,7 +107,7 @@ export function loadPackage(dir) {
   };
   if (rn.library !== undefined) {
     // A Rust library package (for example @rnrs/surface): a crate that module crates depend on
-    // by version (`rnr-surface = "0.1"`). It has no spec, generated interface or JS wrapper;
+    // by version (`rnrs-surface = "0.1"`). It has no spec, generated interface or JS wrapper;
     // bundles patch the crate name to the installed copy and register no module for it.
     const extra = Object.keys(rn).filter((k) => !['targets', 'library'].includes(k));
     if (extra.length)
@@ -172,19 +172,32 @@ export function loadPackage(dir) {
   return pkg;
 }
 
-/** Crate names the framework provides or generates (rnr-bundle); no package may use them.
+/** Crate names the framework provides or generates (rnrs-bundle); no package may use them.
  *  Compared with `-` and `_` treated alike, as Cargo does for crate identifiers. `rnrs` is
  *  the author-facing facade (rust/rnrs). */
 export const FRAMEWORK_CRATES = [
-  'rnr-core',
-  'rnr-android',
-  'rnr-web',
-  'rnr-log',
-  'rnr-bundle',
+  'rnrs-core',
+  'rnrs-android',
+  'rnrs-web',
+  'rnrs-log',
+  'rnrs-bundle',
   'rnrs',
 ];
+/** The framework's former crate names (renamed to rnrs-*, never published): still reserved,
+ *  and named in diagnostics so a crate that depends on one is told the new name. */
+export const RENAMED_CRATES = {
+  'rnr-core': 'rnrs-core',
+  'rnr-android': 'rnrs-android',
+  'rnr-web': 'rnrs-web',
+  'rnr-log': 'rnrs-log',
+  'rnr-bundle': 'rnrs-bundle',
+  'rnr-surface': 'rnrs-surface',
+};
+/** The current name of a former framework crate name (`-` and `_` alike), or undefined. */
+export const renamedCrate = (name) =>
+  Object.entries(RENAMED_CRATES).find(([old]) => sameCrate(old, name))?.[1];
 export const isFrameworkCrate = (name) =>
-  FRAMEWORK_CRATES.some((f) => f.replace(/-/g, '_') === name.replace(/-/g, '_'));
+  FRAMEWORK_CRATES.some((f) => sameCrate(f, name)) || renamedCrate(name) !== undefined;
 
 /** `name` in the `[package]` table of a Cargo.toml, or null. */
 function cargoPackageName(toml) {
@@ -290,7 +303,7 @@ export function plan(packages, { genDir = GEN_DIR } = {}) {
             `pub mod ${p.crateIdent} {\n    include!(concat!(env!("RNR_GEN_DIR"), "/${p.crateIdent}/glue.rs"));\n}\n`,
         )
         .join('') +
-      `\npub static MODULES: &[&rnr_core::bind::ModuleDef] = &[${members.map((p) => `&${p.crateIdent}::MODULE`).join(', ')}];\n`;
+      `\npub static MODULES: &[&rnrs_core::bind::ModuleDef] = &[${members.map((p) => `&${p.crateIdent}::MODULE`).join(', ')}];\n`;
     outputs.push({
       file: path.join(genDir, file),
       content,
@@ -398,7 +411,7 @@ const RESERVED_IDENTS = new Set([
 ]);
 
 /** The module crate's dependency on the framework: an unconditional [dependencies] entry for
- *  `rnr-core` (preferred, so existing crates generate unchanged output) or the `rnrs` facade,
+ *  `rnrs-core` (preferred, so existing crates generate unchanged output) or the `rnrs` facade,
  *  under any `package =` rename or workspace inheritance. Returns {crate, decl, ident}; throws
  *  an actionable GenError when there is none, or only a conditional (optional or
  *  target-specific) one, which the generated interface could not use on every target. */
@@ -417,11 +430,11 @@ export function frameworkDependency(pkg) {
   }
   const decls = manifest.deps.filter(
     (d) =>
-      d.kind === 'normal' && (sameCrate(d.package, 'rnr-core') || sameCrate(d.package, 'rnrs')),
+      d.kind === 'normal' && (sameCrate(d.package, 'rnrs-core') || sameCrate(d.package, 'rnrs')),
   );
   const unconditional = decls.filter((d) => d.target === null && !d.optional);
   const decl =
-    unconditional.find((d) => sameCrate(d.package, 'rnr-core')) ??
+    unconditional.find((d) => sameCrate(d.package, 'rnrs-core')) ??
     unconditional.find((d) => sameCrate(d.package, 'rnrs'));
   if (!decl) {
     if (decls.length)
@@ -429,24 +442,30 @@ export function frameworkDependency(pkg) {
         `${rel}: ${decls.map((d) => `${d.key}${d.key !== d.package ? ` (package ${d.package})` : ''} is ${d.optional ? 'optional' : `declared only for ${d.target}`}`).join('; ')}; ` +
           `the generated interface uses it on every target, so declare it unconditionally: ${hint}`,
       );
-    throw new GenError(`${rel}: the crate must depend on the framework: ${hint}`);
+    const former = manifest.deps.find((d) => d.kind === 'normal' && renamedCrate(d.package));
+    throw new GenError(
+      `${rel}: the crate must depend on the framework: ${hint}` +
+        (former
+          ? ` (it depends on ${former.package}, which was renamed ${renamedCrate(former.package)}; depend on rnrs or ${renamedCrate(former.package)} instead)`
+          : ''),
+    );
   }
   const ident = decl.key.replace(/-/g, '_');
   if (RESERVED_IDENTS.has(ident))
     throw new GenError(
       `${rel}: the dependency on ${decl.package} is named ${decl.key}, which the generated interface cannot use as a path root; rename it (for example rnrs = { package = "rnrs", ... } or drop the rename)`,
     );
-  return { crate: sameCrate(decl.package, 'rnrs') ? 'rnrs' : 'rnr-core', decl, ident, manifest };
+  return { crate: sameCrate(decl.package, 'rnrs') ? 'rnrs' : 'rnrs-core', decl, ident, manifest };
 }
 
-/** The path of rnr-core in the generated interface of `pkg`'s crate. */
+/** The path of rnrs-core in the generated interface of `pkg`'s crate. */
 export function interfaceCore(pkg) {
   const { crate, ident } = frameworkDependency(pkg);
   return crate === 'rnrs' ? `${ident}::core` : ident;
 }
 
 /** A module crate must require a framework crate version this framework provides: bundles
- *  patch `rnr-core` (and `rnrs`) to the framework copy, and an unsatisfiable requirement
+ *  patch `rnrs-core` (and `rnrs`) to the framework copy, and an unsatisfiable requirement
  *  would make cargo look for the (unpublished, unreserved) name on crates.io. Plain or caret
  *  requirements only. */
 export function checkCoreRequirement(pkg) {
@@ -455,7 +474,7 @@ export function checkCoreRequirement(pkg) {
   // Every declaration (any kind, target or optional): any one cargo builds must resolve to the
   // framework copy, or cargo would look for it on crates.io.
   for (const decl of manifest.deps) {
-    const crate = ['rnr-core', 'rnrs'].find((c) => sameCrate(decl.package, c));
+    const crate = ['rnrs-core', 'rnrs'].find((c) => sameCrate(decl.package, c));
     if (!crate) continue;
     if (decl.version === null && (decl.path || decl.git)) continue; // a local override (repository workspaces)
     const req = decl.version ?? '';

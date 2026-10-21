@@ -1,13 +1,13 @@
 # Repository workspace: the lab, the framework crates and the example module packages.
-# Module crates depend on `rnr-core = "0.1"` or `rnrs = "0.1"` like any published dependency;
+# Module crates depend on `rnrs-core = "0.1"` or `rnrs = "0.1"` like any published dependency;
 # this workspace (and every generated per-app bundle) patches them to the framework's copies.
 [workspace]
 members = [
-  "rust/rnr-core",
-  "rust/rnr-android",
-  "rust/rnr-web",
-  "rust/rnr-build",
-  "rust/rnr-log",
+  "rust/rnrs-core",
+  "rust/rnrs-android",
+  "rust/rnrs-web",
+  "rust/rnrs-build",
+  "rust/rnrs-log",
   "rust/rnrs",
   "rust/bind-tests",
   "packages/counter/rust",
@@ -31,9 +31,9 @@ exclude = [".generated", "packages/bevy3d/rust"]
 resolver = "2"
 
 [patch.crates-io]
-rnr-core = { path = "rust/rnr-core" }
+rnrs-core = { path = "rust/rnrs-core" }
 rnrs = { path = "rust/rnrs" }
-rnr-surface = { path = "packages/rnr-surface/rust" }
+rnrs-surface = { path = "packages/rnr-surface/rust" }
 
 [profile.release]
 opt-level = 3

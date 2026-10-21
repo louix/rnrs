@@ -2,7 +2,7 @@
 # The author workflow outside this repository (inside `nix develop .#web`): a new package
 # with only package.json, a TS spec and a Rust crate, plus @rnrs/runtime as a dev tool.
 #   rnrs generate .   -> rust/src/rnr_interface.rs (committed by the author)
-#   cargo test       -> the author's Rust tests, rnr-core taken from the installed runtime
+#   cargo test       -> the author's Rust tests, rnrs-core taken from the installed runtime
 #   rnrs pack-js .    -> rnr/{index,web}.ts, then npm pack
 # The tarball is then installed into a fresh Vite app, bundled and run in headless Chromium.
 set -euo pipefail
@@ -45,7 +45,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-rnr-core = "0.1"
+rnrs-core = "0.1"
 TOML
 cp "$ROOT/fixtures/author/xor.spec.ts" "$PKG/"
 cp "$ROOT/fixtures/author/lib.rs" "$PKG/rust/src/lib.rs"
@@ -53,8 +53,8 @@ cd "$PKG"
 npm install --no-audit --no-fund --save-dev "$PACK/rnrs-cli-0.1.0.tgz" "$PACK/rnrs-runtime-0.1.0.tgz"
 npx rnrs generate .
 npx rnrs check .
-# rnr-core is not on crates.io; resolve it to the installed framework copy for local builds.
-(cd rust && cargo test --config "patch.crates-io.rnr-core.path=\"$PKG/node_modules/@rnrs/runtime/rust/rnr-core\"" \
+# rnrs-core is not on crates.io; resolve it to the installed framework copy for local builds.
+(cd rust && cargo test --config "patch.crates-io.rnrs-core.path=\"$PKG/node_modules/@rnrs/runtime/rust/rnrs-core\"" \
   --target-dir "$PKG/.rnr/target" 2>&1 | grep -E '^test |test result')
 npx rnrs pack-js .
 tarball="$PKG/$(npm pack --ignore-scripts --silent)"

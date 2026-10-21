@@ -11,7 +11,7 @@
     ],
     "spec": "webgpu-triangle.spec.ts",
     "rust": {
-      "crate": "rnr-webgpu-triangle",
+      "crate": "rnrs-webgpu-triangle",
       "path": "rust",
       "module": "Module"
     }

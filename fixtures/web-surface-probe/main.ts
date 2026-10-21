@@ -1,4 +1,4 @@
-import init, { raster, raster_mode } from '../pkg/rnr_web_surface_probe.js';
+import init, { raster, raster_mode } from '../pkg/rnrs_web_surface_probe.js';
 import { FrameWriter } from '../../packages/vello2d/frame';
 
 const checks: { name: string; ok: boolean; detail: string }[] = [];

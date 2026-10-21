@@ -1,7 +1,7 @@
 //! Main-thread browser scheduler. Same decoder, CPU raster, stats and renderer core.
 use std::cell::RefCell;
 use std::sync::{Arc, atomic::{AtomicUsize, Ordering}};
-use rnr_surface::{Extent, Surface, web_producer::{self, Pixels, Producer, Registration}};
+use rnrs_surface::{Extent, Surface, web_producer::{self, Pixels, Producer, Registration}};
 use crate::{cpu::{CpuRaster, raster_geometry}, frame::{self, Cmd}, timing::{EventRing, Kind, browser_now}};
 pub use crate::render_state::{GpuState, Stats};
 static OPEN: AtomicUsize = AtomicUsize::new(0);

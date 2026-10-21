@@ -1,5 +1,5 @@
 // IR -> Rust: the public interface (committed in the author's crate) and the hidden glue
-// (generic over rnr_core::bind::Env, so one conversion implementation serves Android and
+// (generic over rnrs_core::bind::Env, so one conversion implementation serves Android and
 // the browser).
 
 const KEYWORDS = new Set(
@@ -85,9 +85,9 @@ function traitMethods(methods, owner) {
   return out.join('\n\n');
 }
 
-/** `core`: the path of rnr-core in the module crate (`rnr_core`, `rnrs::core`, or a renamed
+/** `core`: the path of rnrs-core in the module crate (`rnrs_core`, `rnrs::core`, or a renamed
  *  dependency's identifier; see interfaceCore in cli.mjs). */
-export function emitInterface(ir, { core = 'rnr_core' } = {}) {
+export function emitInterface(ir, { core = 'rnrs_core' } = {}) {
   const parts = [
     header(ir, 'Public Rust interface of the module: implement these traits.'),
     '#![allow(dead_code)]\n',
@@ -370,11 +370,11 @@ export function emitGlue(ir, { crate, moduleType }) {
         `    NativeTypeDef { spec_name: ${JSON.stringify(o.name)}, rust_type: std::any::type_name::<${o.name}Impl> },`,
     )
     .join('\n');
-  return `${header(ir, 'Hidden binding glue (build output). Generic over rnr_core::bind::Env.')}
+  return `${header(ir, 'Hidden binding glue (build output). Generic over rnrs_core::bind::Env.')}
 #[allow(unused_imports)]
-use rnr_core::bind::*;
+use rnrs_core::bind::*;
 #[allow(unused_imports)]
-use rnr_core::Native;
+use rnrs_core::Native;
 use ${crate}::rnr_interface as spec;
 #[allow(unused_imports)]
 use {${traits}};

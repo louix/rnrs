@@ -6,14 +6,14 @@ Experimental platform surfaces with Rust-owned rendering, lifecycle gates and op
 
 - **TypeScript** owns all application and game state and simulation. Every frame it submits a whole frame description.
 - **Rust** owns only rendering resources: the render thread, the raster context, the wgpu device and surface, and the latest submitted frame. It makes no game decisions.
-- **Framework** (`@rnrs/surface`, plus the runtime teardown hook in `rnr-core`) owns the platform glue: the Fabric component, the Android `SurfaceView`, JNI, and window lifetime. App and renderer authors write TypeScript and Rust only. The consumer app builds from the pristine RN template (0.88.0; device results from 0.83.1) with no native edits.
+- **Framework** (`@rnrs/surface`, plus the runtime teardown hook in `rnrs-core`) owns the platform glue: the Fabric component, the Android `SurfaceView`, JNI, and window lifetime. App and renderer authors write TypeScript and Rust only. The consumer app builds from the pristine RN template (0.88.0; device results from 0.83.1) with no native edits.
 
 ## Packages and files
 
 | Path | Owner | Contents |
 | --- | --- | --- |
-| `packages/rnr-surface` (`@rnrs/surface`) | framework | `<SurfaceView surfaceKey>` Fabric component (codegen spec, Kotlin `SurfaceView` + view manager, autolinking), and the Rust library crate `rnr-surface`: surface registry, window ownership, admission protocol, `WindowLease`, Android JNI entry points |
-| `rust/rnr-core/src/lifecycle.rs` (shared core) | framework | runtime-teardown hook: `TeardownScope`, `Retire` |
+| `packages/rnr-surface` (`@rnrs/surface`) | framework | `<SurfaceView surfaceKey>` Fabric component (codegen spec, Kotlin `SurfaceView` + view manager, autolinking), and the Rust library crate `rnrs-surface`: surface registry, window ownership, admission protocol, `WindowLease`, Android JNI entry points |
+| `rust/rnrs-core/src/lifecycle.rs` (shared core) | framework | runtime-teardown hook: `TeardownScope`, `Retire` |
 | `packages/vello2d` (`@rnrs/example-vello2d`) | example renderer module | TS spec, Rust renderer (render thread, GPU state machine, vello_cpu raster, wgpu present), `frame.ts` frame writer |
 | `fixtures/gpu-probe`, `fixtures/gpu-probe-pr10291` | lab | headless device probes, `run.sh` |
 | `fixtures/surface-consumer` | lab | clean consumer app: in-app lifecycle sequence (`smoke.ts`) and steady-state stats |
@@ -24,20 +24,20 @@ Experimental platform surfaces with Rust-owned rendering, lifecycle gates and op
 
 ### Rust library packages
 
-A renderer crate depends on the framework surface crate, which ships in an npm package rather than on crates.io. Such a package declares `"rustNative": {"targets": [...], "library": {"crate": "rnr-surface", "path": "rust"}}`. It is discovered and target-checked like a module, registers no module, and is patched into the bundle by crate name (`[patch.crates-io] rnr-surface = { path }`), so module crates depend on it by version (`rnr-surface = "0.1"`).
+A renderer crate depends on the framework surface crate, which ships in an npm package rather than on crates.io. Such a package declares `"rustNative": {"targets": [...], "library": {"crate": "rnrs-surface", "path": "rust"}}`. It is discovered and target-checked like a module, registers no module, and is patched into the bundle by crate name (`[patch.crates-io] rnrs-surface = { path }`), so module crates depend on it by version (`rnrs-surface = "0.1"`).
 
 Checks:
 - The schema allows only `targets` and `library`, and `library` allows only `{crate, path}`.
 - The crate name must equal the Cargo `[package] name`.
 - The path must stay inside the package.
-- Framework crate names (`rnr-core`, `rnr-android`, `rnr-web`, `rnr-log`, `rnr-bundle`) are reserved for libraries and modules.
+- Framework crate names (`rnrs`, `rnrs-core`, `rnrs-android`, `rnrs-web`, `rnrs-log`, `rnrs-bundle`, and the former `rnr-core`, `rnr-android`, `rnr-web`, `rnr-log`, `rnr-bundle`, `rnr-surface`) are reserved for libraries and modules.
 - `generate`, `check` and `pack-js` refuse library packages.
 
-### The `rnr-*` namespace is never resolved from a registry
+### The `rnrs-*` namespace is never resolved from a registry
 
-Crates named `rnr-*` (or `rnr_*`) belong to the framework and its npm library packages:
-- Before Cargo runs, a module crate that depends on an `rnr-*` crate no installed package provides is refused. The message names the package to install, for example "add `@rnrs/surface` to the app's dependencies".
-- After resolution, any `rnr-*` crate whose source is a registry or git is refused, whether or not a package declared it. Without this, a renderer requiring `rnr-surface` with `@rnrs/surface` missing would fetch a crates.io crate of that name.
+Crates named `rnrs`, `rnrs-*` (or `rnrs_*`) and the former `rnr-*` (or `rnr_*`) belong to the framework and its npm library packages:
+- Before Cargo runs, a module crate that depends on such a crate that no installed package provides is refused. The message names the package to install, for example "add `@rnrs/surface` to the app's dependencies", or the new name of a former `rnr-*` crate.
+- After resolution, any such crate whose source is a registry or git is refused, whether or not a package declared it. Without this, a renderer requiring `rnrs-surface` with `@rnrs/surface` missing would fetch a crates.io crate of that name.
 
 ### Native packages must be direct app dependencies
 
@@ -49,7 +49,7 @@ Tests (`tools/rnr-gen/test/library.test.mjs`, `bundle.test.mjs`):
 - an incompatible installed version;
 - `npm pack` tarballs of `@rnrs/surface` and `vello2d`: refused when the library is only transitive, resolved from the installed path when it is direct;
 - the missing-library pre-check against a real `Cargo.toml`;
-- registry and git `rnr-*` refusal (fabricated metadata);
+- registry and git refusal of `rnrs`, `rnrs-*` and former `rnr-*` crates (fabricated metadata);
 - dependency-table scanning.
 
 Not covered: multiple installed copies of one library, and a library depending on another library.
@@ -65,7 +65,7 @@ The view is a `SurfaceView`. Its content is a separate compositor layer (BufferQ
 
 `TextureView` would compose like an ordinary view, at the cost of a GPU copy and latency. It could become an opt-in mode behind the same Rust contract.
 
-## Lifecycle contract (rnr-surface)
+## Lifecycle contract (rnrs-surface)
 
 | Concept | Rule |
 | --- | --- |
@@ -80,9 +80,9 @@ The view is a `SurfaceView`. Its content is a separate compositor layer (BufferQ
 | Busy | One window per surface key. The first attached view wins, and a second is refused (`BUSY`). The Kotlin view retries with deduplicated backoff (16 ms doubling to 1 s, then every 1 s) while it still has a key, a surface and a size, revalidating each time. Retries are cancelled on detach, key change, drop and `onDetachedFromWindow`, and it logs once per busy episode. A waiting view attaches within its current backoff once the first view detaches, or once the window's old lease is finally released. |
 | Close | `close()` revokes the current attachment and refuses new attachments and leases. It never blocks. An attached window stays retained until the platform detaches it, so that detach still waits for leases. |
 | Zero extent | The view attaches only with a nonzero size and detaches when its size becomes zero. |
-| Threads and locks | JNI entry points run on the UI thread and never touch JS. The render thread never touches JSI. Every rnr-surface lock (registry, surface state, cell admission, window ownership) is taken alone. Wakers run, and cells, windows and surfaces are dropped, only with no lock held. |
+| Threads and locks | JNI entry points run on the UI thread and never touch JS. The render thread never touches JSI. Every rnrs-surface lock (registry, surface state, cell admission, window ownership) is taken alone. Wakers run, and cells, windows and surfaces are dropped, only with no lock held. |
 
-Host tests (`cargo test -p rnr-surface`) use thread barriers, revocation checks and channels, with no sleeps except a scheduling nudge in one race loop:
+Host tests (`cargo test -p rnrs-surface`) use thread barriers, revocation checks and channels, with no sleeps except a scheduling nudge in one race loop:
 - an admitted operation in flight, then a detach timeout, then completion: no further admission, and the window released exactly once;
 - the same window under a second key refused until the old lease drops, then the retry and a replacement after a timeout succeed;
 - detach waiting for a lease held on another thread;
@@ -90,7 +90,7 @@ Host tests (`cargo test -p rnr-surface`) use thread barriers, revocation checks 
 - a lease outliving its owner;
 - admissions racing detach stop at revocation (50 iterations).
 
-## Runtime teardown hook (rnr-core)
+## Runtime teardown hook (rnrs-core)
 
 A renderer's thread and GPU device must stop when its JS runtime generation is torn down (RN reload, invalidation), even if JS, Worklets or native references to it survive.
 - `Adapter::new` makes a fresh `TeardownScope` current, saved and restored by an RAII guard, while the module instance is created. The module captures it (`TeardownScope::current()`).
@@ -100,16 +100,16 @@ A renderer's thread and GPU device must stop when its JS runtime generation is t
 
 vello2d registers each renderer's `RendererCore` (render state plus surface) before it reaches JS. Retiring it closes both, so an old mounted view cannot attach to a renderer that no longer exists. A module created outside an adapter has no scope: it is unowned and reports `ownedByRuntime: false`.
 
-Lock order: the scope lock is taken alone; vello2d's inbox and stats locks are each taken alone; rnr-surface's as above.
+Lock order: the scope lock is taken alone; vello2d's inbox and stats locks are each taken alone; rnrs-surface's as above.
 
 Tests:
-- rnr-core: retained references; nested scopes; reentrant drop plus a concurrent finalizer; 100 iterations of concurrent register and teardown, each retired exactly once.
-- rnr-android, through the C ABI that Android (JNI) and iOS share: explicit `rnr_adapter_teardown`, the free-only (destructor) path, and a failing instantiate.
+- rnrs-core: retained references; nested scopes; reentrant drop plus a concurrent finalizer; 100 iterations of concurrent register and teardown, each retired exactly once.
+- rnrs-android, through the C ABI that Android (JNI) and iOS share: explicit `rnr_adapter_teardown`, the free-only (destructor) path, and a failing instantiate.
 - vello2d: a retained renderer closed by teardown, and a late attach to its key refused.
 
 ## The wgpu adapter (rnrs::gpu)
 
-A renderer that draws with wgpu writes only its pipeline and draw; `rnrs::gpu` (rnr-surface's
+A renderer that draws with wgpu writes only its pipeline and draw; `rnrs::gpu` (rnrs-surface's
 `wgpu` feature, `rnrs = { version = "0.1", features = ["wgpu"] }`) owns the surface, render loop,
 device, swapchain, window lease, teardown and failure handling on Android (Vulkan), iOS (Metal)
 and the browser (WebGPU, no fallback). The API and its lifecycle rules are documented in
@@ -138,7 +138,7 @@ impl gpu::Renderer for Draw {
   `requestAnimationFrame`. Hooks never run under an adapter, surface or host lock.
 - vello2d and bevy3d keep their own render loops (vello's CPU raster and recovery backoff, Bevy's
   offscreen render and blit); they do not use the adapter.
-- Checked by rnr-surface's host tests (a fake GPU backend and a virtual clock), the triangle's
+- Checked by rnrs-surface's host tests (a fake GPU backend and a virtual clock), the triangle's
   browser fixture (`fixtures/web-webgpu`, software WebGPU), `scripts/consumer/triangle-device-test.mjs`
   (Android) and `scripts/consumer/ios-triangle-sim-test.mjs` (iOS simulator).
 
@@ -174,7 +174,7 @@ impl gpu::Renderer for Draw {
 
 **Direction.** WebGPU (wgpu's `webgpu` backend, Rust drawing into the canvas) is the primary
 browser GPU path. It is optional only in the sense that consumers without a GPU renderer
-depend on no GPU code: wgpu is an optional dependency of `rnr-surface` (feature `wgpu`, the
+depend on no GPU code: wgpu is an optional dependency of `rnrs-surface` (feature `wgpu`, the
 adapter below), and it enters a bundle only through a renderer package that enables it. The Canvas 2D transport (Rust returns owned RGBA pixels and the host
 calls `putImageData`) is a stopgap specific to the CPU renderer (vello2d's vello_cpu raster).
 It is not the default game architecture, and it is not a GPU fallback. It is kept working as a
@@ -225,7 +225,7 @@ Touch input can run directly into Rust with `touchInput="rust"` and `Surface::en
 
 ## Touch input (Android, opt-in; 2026-10-20)
 
-**Prototype.** Native touch from the `SurfaceView` straight to Rust (`rnr-surface` `touch.rs`), without JS. Engine-independent: a renderer drains plain records. Android only. Device evidence and the Bevy consumer: [bevy3d.md](bevy3d.md#native-touch). Not a winit window or event loop, and not a promise of winit compatibility. The records could later be mapped onto winit-style events.
+**Prototype.** Native touch from the `SurfaceView` straight to Rust (`rnrs-surface` `touch.rs`), without JS. Engine-independent: a renderer drains plain records. Android only. Device evidence and the Bevy consumer: [bevy3d.md](bevy3d.md#native-touch). Not a winit window or event loop, and not a promise of winit compatibility. The records could later be mapped onto winit-style events.
 
 **Opt-in on both sides.**
 - The renderer calls `Surface::enable_touch()`.
@@ -269,7 +269,7 @@ Touch input can run directly into Rust with `touchInput="rust"` and `Surface::en
 
 **Not included** (in this Android slice; iOS and browser have their own sections below): keyboard, stylus, hover, wheel, gesture recognition, an input matrix or performance study.
 
-Tests: `cargo test -p rnr-surface`.
+Tests: `cargo test -p rnrs-surface`.
 - The queue: opt-in and stale-attachment refusal; stable ids across reused platform ids; logical units and the per-event scale; coalescing only within the trailing run of moves; overflow resets, with lost pointers dropped until their end; an overflowing end covered by the reset; detach on a full queue; close; pointer and id exhaustion.
 - A 200 000-step pseudo-random stream (random drains, epochs, cancels, overflows) checked against a consumer model: no contradiction, and nothing left down.
 - Through the platform entry points: wake, detach reset, per-attachment separation, resize, close.
@@ -281,7 +281,7 @@ Tests: `cargo test -p rnr-surface`.
 **Opt-in on both sides:** the renderer calls `Surface::enable_touch()`, and `<SurfaceView touchInput="rust">` (`index.web.tsx`) opts in. Changing the prop does not remount the canvas.
 - With `"none"`, the default, the host element gets no pointer listeners, no `touch-action` and no `preventDefault`.
 - With `"rust"`, the host element gets `touch-action: none`, so touch pans and pinches go to the listeners instead of scrolling the page. This applies to every touch on the element, including touches Rust refuses: those do not pan the page either. The previous value is restored on opt-out or unmount.
-- **Bundle compatibility:** the surface bootstrap now requires the `rnr_surface_touch` export. The bootstrap and the generated Wasm bundle must come from the same `rnr-surface`; an older bundle is rejected at bootstrap.
+- **Bundle compatibility:** the surface bootstrap now requires the `rnr_surface_touch` export. The bootstrap and the generated Wasm bundle must come from the same `rnrs-surface`; an older bundle is rejected at bootstrap.
 
 **Path and threads.**
 - Pointer listeners run on the browser main thread, which is the JS thread. The canvas host (`canvas-host.ts`) calls the wasm export `rnr_surface_touch(key, token, phase, pointerId, xPx, yPx, timeMs)` (`web_exports.rs` → `web_host::touch`). That pushes under the queue mutex.
@@ -336,8 +336,8 @@ Tests: `cargo test -p rnr-surface`.
 - Parent scroll views, gesture handlers, stylus and hover.
 - Interleaving of touches with a busy JS thread.
 
-Tests: `cargo test -p rnr-surface -p touch-probe`. The probe's consumer model and the platform entry points (gesture, revoke and reattach with an old slot, close) are host-tested. The Objective-C++ code has only the simulator run.
+Tests: `cargo test -p rnrs-surface -p touch-probe`. The probe's consumer model and the platform entry points (gesture, revoke and reattach with an old slot, close) are host-tested. The Objective-C++ code has only the simulator run.
 
 **Limits:** simulator validation only; physical iPhone, parent scroll views, gesture handlers, stylus, hover and busy-JS interaction are untested.
 
-Tests: `cargo test -p rnr-surface -p touch-probe`. Platform reproduction uses `scripts/consumer/surface-device-test.mjs`, `scripts/consumer/ios-touch-sim-test.mjs` and `fixtures/web-touch`.
+Tests: `cargo test -p rnrs-surface -p touch-probe`. Platform reproduction uses `scripts/consumer/surface-device-test.mjs`, `scripts/consumer/ios-touch-sim-test.mjs` and `fixtures/web-touch`.

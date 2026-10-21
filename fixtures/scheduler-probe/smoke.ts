@@ -2,7 +2,7 @@
 // task throws, RN clears the scheduler's queues (RuntimeScheduler_Modern::handleTaskError)
 // and reports the error to the JS global handler; an app whose handler does not crash keeps
 // running. A drain task queued at that moment is destroyed unrun. The framework detects the
-// drop (RnrDelivery.h) and the Rust host posts the wake again (rnr-core
+// drop (RnrDelivery.h) and the Rust host posts the wake again (rnrs-core
 // Host::monitor_delivery); a drain that is merely slow is never posted again.
 // Deterministic setup: one scheduler task busy-waits while a Rust `addLater` completes (its
 // drain is posted behind the busy task), then throws (or, in the controls, returns).

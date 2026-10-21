@@ -4,7 +4,7 @@
 // NAME selects the consumer (.generated/consumer/<NAME>, default rn-app). RNR_HTTP_TEST_SERVER=1
 // starts scripts/http-test-server.mjs on 127.0.0.1:8787 and maps the device's port 8787 to it
 // with `adb reverse` for the run (removed afterwards). RNR_EXPECT_LOG='["regex", ...]': lines that
-// logcat must contain for the Rust log tags RNR_LOG_TAGS (comma-separated, default rnr_log),
+// logcat must contain for the Rust log tags RNR_LOG_TAGS (comma-separated, default rnrs_log),
 // RNR_FORBID_LOG lines it must not (Rust logging, docs/logging.md);
 // RNR_COMMIT is recorded with the result.
 import { execFileSync } from 'node:child_process';
@@ -45,7 +45,7 @@ try {
   const expectLog = JSON.parse(process.env.RNR_EXPECT_LOG ?? '[]').map((re) => new RegExp(re));
   const forbidLog = JSON.parse(process.env.RNR_FORBID_LOG ?? '[]').map((re) => new RegExp(re));
   if (expectLog.length || forbidLog.length) {
-    const tags = (process.env.RNR_LOG_TAGS ?? 'rnr_log').split(',');
+    const tags = (process.env.RNR_LOG_TAGS ?? 'rnrs_log').split(',');
     const rustLog = adb('logcat', '-d', '-s', ...tags.map((t) => `${t}:*`))
       .split('\n')
       .filter((l) => tags.some((t) => l.includes(t)));

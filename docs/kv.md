@@ -26,7 +26,7 @@ sled 0.34 is old (2021) and still pre-1.0. It was chosen as requested for this e
 
 ## Framework additions (minimal)
 
-- **`rnr_core::platform::app_data_dir()`** (new, documented in rnr-core). The app-private directory supplied by the backend:
+- **`rnrs_core::platform::app_data_dir()`** (new, documented in rnrs-core). The app-private directory supplied by the backend:
   - On Android the framework's Kotlin module selects `Context.getFilesDir()/rnr` and passes the path through JNI (`RnrPlatform.setAppDataDir`, then `rnr_set_app_data_dir`) before modules exist. Directory creation is deferred until use.
   - The first value wins, and a different one is an error.
   - Without a backend-provided directory (for example the browser) it returns an error.

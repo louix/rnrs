@@ -1,13 +1,13 @@
 //! Browser: keeps the probe's surface attachable. The browser host attaches only surfaces with a
 //! registered producer, so this registers one that never draws (Canvas 2D presentation; every
 //! render is "unchanged", nothing is rasterized and no GPU is used). [`Hold::close`] releases the
-//! registration (one of rnr-surface's four browser producer slots) without waiting for the probe
+//! registration (one of rnrs-surface's four browser producer slots) without waiting for the probe
 //! to be dropped.
 use std::cell::RefCell;
 use std::sync::Arc;
 
-use rnr_surface::web_producer::{self, Pixels, Producer, Registration};
-use rnr_surface::{Extent, Surface};
+use rnrs_surface::web_producer::{self, Pixels, Producer, Registration};
+use rnrs_surface::{Extent, Surface};
 
 struct Blank;
 

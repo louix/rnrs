@@ -8,7 +8,7 @@
 //!   device is created.
 //! - The wgpu surface holds the window lease and is dropped on unbind (destroying the
 //!   swapchain, which can wait for the GPU: part of the platform's bounded detach wait).
-//! - Acquire and present are each admitted through the lease (rnr-surface's admission
+//! - Acquire and present are each admitted through the lease (rnrs-surface's admission
 //!   protocol), with no lock held during the GPU calls.
 //! - Configure errors are captured with an error scope and returned, not only logged.
 //!
@@ -17,7 +17,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
 
-use rnr_surface::{Extent, WindowLease};
+use rnrs_surface::{Extent, WindowLease};
 
 use crate::cpu::{CpuRaster, MAX_RASTER};
 use crate::frame::Cmd;
@@ -78,7 +78,7 @@ struct Target {
     /// The wgpu surface, then the lease used to admit acquire and present (dropped after the
     /// surface; on Android the surface also holds a lease of its own as its handle source).
     bound: SurfaceLease<wgpu::Surface<'static>>,
-    /// Whether the last configure allows acquires (rnr_surface::layer; always true where the
+    /// Whether the last configure allows acquires (rnrs_surface::layer; always true where the
     /// platform has no drawable-timeout read-back).
     acquire_allowed: bool,
     config: wgpu::SurfaceConfiguration,
@@ -141,7 +141,7 @@ impl WgpuPresenter {
         // timeout and reads it back; acquires are refused unless it is confirmed.
         #[cfg(target_os = "ios")]
         let (result, allowed) = {
-            let configured = rnr_surface::ios::configure_in_transaction(&target.bound.lease, run);
+            let configured = rnrs_surface::ios::configure_in_transaction(&target.bound.lease, run);
             (configured.result, configured.acquire_allowed)
         };
         // Elsewhere there is no layer read-back.

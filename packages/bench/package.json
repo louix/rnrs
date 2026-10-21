@@ -11,7 +11,7 @@
     ],
     "spec": "bench.spec.ts",
     "rust": {
-      "crate": "rnr-bench",
+      "crate": "rnrs-bench",
       "path": "rust",
       "module": "Bench"
     },

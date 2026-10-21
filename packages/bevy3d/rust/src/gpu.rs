@@ -3,7 +3,7 @@
 //! offscreen texture ([`crate::scene`]); here it is blitted onto the acquired swapchain image
 //! and presented. That blit is one extra full-screen GPU pass per frame (not zero-copy).
 //!
-//! - Acquire, present and configure are each admitted through the lease (rnr-surface's
+//! - Acquire, present and configure are each admitted through the lease (rnrs-surface's
 //!   admission protocol), with no lock held during the GPU calls. After a revocation no
 //!   acquire starts and an acquired image is dropped unpresented.
 //! - The wgpu surface holds the lease and is dropped with the [`Target`]; dropping it destroys
@@ -11,14 +11,14 @@
 //! - Colour: Bevy writes sRGB-encoded bytes (its target view is `Rgba8UnormSrgb`); the blit reads
 //!   them through a non-sRGB view and writes a non-sRGB view of the swapchain, so the bytes
 //!   reach the display unchanged, as in vello2d.
-//! - iOS (Metal), with rnr-surface's iOS contracts exactly as vello2d uses them: the surface is
+//! - iOS (Metal), with rnrs-surface's iOS contracts exactly as vello2d uses them: the surface is
 //!   made from the lease's `CAMetalLayer` (wgpu's UIKit path needs the main thread), each
-//!   configure runs in `rnr_surface::ios::configure_in_transaction`, and acquires are refused
+//!   configure runs in `rnrs_surface::ios::configure_in_transaction`, and acquires are refused
 //!   unless its read-back confirmed the drawable timeout.
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use rnr_surface::{Extent, WindowLease};
+use rnrs_surface::{Extent, WindowLease};
 
 pub enum PresentError {
     /// Nothing presented this time (timeout, occluded, outdated and reconfigured, revoked).
@@ -156,7 +156,7 @@ impl Target {
         let configured = admitted(&self.lease, || {
             #[cfg(target_os = "ios")]
             let configured = {
-                let c = rnr_surface::ios::configure_in_transaction(&self.lease, run);
+                let c = rnrs_surface::ios::configure_in_transaction(&self.lease, run);
                 (c.result, c.acquire_allowed)
             };
             #[cfg(not(target_os = "ios"))]

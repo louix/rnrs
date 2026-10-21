@@ -8,7 +8,7 @@
 //!   default asset source is replaced by one that fails every read with an error naming this
 //!   limit. The scene uses only in-code meshes and materials and Bevy's embedded shaders.
 //! - No Bevy windows, audio or logging plugin; controls arrive as [`Controls`].
-//! - **Touch** (Android): rnr-surface's touch records ([`BevyScene::feed_touch`]) become real
+//! - **Touch** (Android): rnrs-surface's touch records ([`BevyScene::feed_touch`]) become real
 //!   Bevy `TouchInput` messages, so Bevy's own `touch_screen_input_system` maintains the
 //!   `Touches` resource. Positions are logical pixels (physical ÷ scale), as bevy_winit would
 //!   send. `TouchInput::window` is a [`SurfaceTouchTarget`] marker entity, **not** a Bevy
@@ -41,7 +41,7 @@ use bevy::render::render_resource::{CachedPipelineState, PipelineCache, Pipeline
 use bevy::render::RenderApp;
 use bevy::time::TimeUpdateStrategy;
 use bevy::window::{ExitCondition, WindowPlugin};
-use rnr_surface::touch::{TouchPhase, TouchRecord};
+use rnrs_surface::touch::{TouchPhase, TouchRecord};
 
 /// Latest-value controls from TypeScript, applied before the next update.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -152,7 +152,7 @@ pub struct TouchStats {
     pub dropped_failed: u64,
 }
 
-/// Feeds rnr-surface touch records into the app as `TouchInput` messages and remembers which
+/// Feeds rnrs-surface touch records into the app as `TouchInput` messages and remembers which
 /// ids are down, so a reset (or a new attachment) can cancel them.
 #[cfg_attr(target_arch = "wasm32", allow(dead_code))] // no touch input in the browser
 struct TouchFeed {
@@ -538,8 +538,8 @@ mod tests {
     }
 
     fn touch(attachment: u64, id: u64, phase: TouchPhase, x_px: f32) -> TouchRecord {
-        let extent = rnr_surface::Extent { width: 1440, height: 1000, scale: 2.0 };
-        TouchRecord::Event(rnr_surface::touch::TouchEvent { attachment, id, phase, x_px, y_px: 40.0, extent, time_ms: 0 })
+        let extent = rnrs_surface::Extent { width: 1440, height: 1000, scale: 2.0 };
+        TouchRecord::Event(rnrs_surface::touch::TouchEvent { attachment, id, phase, x_px, y_px: 40.0, extent, time_ms: 0 })
     }
 
     /// A GPU-free app with Bevy's real input and time plugins and this scene's `spin` system:
@@ -572,7 +572,7 @@ mod tests {
         assert_eq!(pressed(&app).len(), 1);
 
         // Detach: a reset cancels touch 2, even with no frame in between the next attachment.
-        feed.feed(app.world_mut(), &[TouchRecord::Reset { attachment: 1, reason: rnr_surface::touch::ResetReason::Detached }, touch(2, 3, TouchPhase::Down, 0.0)]);
+        feed.feed(app.world_mut(), &[TouchRecord::Reset { attachment: 1, reason: rnrs_surface::touch::ResetReason::Detached }, touch(2, 3, TouchPhase::Down, 0.0)]);
         app.update();
         assert!(app.world().resource::<Touches>().just_canceled(2));
         assert_eq!(pressed(&app).iter().map(|t| t.0).collect::<Vec<_>>(), vec![3]);
@@ -606,7 +606,7 @@ mod tests {
         feed.fail(app.world_mut(), 1);
         let after_fail = queued(&app);
         assert_eq!(after_fail, 3 + 1, "one Canceled for the touch still down");
-        let reset = TouchRecord::Reset { attachment: 1, reason: rnr_surface::touch::ResetReason::Overflow };
+        let reset = TouchRecord::Reset { attachment: 1, reason: rnrs_surface::touch::ResetReason::Overflow };
         for i in 0..10_000u64 {
             let id = 10 + i / 3;
             let record = match i % 4 {

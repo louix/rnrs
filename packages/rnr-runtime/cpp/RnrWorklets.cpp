@@ -3,7 +3,7 @@
 // - R1: host functions are created in the runtime that reads them, and every value of a call
 //   is created from that call's `rt`. Nothing captures a runtime, invoker or JSI value.
 // - R2: shared state is immutable after creation (the method table) or atomic. The Rust
-//   module and its objects are Send + Sync (rnr-core's NativeObject bound); generated glue
+//   module and its objects are Send + Sync (rnrs-core's NativeObject bound); generated glue
 //   for sync methods only reads the module instance.
 // - R4: sync only. Async methods are refused when the endpoint is created; nothing settles.
 // - R5: a boxed handle owns its own NativeBox (rnr_native_share), released by its destructor

@@ -113,7 +113,7 @@ name = "counter"
 version = "0.1.0"
 dependencies = [
  "gloo-timers",
- "rnr-core",
+ "rnrs-core",
  "tokio",
 ]
 
@@ -621,7 +621,7 @@ name = "meter"
 version = "0.1.0"
 dependencies = [
  "gloo-timers",
- "rnr-core",
+ "rnrs-core",
  "tokio",
 ]
 
@@ -860,65 +860,65 @@ dependencies = [
 ]
 
 [[package]]
-name = "rnr-android"
+name = "rnrs-android"
 version = "0.1.0"
 dependencies = [
- "rnr-core",
+ "rnrs-core",
 ]
 
 [[package]]
-name = "rnr-bench"
+name = "rnrs-bench"
 version = "0.1.0"
 dependencies = [
- "rnr-core",
+ "rnrs-core",
 ]
 
 [[package]]
-name = "rnr-blake3"
+name = "rnrs-blake3"
 version = "0.1.0"
 dependencies = [
  "blake3",
- "rnr-core",
+ "rnrs-core",
 ]
 
 [[package]]
-name = "rnr-bundle"
+name = "rnrs-bundle"
 version = "0.0.0"
 dependencies = [
  "counter",
  "meter",
- "rnr-android",
- "rnr-bench",
- "rnr-blake3",
- "rnr-core",
- "rnr-http",
- "rnr-kv",
+ "rnrs-android",
+ "rnrs-bench",
+ "rnrs-blake3",
+ "rnrs-core",
+ "rnrs-http",
+ "rnrs-kv",
  "values",
 ]
 
 [[package]]
-name = "rnr-core"
+name = "rnrs-core"
 version = "0.1.0"
 dependencies = [
  "tokio",
 ]
 
 [[package]]
-name = "rnr-http"
+name = "rnrs-http"
 version = "0.1.0"
 dependencies = [
  "futures-util",
  "gloo-timers",
  "reqwest",
- "rnr-core",
+ "rnrs-core",
  "tokio",
 ]
 
 [[package]]
-name = "rnr-kv"
+name = "rnrs-kv"
 version = "0.1.0"
 dependencies = [
- "rnr-core",
+ "rnrs-core",
  "sled",
  "tokio",
 ]
@@ -1302,7 +1302,7 @@ name = "values"
 version = "0.1.0"
 dependencies = [
  "gloo-timers",
- "rnr-core",
+ "rnrs-core",
  "tokio",
 ]
 

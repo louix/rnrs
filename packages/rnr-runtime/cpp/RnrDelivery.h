@@ -17,7 +17,7 @@
 
 namespace rnr {
 
-// Values match rnr-android's DeliveryCallback mapping.
+// Values match rnrs-android's DeliveryCallback mapping.
 enum DeliveryValue : uint8_t { kDeliveryQueued = 0, kDeliveryRunning = 1, kDeliveryDone = 2, kDeliveryDropped = 3 };
 
 struct DeliveryState {

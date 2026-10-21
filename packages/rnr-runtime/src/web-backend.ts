@@ -1,5 +1,5 @@
 // Browser backend (framework, module-independent) over the wasm-bindgen exports of
-// rust/rnr-web. Everything runs on the page's JS thread.
+// rust/rnrs-web. Everything runs on the page's JS thread.
 import {
   bindThis,
   conversionHelpers,

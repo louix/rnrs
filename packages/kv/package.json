@@ -10,7 +10,7 @@
     ],
     "spec": "kv.spec.ts",
     "rust": {
-      "crate": "rnr-kv",
+      "crate": "rnrs-kv",
       "path": "rust",
       "module": "Kv"
     },

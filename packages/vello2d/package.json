@@ -11,7 +11,7 @@
     ],
     "spec": "vello2d.spec.ts",
     "rust": {
-      "crate": "rnr-vello2d",
+      "crate": "rnrs-vello2d",
       "path": "rust",
       "module": "Module"
     }

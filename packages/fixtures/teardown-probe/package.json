@@ -2,7 +2,7 @@
   "name": "@rnrs/labs-teardown-probe",
   "version": "0.1.0",
   "private": true,
-  "description": "Lab-only fixture for the runtime-teardown hook (rnr-core lifecycle): resources registered with the adapter generation's TeardownScope, observable after teardown.",
+  "description": "Lab-only fixture for the runtime-teardown hook (rnrs-core lifecycle): resources registered with the adapter generation's TeardownScope, observable after teardown.",
   "rustNative": {
     "targets": [
       "android",

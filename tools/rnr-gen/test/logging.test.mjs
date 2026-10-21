@@ -73,19 +73,19 @@ test('logging config: default off, managed defaults, external, and actionable er
     withApp(logging, (dir) => assert.throws(() => appLogging(dir), error, JSON.stringify(logging)));
 });
 
-test('generated bundles: nothing for default off; rnr-log, build check and install for managed; link only for external', () => {
+test('generated bundles: nothing for default off; rnrs-log, build check and install for managed; link only for external', () => {
   for (const target of ['android', 'ios', 'web']) {
     withApp(undefined, (dir) => {
       const { crateDir } = generateBundle(dir, target, path.join(dir, '.rnr', target));
       const cargo = readFileSync(path.join(crateDir, 'Cargo.toml'), 'utf8');
-      assert.doesNotMatch(cargo, /rnr-log|build-dependencies/);
+      assert.doesNotMatch(cargo, /rnrs-log|build-dependencies/);
       assert.equal(existsSync(path.join(crateDir, 'build.rs')), false);
-      assert.doesNotMatch(readFileSync(path.join(crateDir, 'src/lib.rs'), 'utf8'), /rnr_log/);
+      assert.doesNotMatch(readFileSync(path.join(crateDir, 'src/lib.rs'), 'utf8'), /rnrs_log/);
     });
     withApp({ filter: 'info,sled=warn', iosPrivacy: 'public' }, (dir) => {
       const { crateDir } = generateBundle(dir, target, path.join(dir, '.rnr', target));
       const cargo = readFileSync(path.join(crateDir, 'Cargo.toml'), 'utf8');
-      assert.match(cargo, /^rnr-log = \{ path = ".*rust\/rnr-log" \}$/m);
+      assert.match(cargo, /^rnrs-log = \{ path = ".*rust\/rnrs-log" \}$/m);
       assert.match(
         cargo,
         /\[build-dependencies\]\ntracing-subscriber = \{ version = "0.3", default-features = false, features = \["registry", "std"\] \}/,
@@ -98,12 +98,12 @@ test('generated bundles: nothing for default off; rnr-log, build check and insta
       // Installed before the modules are registered, so before any module code runs.
       assert.match(
         lib,
-        /rnr_log::install_for_bundle\("info,sled=warn", rnr_log::Privacy::Public\);\n\s+rnr_(android|web)::register\(MODULES\);/,
+        /rnrs_log::install_for_bundle\("info,sled=warn", rnrs_log::Privacy::Public\);\n\s+rnrs_(android|web)::register\(MODULES\);/,
       );
     });
     withApp({ mode: 'external' }, (dir) => {
       const { crateDir } = generateBundle(dir, target, path.join(dir, '.rnr', target));
-      assert.match(readFileSync(path.join(crateDir, 'Cargo.toml'), 'utf8'), /^rnr-log = /m);
+      assert.match(readFileSync(path.join(crateDir, 'Cargo.toml'), 'utf8'), /^rnrs-log = /m);
       assert.equal(existsSync(path.join(crateDir, 'build.rs')), false);
       assert.doesNotMatch(
         readFileSync(path.join(crateDir, 'src/lib.rs'), 'utf8'),

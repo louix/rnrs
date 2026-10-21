@@ -11,7 +11,7 @@
     ],
     "spec": "http.spec.ts",
     "rust": {
-      "crate": "rnr-http",
+      "crate": "rnrs-http",
       "path": "rust",
       "module": "Http"
     },

@@ -1,11 +1,11 @@
 //! A deterministic, single-threaded model of a JS engine for testing generated glue:
 //! values, plain objects with optional throwing or side-effecting getters, arrays (with
 //! holes), UTF-16 strings (lone surrogates allowed), and unforgeable native wrappers tied
-//! to an adapter generation. `MockEnv` implements `rnr_core::bind::Env` like a backend.
+//! to an adapter generation. `MockEnv` implements `rnrs_core::bind::Env` like a backend.
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use rnr_core::bind::{BindError, Env, Kind, NativeBox, UnwrapError, Val};
+use rnrs_core::bind::{BindError, Env, Kind, NativeBox, UnwrapError, Val};
 
 pub mod harness;
 
@@ -239,8 +239,8 @@ impl Env for MockEnv {
             _ => Err(BindError::type_error("not an array")),
         }
     }
-    fn to_bytes(&mut self, v: Val, out: &mut Vec<u8>) -> Result<(), rnr_core::bind::BytesError> {
-        use rnr_core::bind::BytesError;
+    fn to_bytes(&mut self, v: Val, out: &mut Vec<u8>) -> Result<(), rnrs_core::bind::BytesError> {
+        use rnrs_core::bind::BytesError;
         match self.take(v) {
             V::Buf(data, BufState::Plain) => {
                 *out = data.borrow().clone();

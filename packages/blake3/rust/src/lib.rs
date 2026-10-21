@@ -5,7 +5,7 @@ use std::pin::Pin;
 use std::sync::{Mutex, MutexGuard};
 use std::task::{Context, Poll};
 
-use rnr_core::{CancelToken, Native};
+use rnrs_core::{CancelToken, Native};
 
 pub mod rnr_interface;
 use rnr_interface as spec;

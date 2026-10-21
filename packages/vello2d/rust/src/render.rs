@@ -10,7 +10,7 @@
 //! - Only the render thread owns the presenter (window lease, GPU resources). `close` and
 //!   `Drop` only set a flag and notify; the thread unbinds and drops the presenter itself and
 //!   is never joined from a JS, UI or finalizer thread.
-//! - The window is used only through admitted operations (rnr-surface's admission protocol):
+//! - The window is used only through admitted operations (rnrs-surface's admission protocol):
 //!   the presenter admits acquire and present separately, so a revoked attachment gets no
 //!   new operation. The GPU device is created before a lease is taken, so a detach never waits
 //!   for device creation.
@@ -21,13 +21,13 @@
 //!   attachment or resize). A successful bind alone does not reset the attempt count, so a
 //!   bind-then-fail cycle is bounded too. Errors are kept in `last_error`.
 //!
-//! Locks: the inbox and stats locks are each taken alone; the surface's locks are rnr-surface's.
+//! Locks: the inbox and stats locks are each taken alone; the surface's locks are rnrs-surface's.
 //! No lock is held while calling the presenter, wakers, or dropping frames.
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
-use rnr_surface::{Extent, Surface, WindowLease};
+use rnrs_surface::{Extent, Surface, WindowLease};
 
 pub use crate::render_state::{GpuState, Stats, Timings};
 use crate::frame::{self, Cmd};
@@ -58,7 +58,7 @@ pub struct SurfaceLease<S> {
 }
 
 /// Why an acquire is refused when the last configure's read-back did not confirm the
-/// drawable timeout (rnr_surface::layer): the present fails like a bind failure, so the window
+/// drawable timeout (rnrs_surface::layer): the present fails like a bind failure, so the window
 /// is unbound and rebound (reconfigured) under the bounded recovery backoff.
 pub const ACQUIRE_REFUSED: &str = "acquire refused: the drawable timeout was not confirmed after configure";
 
@@ -108,7 +108,7 @@ pub fn admitted<R>(lease: &WindowLease, f: impl FnOnce() -> R) -> Option<R> {
 /// pool of its own, so autoreleased objects would otherwise accumulate until it exits).
 #[cfg(target_os = "ios")]
 fn pool<R>(f: impl FnOnce() -> R) -> R {
-    rnr_surface::ios::autoreleasepool(f)
+    rnrs_surface::ios::autoreleasepool(f)
 }
 #[cfg(not(target_os = "ios"))]
 fn pool<R>(f: impl FnOnce() -> R) -> R {

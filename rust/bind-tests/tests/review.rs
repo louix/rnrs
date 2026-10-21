@@ -5,8 +5,8 @@ use std::rc::Rc;
 use bind_tests::harness::Harness;
 use bind_tests::modules::values;
 use bind_tests::{Obj, Prop, V};
-use rnr_core::bind::NativeBox;
-use rnr_core::Native;
+use rnrs_core::bind::NativeBox;
+use rnrs_core::Native;
 use ::values::rnr_interface::Bag as _;
 
 const NONE: V = V::Undefined;

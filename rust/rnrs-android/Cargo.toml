@@ -1,0 +1,11 @@
+[package]
+name = "rnrs-android"
+version = "0.1.0"
+edition = "2021"
+description = "Framework Android backend: generic C ABI between the JSI adapter (C++) and generated module glue."
+
+[features]
+diagnostics = ["rnrs-core/diagnostics"]
+
+[dependencies]
+rnrs-core = { path = "../rnrs-core", features = ["tokio"] }

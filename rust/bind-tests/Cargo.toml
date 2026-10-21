@@ -6,16 +6,16 @@ publish = false
 description = "Host tests of generated glue against a deterministic mock JS environment."
 
 [dependencies]
-rnr-core = { path = "../rnr-core", features = ["tokio"] }
+rnrs-core = { path = "../rnrs-core", features = ["tokio"] }
 counter = { path = "../../packages/counter/rust" }
 meter = { path = "../../packages/meter/rust" }
 values = { path = "../../packages/values/rust" }
-rnr-blake3 = { path = "../../packages/blake3/rust" }
-rnr-http = { path = "../../packages/http/rust" }
-rnr-kv = { path = "../../packages/kv/rust" }
-rnr-bench = { path = "../../packages/bench/rust" }
+rnrs-blake3 = { path = "../../packages/blake3/rust" }
+rnrs-http = { path = "../../packages/http/rust" }
+rnrs-kv = { path = "../../packages/kv/rust" }
+rnrs-bench = { path = "../../packages/bench/rust" }
 blake3 = "1.8"
 tokio = { version = "1.47", default-features = false, features = ["rt-multi-thread", "time"] }
 
 [build-dependencies]
-rnr-build = { path = "../rnr-build" }
+rnrs-build = { path = "../rnrs-build" }

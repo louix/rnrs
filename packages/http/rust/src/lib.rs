@@ -11,7 +11,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use futures_util::future::{select, Either};
-use rnr_core::CancelToken;
+use rnrs_core::CancelToken;
 
 pub mod rnr_interface;
 use rnr_interface as spec;

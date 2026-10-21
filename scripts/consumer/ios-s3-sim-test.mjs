@@ -6,8 +6,8 @@
 // network) for commands and posts reports. The app is launched with CA_DEBUG_TRANSACTIONS=1
 // and Main Thread Checker injected (whether it actually loaded is recorded from vmmap, not
 // assumed). Unified-log lines of the app process are streamed to a file.
-// The read-back and retirement gates read rnr_surface info logs: build the app with
-// RNR_APP_LOGGING='{"filter":"warn,rnr_surface=info,rnr_vello2d=info","iosPrivacy":"public"}'
+// The read-back and retirement gates read rnrs_surface info logs: build the app with
+// RNR_APP_LOGGING='{"filter":"warn,rnrs_surface=info,rnrs_vello2d=info","iosPrivacy":"public"}'
 // (ios-app.sh), or those gates fail for lack of lines.
 //
 // Sequence (--mode full): cold launch; baseline; 20 background/foreground cycles (Settings to the

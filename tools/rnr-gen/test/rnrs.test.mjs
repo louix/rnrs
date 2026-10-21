@@ -1,5 +1,5 @@
 // The rnrs facade on the generator side, without cargo: reading Cargo manifests (renames,
-// target tables, workspace inheritance), the generated interface's rnr-core path, the
+// target tables, workspace inheritance), the generated interface's rnrs-core path, the
 // conditional rnrs patch, and diagnostics for rnrs features whose library is not installed.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -170,18 +170,18 @@ test('dependency declarations: renames, kinds, targets, workspace inheritance an
     );
   }));
 
-test('the generated interface names rnr-core through the dependency the crate declares', () =>
+test('the generated interface names rnrs-core through the dependency the crate declares', () =>
   withDir((dir) => {
     const core = (body) => interfaceCore(crate(dir, body));
-    assert.equal(core('[dependencies]\nrnr-core = "0.1"'), 'rnr_core');
+    assert.equal(core('[dependencies]\nrnrs-core = "0.1"'), 'rnrs_core');
     assert.equal(core('[dependencies]\nrnrs = "0.1"'), 'rnrs::core');
     assert.equal(core('[dependencies]\nfw = { package = "rnrs", version = "0.1" }'), 'fw::core');
-    assert.equal(core('[dependencies.my-core]\npackage = "rnr-core"\nversion = "0.1"'), 'my_core');
-    // Both: rnr-core, so crates that add rnrs keep their generated interface.
-    assert.equal(core('[dependencies]\nrnrs = "0.1"\nrnr-core = "0.1"'), 'rnr_core');
-    // A conditional rnr-core does not win over an unconditional rnrs.
+    assert.equal(core('[dependencies.my-core]\npackage = "rnrs-core"\nversion = "0.1"'), 'my_core');
+    // Both: rnrs-core, so crates that add rnrs keep their generated interface.
+    assert.equal(core('[dependencies]\nrnrs = "0.1"\nrnrs-core = "0.1"'), 'rnrs_core');
+    // A conditional rnrs-core does not win over an unconditional rnrs.
     assert.equal(
-      core('[dependencies]\nrnrs = "0.1"\nrnr-core = { version = "0.1", optional = true }'),
+      core('[dependencies]\nrnrs = "0.1"\nrnrs-core = { version = "0.1", optional = true }'),
       'rnrs::core',
     );
     assert.throws(
@@ -194,6 +194,10 @@ test('the generated interface names rnr-core through the dependency the crate de
           '[target.\'cfg(target_os = "android")\'.dependencies]\nfw = { package = "rnrs", version = "0.1" }',
         ),
       /fw \(package rnrs\) is declared only for cfg\(target_os = "android"\)/,
+    );
+    assert.throws(
+      () => core('[dependencies]\nrnr-core = "0.1"'),
+      /the crate must depend on the framework: add rnrs = "0\.1" to \[dependencies\] \(it depends on rnr-core, which was renamed rnrs-core; depend on rnrs or rnrs-core instead\)/,
     );
     assert.throws(
       () => core('[dev-dependencies]\nrnrs = "0.1"'),
@@ -223,11 +227,11 @@ test('the generated interface names rnr-core through the dependency the crate de
     const out = emitInterface(ir, { core: 'fw::core' });
     assert.match(out, /^use fw::core::bind::\{MaybeSend, NativeObject\};$/m);
     assert.match(out, /^use fw::core::\{CancelToken, Native\};$/m);
-    assert.doesNotMatch(out, /rnr_core/);
+    assert.doesNotMatch(out, /rnrs_core/);
   }));
 
 /** node_modules/<name>: a copy of packages/counter whose crate depends on the framework through
- *  `requirement` instead of rnr-core, plus `extra` manifest text. */
+ *  `requirement` instead of rnrs-core, plus `extra` manifest text. */
 function moduleWith(app, name, { crate: crateName, requirement, extra = '' }) {
   const dir = path.join(app, 'node_modules', name);
   cpSync(path.join(ROOT, 'packages/counter'), dir, {
@@ -244,7 +248,7 @@ function moduleWith(app, name, { crate: crateName, requirement, extra = '' }) {
     toml,
     readFileSync(toml, 'utf8')
       .replace(/^name = "[^"]+"/m, `name = "${crateName}"`)
-      .replace(/^rnr-core = "0\.1"\n/m, `${requirement}\n`) + extra,
+      .replace(/^rnrs-core = "0\.1"\n/m, `${requirement}\n`) + extra,
   );
   return dir;
 }
@@ -260,7 +264,7 @@ function app(dir, deps) {
 test('the bundle patches rnrs only when a module crate, or a crate it reaches by path, uses it', () =>
   withDir((dir) => {
     app(dir, ['plain']);
-    moduleWith(dir, 'plain', { crate: 'plain_mod', requirement: 'rnr-core = "0.1"' });
+    moduleWith(dir, 'plain', { crate: 'plain_mod', requirement: 'rnrs-core = "0.1"' });
     const patchOf = () => {
       const { crateDir } = generateBundle(dir, 'android', path.join(dir, '.rnr/android'));
       return readFileSync(path.join(crateDir, 'Cargo.toml'), 'utf8').split('[patch.crates-io]')[1];
@@ -299,7 +303,7 @@ test('an rnrs feature whose library package is not installed is refused before c
         (error) =>
           error instanceof BundleError &&
           new RegExp(
-            `app -> r: its crate ${how}, which no installed package provides \\(rnr-\\* crates are never taken from crates.io\\); add @rnrs/surface to the app's dependencies`,
+            `app -> r: its crate ${how}, which no installed package provides \\(rnrs-\\* and rnr-\\* crates are never taken from crates.io\\); add @rnrs/surface to the app's dependencies`,
           ).test(error.message),
       );
     app(dir, ['r']);
@@ -307,14 +311,14 @@ test('an rnrs feature whose library package is not installed is refused before c
       crate: 'r_mod',
       requirement: 'rnrs = { version = "0.1", features = ["surface"] }',
     });
-    refused(`enables rnrs's "surface" feature, which needs rnr-surface`);
+    refused(`enables rnrs's "surface" feature, which needs rnrs-surface`);
     // Through the crate's own feature table, under a rename.
     moduleWith(dir, 'r', {
       crate: 'r_mod',
       requirement: 'fw = { package = "rnrs", version = "0.1" }',
       extra: '\n[features]\ndefault = ["fw/surface"]\n',
     });
-    refused(`enables rnrs's "surface" feature, which needs rnr-surface`);
+    refused(`enables rnrs's "surface" feature, which needs rnrs-surface`);
     // Through a path dependency.
     moduleWith(dir, 'r', {
       crate: 'r_mod',
@@ -324,14 +328,14 @@ test('an rnrs feature whose library package is not installed is refused before c
       path.join(dir, 'node_modules/r/helper/Cargo.toml'),
       '[package]\nname = "helper"\nversion = "0.1.0"\n\n[dependencies]\nrnrs = { version = "0.1", features = ["surface"] }\n',
     );
-    refused(`enables rnrs's "surface" feature \\(through helper\\), which needs rnr-surface`);
+    refused(`enables rnrs's "surface" feature \\(through helper\\), which needs rnrs-surface`);
     // Reached from default through another feature: refused too.
     moduleWith(dir, 'r', {
       crate: 'r_mod',
       requirement: 'rnrs = "0.1"',
       extra: '\n[features]\ndefault = ["gpu"]\ngpu = ["rnrs/surface"]\n',
     });
-    refused(`enables rnrs's "surface" feature, which needs rnr-surface`);
+    refused(`enables rnrs's "surface" feature, which needs rnrs-surface`);
     // An optional feature nothing enables needs no package (the bundle builds default features).
     moduleWith(dir, 'r', {
       crate: 'r_mod',
@@ -346,7 +350,7 @@ test('an rnrs feature whose library package is not installed is refused before c
     moduleWith(dir, 'r', {
       crate: 'r_mod',
       requirement:
-        'rnr-core = "0.1"\nrnrs = { version = "0.1", optional = true, features = ["surface"] }',
+        'rnrs-core = "0.1"\nrnrs = { version = "0.1", optional = true, features = ["surface"] }',
     });
     assert.equal(usesRnrs(selectModules(dir, 'android')), false);
     // Headless use of rnrs needs no library package.
@@ -365,8 +369,8 @@ test("cargo's failure to find a framework crate (reached through a registry crat
     /rnrs is a framework crate, never taken from crates.io: rnrs is provided by @rnrs\/runtime .* depend on rnrs from the module crate itself\.\n$/,
   );
   assert.match(
-    explainMissing('error: no matching package named `rnr-surface` found\n'),
-    /rnr-surface comes from @rnrs\/surface: add it to the app's dependencies \(it is needed, for example, by rnrs's "surface" feature\)/,
+    explainMissing('error: no matching package named `rnrs-surface` found\n'),
+    /rnrs-surface comes from @rnrs\/surface: add it to the app's dependencies \(it is needed, for example, by rnrs's "surface" feature\)/,
   );
   const other = 'error: no matching package named `serde_x` found\n';
   assert.equal(explainMissing(other), other);
@@ -576,7 +580,7 @@ test('workspace = true follows the workspace cargo would use, or is refused', ()
 
 test('every framework declaration must be satisfiable, not only the one the interface uses', () =>
   withDir((dir) => {
-    crate(dir, '[dependencies]\nrnr-core = "0.1"\nrnrs = "0.2"');
+    crate(dir, '[dependencies]\nrnrs-core = "0.1"\nrnrs = "0.2"');
     assert.throws(
       () => checkCoreRequirement({ cratePath: dir }),
       /dependency rnrs: rnrs requirement "0\.2" is not satisfied by this framework's rnrs 0\.1\.0/,
@@ -591,13 +595,13 @@ test('every framework declaration must be satisfiable, not only the one the inte
     );
     crate(
       dir,
-      '[dependencies]\nrnrs = "0.1"\n[target.\'cfg(unix)\'.dependencies]\nrnr-core = "0.3"',
+      '[dependencies]\nrnrs = "0.1"\n[target.\'cfg(unix)\'.dependencies]\nrnrs-core = "0.3"',
     );
     assert.throws(
       () => checkCoreRequirement({ cratePath: dir }),
-      /dependency rnr-core for cfg\(unix\): rnr-core requirement "0\.3"/,
+      /dependency rnrs-core for cfg\(unix\): rnrs-core requirement "0\.3"/,
     );
-    crate(dir, '[dependencies]\nrnrs = "0.1"\nrnr-core = { path = "../core" }');
+    crate(dir, '[dependencies]\nrnrs = "0.1"\nrnrs-core = { path = "../core" }');
     assert.doesNotThrow(() => checkCoreRequirement({ cratePath: dir }));
   }));
 
@@ -648,11 +652,11 @@ test('rnrs test patches what cargo test builds: dev-dependencies and the request
         .filter((a) => a.startsWith('patch.'))
         .map((a) => a.split('.')[2]);
     assert.equal(testPackage(pkg, [], { cargo }), 0);
-    assert.deepEqual(patched(), ['rnr-core', 'rnrs']);
+    assert.deepEqual(patched(), ['rnrs-core', 'rnrs']);
     // --features gpu enables rnrs/surface: it needs @rnrs/surface, which is not installed.
     assert.throws(
       () => testPackage(pkg, ['--features', 'gpu'], { cargo }),
-      /the crate enables rnrs's "surface" feature, which needs rnr-surface, which comes from @rnrs\/surface; install it next to the package \(npm install --save-dev @rnrs\/surface@0\.1\.0\)/,
+      /the crate enables rnrs's "surface" feature, which needs rnrs-surface, which comes from @rnrs\/surface; install it next to the package \(npm install --save-dev @rnrs\/surface@0\.1\.0\)/,
     );
     // A dev-dependency enabling it is built by cargo test too.
     const toml = path.join(pkg, 'rust/Cargo.toml');
@@ -665,7 +669,7 @@ test('rnrs test patches what cargo test builds: dev-dependencies and the request
     );
     assert.throws(
       () => testPackage(pkg, [], { cargo }),
-      /enables rnrs's "surface" feature, which needs rnr-surface, which comes from @rnrs\/surface/,
+      /enables rnrs's "surface" feature, which needs rnrs-surface, which comes from @rnrs\/surface/,
     );
     // With the library installed, it is patched to the installed copy.
     cpSync(
@@ -679,7 +683,7 @@ test('rnrs test patches what cargo test builds: dev-dependencies and the request
       { recursive: true },
     );
     assert.equal(testPackage(pkg, [], { cargo }), 0);
-    assert.deepEqual(patched(), ['rnr-core', 'rnrs', 'rnr-surface']);
+    assert.deepEqual(patched(), ['rnrs-core', 'rnrs', 'rnrs-surface']);
     // An rnr-* crate nobody provides is named, not left to crates.io.
     write(
       toml,
@@ -755,12 +759,12 @@ test('activation: dep: suppresses only the implicit feature of the dependency it
     moduleWith(dir, 'r', {
       crate: 'r_mod',
       requirement:
-        'rnr-core = "0.1"\nrnrs = { version = "0.1", optional = true, features = ["surface"] }\nhelper = { path = "../../../helper", optional = true }',
+        'rnrs-core = "0.1"\nrnrs = { version = "0.1", optional = true, features = ["surface"] }\nhelper = { path = "../../../helper", optional = true }',
       extra: '\n[features]\ndefault = ["rnrs"]\nother = ["dep:helper"]\n',
     });
     assert.throws(
       () => selectModules(dir, 'android'),
-      /app -> r: its crate enables rnrs's "surface" feature, which needs rnr-surface/,
+      /app -> r: its crate enables rnrs's "surface" feature, which needs rnrs-surface/,
     );
   }));
 

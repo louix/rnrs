@@ -21,8 +21,8 @@ import { runMeterSuite } from './rnr/meter-suite';
 import { runValuesSuite } from './rnr/values-suite';
 import { runBlake3Suite } from './rnr/blake3-suite';
 import { valuesModule } from '../.generated/rnr/values';
-import { httpModule } from '../.generated/rnr/rnr_http';
-import { kvModule } from '../.generated/rnr/rnr_kv';
+import { httpModule } from '../.generated/rnr/rnrs_http';
+import { kvModule } from '../.generated/rnr/rnrs_kv';
 
 // The lab's own test databases (deleted by the runner's last step; nothing else is touched).
 const KV_LIFECYCLE = 'rnr-lab-lifecycle';

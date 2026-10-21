@@ -1,5 +1,5 @@
 //! Browser presentation (wasm32 only): the same interface as the native render thread
-//! (`render.rs`), but there is no thread. The scene is a `WebGpu` producer of rnr-surface's
+//! (`render.rs`), but there is no thread. The scene is a `WebGpu` producer of rnrs-surface's
 //! browser host; the host's requestAnimationFrame loop calls [`Producer::render_gpu`], which runs
 //! one Bevy update and blits Bevy's offscreen texture into the canvas texture. Rust owns the
 //! simulation (Bevy's world); TypeScript only sets controls. No pixels cross the bridge and there
@@ -32,8 +32,8 @@ use std::cell::{Cell, RefCell};
 use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
 
-use rnr_surface::web_producer::{self, Canvas, GpuOutcome, Pixels, Presentation, Producer, Registration};
-use rnr_surface::{Extent, Surface};
+use rnrs_surface::web_producer::{self, Canvas, GpuOutcome, Pixels, Presentation, Producer, Registration};
+use rnrs_surface::{Extent, Surface};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 

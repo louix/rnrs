@@ -29,11 +29,11 @@ for (const dir of ['vello2d', 'fixtures/webgpu-triangle']) {
     if (!out.committed && out.file.endsWith('/index.ts')) writeAtomic(out.file, out.content);
   }
 }
-// The reentrancy checks use rnr-surface's lab-only test hooks (feature lab-hooks), which no
+// The reentrancy checks use rnrs-surface's lab-only test hooks (feature lab-hooks), which no
 // package enables; this fixture's bundle does, unless --default-exports builds it as an app would
 // (then the hook must be absent; only the build and that check run).
 const defaultExports = process.argv.includes('--default-exports');
-if (!defaultExports) process.env.RNR_BUNDLE_FEATURES ??= 'rnr-surface/lab-hooks';
+if (!defaultExports) process.env.RNR_BUNDLE_FEATURES ??= 'rnrs-surface/lab-hooks';
 buildBundle(fixture, 'web', {
   out: path.join(fixture, 'rnr'),
   locked: existsSync(lockFile(fixture, 'web')),

@@ -126,7 +126,7 @@ impl rnr_interface::CrcModule for Module {
 ```
 
 - **Generated trait:** run `npx rnrs generate` after you edit the spec, and read `rust/src/rnr_interface.rs` for the exact signatures. Supported types are listed in [status](status.md#spec-types); the full rules are in [generator](generator.md).
-- **`rnrs`:** the framework crate (`rnrs::core` is rnr-core), not on crates.io. `rnrs test` and app builds resolve it to the copy inside `@rnrs/runtime`. Renderers enable its `surface` feature, and apps using them install `@rnrs/surface`.
+- **`rnrs`:** the framework crate (`rnrs::core` is rnrs-core), not on crates.io. `rnrs test` and app builds resolve it to the copy inside `@rnrs/runtime`. Renderers enable its `surface` feature, and apps using them install `@rnrs/surface`.
 - **The spec import:** `@rnrs/runtime/spec` also resolves in editors and `tsc` with `moduleResolution` `bundler` or `nodenext`.
 
 ## 3. Test and pack ✅

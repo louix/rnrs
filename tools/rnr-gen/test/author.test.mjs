@@ -115,7 +115,7 @@ test('init validates names and targets', async () => {
       /unknown target "desktop"/,
     );
     assert.match(
-      (await run(['init', dir, '--name', 'ok', '--crate', 'rnr-core'])).out,
+      (await run(['init', dir, '--name', 'ok', '--crate', 'rnrs-core'])).out,
       /reserved for the framework/,
     );
     assert.ok(!existsSync(path.join(dir, 'package.json')));
@@ -222,7 +222,7 @@ test('rnrs test patches the framework crates it uses, forwards arguments and the
     // The scaffold depends on rnrs: both framework crates are patched, nothing else.
     assert.deepEqual(args.slice(3, 7), [
       '--config',
-      `patch.crates-io.rnr-core.path=${JSON.stringify(path.join(FRAMEWORK_RUST, 'rnr-core'))}`,
+      `patch.crates-io.rnrs-core.path=${JSON.stringify(path.join(FRAMEWORK_RUST, 'rnrs-core'))}`,
       '--config',
       `patch.crates-io.rnrs.path=${JSON.stringify(path.join(FRAMEWORK_RUST, 'rnrs'))}`,
     ]);
@@ -235,7 +235,7 @@ test('rnrs test patches the framework crates it uses, forwards arguments and the
 test('the web build requires the pinned wasm-bindgen CLI version', async () => {
   const want = wasmBindgenVersion();
   assert.match(
-    readFileSync(path.join(FRAMEWORK_RUST, 'rnr-web/Cargo.toml'), 'utf8'),
+    readFileSync(path.join(FRAMEWORK_RUST, 'rnrs-web/Cargo.toml'), 'utf8'),
     new RegExp(`wasm-bindgen = "=${want.replace(/\./g, '\\.')}"`),
   );
   await withDir((dir) => {

@@ -19,7 +19,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
-use rnr_surface::{Extent, Surface};
+use rnrs_surface::{Extent, Surface};
 
 use crate::gpu::{Gpu, PresentError, Target};
 use crate::scene::{BevyScene, TouchStats};
@@ -28,7 +28,7 @@ use crate::scene::{BevyScene, TouchStats};
 /// thread has no pool of its own, so autoreleased objects would accumulate until it exits).
 #[cfg(target_os = "ios")]
 fn pool<R>(f: impl FnOnce() -> R) -> R {
-    rnr_surface::ios::autoreleasepool(f)
+    rnrs_surface::ios::autoreleasepool(f)
 }
 #[cfg(not(target_os = "ios"))]
 fn pool<R>(f: impl FnOnce() -> R) -> R {
@@ -240,7 +240,7 @@ fn run(shared: &Shared, surface: &Surface) {
     let mut failed_for: Option<u64> = None;
     let mut redraw = false;
     let mut wait_until: Option<Instant> = None;
-    let mut touches = Vec::with_capacity(rnr_surface::touch::QUEUE_CAPACITY);
+    let mut touches = Vec::with_capacity(rnrs_surface::touch::QUEUE_CAPACITY);
     loop {
         let controls = {
             let mut inbox = lock(&shared.inbox);

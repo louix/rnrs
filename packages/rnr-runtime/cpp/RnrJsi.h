@@ -10,7 +10,7 @@ namespace rnr {
 // Framework JSI adapter, generic over modules: creates one adapter generation of the
 // generated module `name` (checked against the JS wrapper's IR `hash`) bound to this
 // runtime and registered with its lifecycle scope. Module code never touches JSI; it
-// converts values through the vtable in RnrJsi.cpp (see rust/rnr-android).
+// converts values through the vtable in RnrJsi.cpp (see rust/rnrs-android).
 facebook::jsi::Object installModuleAdapter(
     facebook::jsi::Runtime& rt, std::shared_ptr<facebook::react::CallInvoker> invoker,
     std::shared_ptr<RuntimeScope> scope, const std::string& name, const std::string& hash, double maxInFlight);

@@ -1,0 +1,18 @@
+[package]
+name = "rnrs-log"
+version = "0.1.0"
+edition = "2021"
+description = "Framework logging: a tracing Layer writing to the platform log (Android logcat, Apple unified logging, browser console), and an opt-in managed install with a log-to-tracing bridge."
+
+[dependencies]
+log = { version = "0.4", features = ["std"] }
+tracing = { version = "0.1", default-features = false, features = ["std"] }
+tracing-core = { version = "0.1", default-features = false, features = ["std"] }
+tracing-subscriber = { version = "0.3", default-features = false, features = ["registry", "std"] }
+tracing-log = { version = "0.2", default-features = false, features = ["log-tracer", "std"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "=0.2.129"
+
+[build-dependencies]
+cc = "1"

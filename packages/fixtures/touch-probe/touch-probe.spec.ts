@@ -1,4 +1,4 @@
-// Lab fixture (docs/surface.md, "Touch input"): a GPU-free consumer of rnr-surface touch input.
+// Lab fixture (docs/surface.md, "Touch input"): a GPU-free consumer of rnrs-surface touch input.
 // A probe owns one surface with touch enabled and no renderer, so nothing is drawn. There is
 // no background consumer: records stay in the surface's bounded queue until `drain()` moves
 // them, on the calling (JS) thread, into bounded consumer state checked against the queue
@@ -68,7 +68,7 @@ export interface ProbeStats {
   lastContradiction: string | null;
   /** The last records drained (at most 32), oldest first. */
   recent: ProbeRecord[];
-  /** Producer-side counters of the surface's queue (rnr-surface TouchCounters). */
+  /** Producer-side counters of the surface's queue (rnrs-surface TouchCounters). */
   accepted: number;
   coalesced: number;
   refusedStale: number;

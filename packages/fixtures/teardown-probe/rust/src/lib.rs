@@ -3,8 +3,8 @@
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 
-use rnr_core::lifecycle::{Retire, TeardownScope};
-use rnr_core::Native;
+use rnrs_core::lifecycle::{Retire, TeardownScope};
+use rnrs_core::Native;
 
 pub mod rnr_interface;
 use rnr_interface as spec;

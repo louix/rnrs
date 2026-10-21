@@ -11,7 +11,7 @@
     ],
     "spec": "bevy3d.spec.ts",
     "rust": {
-      "crate": "rnr-bevy3d",
+      "crate": "rnrs-bevy3d",
       "path": "rust",
       "module": "Module"
     }

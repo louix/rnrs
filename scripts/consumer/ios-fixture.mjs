@@ -17,7 +17,7 @@ const IMPORTS = {
   '../../.generated/rnr/counter': '@rnrs/example-counter',
   '../../.generated/rnr/meter': '@rnrs/labs-meter',
   '../../.generated/rnr/values': '@rnrs/labs-values',
-  '../../.generated/rnr/rnr_blake3': '@rnrs/example-blake3',
+  '../../.generated/rnr/rnrs_blake3': '@rnrs/example-blake3',
   '../../fixtures/blake3/test_vectors.json': '../test_vectors.json',
 };
 

@@ -1,6 +1,6 @@
 # iOS backend
 
-Experimental, 2026-10-19. iOS uses the same runtime as Android: the generic JSI adapter, the runtime scope, the Rust C ABI (`rnr-android`, which despite its name has no Android code), the binding-owned Tokio runtime and the executor budget. Only the lifecycle module and the build integration are iOS-specific. Module authors still write only a TypeScript spec and Rust.
+Experimental, 2026-10-19. iOS uses the same runtime as Android: the generic JSI adapter, the runtime scope, the Rust C ABI (`rnrs-android`, which despite its name has no Android code), the binding-owned Tokio runtime and the executor budget. Only the lifecycle module and the build integration are iOS-specific. Module authors still write only a TypeScript spec and Rust.
 
 ## Layout
 
@@ -17,7 +17,7 @@ Experimental, 2026-10-19. iOS uses the same runtime as Android: the generic JSI 
 ## Build integration
 
 - **Autolinking.** `react-native.config.js` no longer disables iOS. `use_native_modules!` adds the `RnrRuntime` pod from the package root. The codegen config maps `RnrRuntime` to `RnrRuntimeModule` (`ios.modulesProvider`), and the class also uses `RCT_EXPORT_MODULE(RnrRuntime)`.
-- **Bundle.** The pod's script phase runs before the pod compiles. `rnrs build --target ios` generates the same per-app crate as Android (a `staticlib` over `rnr-android` and `rnr-core` with Tokio). It builds one triple per architecture and combines them with `lipo` into `<app>/.rnr/ios/lib/<sdk>/librnr_bundle.a`:
+- **Bundle.** The pod's script phase runs before the pod compiles. `rnrs build --target ios` generates the same per-app crate as Android (a `staticlib` over `rnrs-android` and `rnrs-core` with Tokio). It builds one triple per architecture and combines them with `lipo` into `<app>/.rnr/ios/lib/<sdk>/librnr_bundle.a`:
 
   | SDK | Architecture | Triple |
   | --- | --- | --- |
@@ -30,7 +30,7 @@ Experimental, 2026-10-19. iOS uses the same runtime as Android: the generic JSI 
 - **Tools.** The script phase needs node and cargo with the iOS targets. Like React Native's own phases, it sources `ios/.xcode.env` and `.xcode.env.local`, which set `NODE_BINARY` and can set `PATH` or `RNR_CARGO`. It sources them as React Native's `with-environment.sh` does, without `-e`/`-u`, so lines that read unset variables (`$NVM_BIN`) or run a missing optional `nvm.sh` do not abort the build; strict mode is restored afterwards, and no usable node is an actionable error (`scripts/ios-env.test.mjs`). A build started from a shell (`xcodebuild`) inherits that shell's `PATH`.
 - **Test hooks.** The native test hooks (`invalidateForTesting`, `forceBytesCopyOutForTesting`, `collectGarbageForTesting`, and iOS `reloadForTesting`) are compiled only with `RNR_TEST_HOOKS`: `RNR_TEST_HOOKS=1` in the environment of `pod install` on iOS, Gradle property `rnr.testHooks=true` (or `RNR_TEST_HOOKS=1`) on Android. The default package omits them, and `__rnrRuntime.testHooks` says which build is running. The iOS device test enables them (`ios-app.sh`), and so does the lab (`android/gradle.properties`). The Android clean consumer builds the default and checks that its `librnr.so` contains none of them.
 - **Not supported: `use_frameworks!`.** Builds with `USE_FRAMEWORKS=static` or `dynamic` were not tested, and the bundle's link flag and static-library linking are only known to work for the template's default static-library pods. Treat frameworks linkage as unsupported until it is tested.
-- **App data directory.** As on Android (`<filesDir>/rnr`), the lifecycle module sets `rnr_core::platform::app_data_dir()` before any module exists: `<Application Support>/rnr` from `NSSearchPathForDirectoriesInDomains`. It sets the path only and creates nothing; a module that needs the directory creates it on first use and gets any error then, and the runtime starts regardless. `@rnrs/example-kv` uses it on the device: its databases live in `<Application Support>/rnr/kv/<name>` ([below](#reproduce)).
+- **App data directory.** As on Android (`<filesDir>/rnr`), the lifecycle module sets `rnrs_core::platform::app_data_dir()` before any module exists: `<Application Support>/rnr` from `NSSearchPathForDirectoriesInDomains`. It sets the path only and creates nothing; a module that needs the directory creates it on first use and gets any error then, and the runtime starts regardless. `@rnrs/example-kv` uses it on the device: its databases live in `<Application Support>/rnr/kv/<name>` ([below](#reproduce)).
 - **Lock.** `<app>/rnr-ios.Cargo.lock` is independent of the Android and web locks and follows the same rules ([packaging](packaging.md#lock-files)). `RNR_LOCKED=1` in the Xcode environment is the CI switch.
 - **Tooling on a Mac.** `nix develop .#ios` (flake `devShells.<darwin>.ios`) provides Node 24, rustup and CocoaPods from the flake's pinned nixpkgs. Xcode is the system's selected Xcode, because nixpkgs does not package it. The scripts keep `RUSTUP_HOME` and `CARGO_HOME` under `.generated/`.
 
@@ -85,7 +85,7 @@ Rerun at commit `c34c7ec` on React Native 0.88.0 (Hermes release build, prebuilt
   - while JS is blocked for 10 s: 1 post, 0 runs, no drop, then the call settles.
 
   Pre-fix control, on the same simulator: runtime and fixtures at `1f4d57b` (before `5e1df35`) with the probe from `50edb96` (before `91e04b7` added the exactly-once error-message check) and this harness. The drop recovery, the later `addLater` and the 10 s block all stayed pending. That tree was assembled only for the run (its result JSON records the throwaway commit `49001ac`, which is not in history).
-- **`SceneDelegate`.** The 0.88 template starts React Native from a `UIWindowSceneDelegate`. The surface view still follows `UIApplication` active-state notifications, which UIKit posts for the template's single scene. The S3 harness (`ios-s3-sim-test.mjs --mode full`, built with `rnr_surface` info logging) passes 17/17 checks:
+- **`SceneDelegate`.** The 0.88 template starts React Native from a `UIWindowSceneDelegate`. The surface view still follows `UIApplication` active-state notifications, which UIKit posts for the template's single scene. The S3 harness (`ios-s3-sim-test.mjs --mode full`, built with `rnrs_surface` info logging) passes 17/17 checks:
   - 20 background/foreground cycles in one process, with 20 resign-active and 20 become-active, revoked each time;
   - resize, remount, and five reloads with the surface attached;
   - read-back YES after all 27 binds; longest window retirement 5.7 ms;
@@ -98,7 +98,7 @@ Rerun at commit `c34c7ec` on React Native 0.88.0 (Hermes release build, prebuilt
 
 - Device results are from one iPhone, one iOS version and one Xcode on React Native 0.83.1. React Native 0.88.0 is simulator-tested only (above). Arm64 only, on both device and simulator.
 - Release builds only. Reload is driven by the `reloadForTesting` test hook, because release builds have no JS-reachable reload. It calls React Native's `RCTTriggerReloadCommandListeners`, which is process-wide: it reloads every registered `RCTHost` in the process, not only the caller's. The test app has one.
-- `rnr-android`, the shared native backend crate, keeps its historical name so that existing Android lock files stay valid.
+- `rnrs-android`, the shared native backend crate, keeps its historical name so that existing Android lock files stay valid.
 - App setup the framework does not do: signing identity and bundle id (passed to `xcodebuild` here), and Info.plist permission strings if a module's Rust code uses platform APIs that require them (none of the tested modules do).
 - Test hooks, not production API: the native hooks above (compiled only with `RNR_TEST_HOOKS`), `@rnrs/runtime/testing`, and the `bindingsInstalled` diagnostic.
 
@@ -122,7 +122,7 @@ node scripts/consumer/ios-modules-test.mjs --device <devicectl id> --bundle-id <
 # simulator (booted, <sim udid>): the lifecycle test, the surface harness, a JS smoke fixture, Expo
 RNR_IOS_SDKS=iphonesimulator RNR_IOS_SIM_ARCHS=arm64 bash scripts/consumer/ios-app.sh
 node scripts/consumer/ios-device-test.mjs --simulator --device <sim udid> --bundle-id org.reactjs.native.example.HelloWorld results/rnr-ios/sim.json
-RNR_IOS_FIXTURE=surface-s3 RNR_APP_LOGGING='{"filter":"warn,rnr_surface=info,rnr_vello2d=info","iosPrivacy":"public"}' RNR_IOS_SDKS=iphonesimulator \
+RNR_IOS_FIXTURE=surface-s3 RNR_APP_LOGGING='{"filter":"warn,rnrs_surface=info,rnrs_vello2d=info","iosPrivacy":"public"}' RNR_IOS_SDKS=iphonesimulator \
   RNR_IOS_SIM_ARCHS=arm64 RNR_IOS_SKIP_RELOCATED=1 RNR_IOS_OUT=$PWD/.generated/consumer-ios-s3 bash scripts/consumer/ios-app.sh
 node scripts/consumer/ios-s3-sim-test.mjs --app .generated/consumer-ios-s3/build/Build/Products/Release-iphonesimulator/HelloWorld.app \
   --device <sim udid> --bundle-id org.reactjs.native.example.HelloWorld --commit <sha> --out results/rnr-ios/s3-sim.json

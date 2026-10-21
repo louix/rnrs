@@ -10,7 +10,7 @@
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 
-use rnr_core::lifecycle::{Retire, TeardownScope};
+use rnrs_core::lifecycle::{Retire, TeardownScope};
 
 use super::driver::{self, Backend, Client, Presented, RealClock, Shared};
 use super::{adapter_label, describe, Frame, Gpu, Next, Options, Renderer, Status, TargetInfo};

@@ -1,6 +1,6 @@
 # Rust logging
 
-Experimental, 2026-10-19 (first slice). Libraries emit standard [`tracing`](https://docs.rs/tracing) events or [`log`](https://docs.rs/log) records. The app decides, once, where they go: the platform log through `rnr-log` (`rust/rnr-log`, packaged in `@rnrs/runtime`). Nothing is logged unless the app opts in.
+Experimental, 2026-10-19 (first slice). Libraries emit standard [`tracing`](https://docs.rs/tracing) events or [`log`](https://docs.rs/log) records. The app decides, once, where they go: the platform log through `rnrs-log` (`rust/rnrs-log`, packaged in `@rnrs/runtime`). Nothing is logged unless the app opts in.
 
 ## Who does what
 
@@ -8,7 +8,7 @@ Experimental, 2026-10-19 (first slice). Libraries emit standard [`tracing`](http
 | --- | --- |
 | Library and module crates | `tracing::info!(...)`, `log::warn!(...)` and so on. Never install a global subscriber or logger: that is the app's choice (managed mode, or the app's own setup code in external mode), and with `panic = "abort"` a library calling `tracing_subscriber::fmt::init()` after the app's install aborts the process. |
 | App (`package.json`) | `rustNativeApp.logging`: absent (default, off), managed, or external. No native code. |
-| Framework | Managed mode: installs the subscriber and the `log` bridge at bundle startup. `rnr-log` also offers its pieces to app-owned subscribers. |
+| Framework | Managed mode: installs the subscriber and the `log` bridge at bundle startup. `rnrs-log` also offers its pieces to app-owned subscribers. |
 
 ```json
 {
@@ -20,9 +20,9 @@ Experimental, 2026-10-19 (first slice). Libraries emit standard [`tracing`](http
 
 | `rustNativeApp.logging` | Result |
 | --- | --- |
-| absent | Off. `rnr-log` is not linked; generated bundles are unchanged. |
+| absent | Off. `rnrs-log` is not linked; generated bundles are unchanged. |
 | `{}`, `{"filter": ...}`, `{"mode": "managed", ...}` | Managed. `filter` defaults to `info`; `iosPrivacy` is `"private"` (default) or `"public"`. |
-| `{"mode": "external"}` | `rnr-log` is linked, nothing is installed: an app-owned Rust setup crate owns the global subscriber and can use `rnr_log::layer`. No other keys. |
+| `{"mode": "external"}` | `rnrs-log` is linked, nothing is installed: an app-owned Rust setup crate owns the global subscriber and can use `rnrs_log::layer`. No other keys. |
 
 The configuration is fixed when the bundle is built. Changing it changes the bundle's dependencies, so the app's committed `rnr-<target>.Cargo.lock` must be updated (`npx rnrs lock --target T`; the build says so).
 
@@ -37,13 +37,15 @@ The filter is checked twice:
 
 The same filter applies to `tracing` events and to bridged `log` records, by the record's own target (`sled=warn` filters `log` records from `sled::...`). Its maximum level also becomes `log::max_level`. Release and debug builds behave the same (bundles are always built in release); no `max_level_*` features are set.
 
+**Renamed targets.** The framework crates were renamed `rnr-*` → `rnrs-*`, and their log targets moved with them: `rnr_log`, `rnr_core`, `rnr_surface` and the other former `rnr_*` targets are now `rnrs_log`, `rnrs_core`, `rnrs_surface`, .... A filter naming a former target is still accepted but matches nothing; rename it.
+
 ## Managed install
 
-Generated bundles call `rnr_log::install_for_bundle(filter, privacy)` first in their startup function, before registering modules: `rnr_bundle_init` on Android and iOS (called once per process, on the first module use, so it also spans React Native reloads), the Wasm `start` function on the web.
+Generated bundles call `rnrs_log::install_for_bundle(filter, privacy)` first in their startup function, before registering modules: `rnr_bundle_init` on Android and iOS (called once per process, on the first module use, so it also spans React Native reloads), the Wasm `start` function on the web.
 
-`rnr_log::install` is serialized: the first call decides, concurrent callers wait and receive the same status. In order, each slot only if free:
+`rnrs_log::install` is serialized: the first call decides, concurrent callers wait and receive the same status. In order, each slot only if free:
 
-1. The `tracing` global default: a `Registry` with `rnr_log::layer` filtered by the `Targets` filter.
+1. The `tracing` global default: a `Registry` with `rnrs_log::layer` filtered by the `Targets` filter.
 2. Only if step 1 succeeded: the `log` facade logger, `tracing_log::LogTracer` (one-way, `log` into `tracing`), with `log::max_level` set to the filter's maximum. `LogTracer` sets the level only after its logger was accepted.
 
 | Result | `tracing` | `log` | Meaning |
@@ -52,9 +54,9 @@ Generated bundles call `rnr_log::install_for_bundle(filter, privacy)` first in t
 | `Partial` | `Installed` | `Occupied` | `tracing` events are filtered and written; `log` records go to whoever owns the `log` logger; `log::max_level` is unchanged. |
 | `NotInstalled` | `Occupied` | `Skipped` | Nothing installed; rnr's filter and sink do not apply; the `log` slot and `log::max_level` are untouched. |
 
-- A `Full` install reports itself through the installed pipeline: one `tracing` event (`rnr_log: installed: tracing subscriber and log bridge filter=...`) and one `log` record (`rnr_log: log bridge ready`), both subject to the filter (`rnr_log=off` silences them).
+- A `Full` install reports itself through the installed pipeline: one `tracing` event (`rnrs_log: installed: tracing subscriber and log bridge filter=...`) and one `log` record (`rnrs_log: log bridge ready`), both subject to the filter (`rnrs_log=off` silences them).
 - `Partial` and `NotInstalled` write one line straight to the platform log at warn level, bypassing all filters, naming what was occupied.
-- `rnr_log::status()` returns the `InstallStatus` (filter, privacy, both slots, outcome) to Rust code. **It is not visible from JS in this slice:** that needs the shared native bridge, which is being reworked.
+- `rnrs_log::status()` returns the `InstallStatus` (filter, privacy, both slots, outcome) to Rust code. **It is not visible from JS in this slice:** that needs the shared native bridge, which is being reworked.
 - A repeated call with the same configuration returns the same status and installs nothing. A different configuration is `InstallError::ConflictingConfig`, and nothing changes.
 
 **Scope of "global".** The slots are the globals of the `tracing` and `log` copies linked into the app's generated bundle: one native static library per app, or one Wasm instance. Another Rust library linked separately into the app (its own dynamic library or static copy) has its own globals and is not affected. Each Wasm instance has its own; see Platforms.
@@ -63,13 +65,13 @@ Generated bundles call `rnr_log::install_for_bundle(filter, privacy)` first in t
 
 **`log-always`.** With `tracing`'s `log-always` feature, every `tracing` event is also emitted as a `log` record, which the bridge would turn into a second event. For managed bundles `rnrs build` checks the resolved features per build target (`cargo metadata --filter-platform <triple>`, after resolution and before compiling) and fails, naming the package that enables it (directly, or through one of its enabled features), with external mode as the alternative. `tracing`'s plain `log` feature emits records only while no subscriber is set, which never overlaps with an installed one.
 
-## External mode and `rnr_log::layer`
+## External mode and `rnrs_log::layer`
 
-`rnr_log::layer(Sink)` is a `tracing_subscriber::Layer` usable in any subscriber an app owns:
+`rnrs_log::layer(Sink)` is a `tracing_subscriber::Layer` usable in any subscriber an app owns:
 
 ```rust
 use tracing_subscriber::prelude::*;
-let platform = rnr_log::layer(rnr_log::Sink::Platform(rnr_log::Privacy::Private))
+let platform = rnrs_log::layer(rnrs_log::Sink::Platform(rnrs_log::Privacy::Private))
     .with_filter("info,my_app=debug".parse::<tracing_subscriber::filter::Targets>()?);
 tracing_subscriber::registry().with(platform).with(my_other_layer).init();
 ```
@@ -92,13 +94,13 @@ The layer does no filtering of its own: it formats and writes every event it rec
 | Platform | Destination | Levels |
 | --- | --- | --- |
 | Android | `__android_log_write`. Tag: the target's crate (`sled` for `sled::tree`), with control characters replaced, at most 23 bytes, cut at a character boundary. The full target (escaped) is prefixed to the message when longer. | trace→VERBOSE, debug→DEBUG, info→INFO, warn→WARN, error→ERROR |
-| iOS (and macOS) | Unified logging through a C shim in `rnr-log`: one `os_log_t` for the process (subsystem `rnrs`, category `rust`), so no per-target log objects are cached; `target: message`. | error→ERROR, warn→DEFAULT, info→INFO, debug/trace→DEBUG |
+| iOS (and macOS) | Unified logging through a C shim in `rnrs-log`: one `os_log_t` for the process (subsystem `rnr`, category `rust`), so no per-target log objects are cached; `target: message`. | error→ERROR, warn→DEFAULT, info→INFO, debug/trace→DEBUG |
 | Browser | `console.error/warn/info/debug` (trace→debug), `target: message`. | |
 | Other (host tests) | standard error. | |
 
 **Threads.** Android and Apple writes happen synchronously on the emitting Rust thread: any thread, including Tokio workers, with no queue and no JSI. On the web, only the main-thread Wasm instance created by `initRnr` is supported. Every Wasm instance has its own `tracing`/`log` globals and installs from its own copy of the configuration. Workers, iframes and threaded Wasm are unsupported until separately validated.
 
-**Message size.** Targets come from log records and can be any string. They are escaped like message text and cut to 128 bytes. The whole message handed to the platform (target prefix, text and truncation marker) is at most 4000 bytes (`rnr_log::MAX_MESSAGE`). That bounds what rnr produces, not what a platform keeps:
+**Message size.** Targets come from log records and can be any string. They are escaped like message text and cut to 128 bytes. The whole message handed to the platform (target prefix, text and truncation marker) is at most 4000 bytes (`rnrs_log::MAX_MESSAGE`). That bounds what rnr produces, not what a platform keeps:
 - logcat's payload limit is slightly above it;
 - Apple unified logging and browser consoles may keep less;
 - end-to-end retention of 4000 bytes is not promised.
@@ -120,8 +122,8 @@ The layer does no filtering of its own: it formats and writes every event it rec
 
 | Check | Where |
 | --- | --- |
-| Bounded escaping writer, truncation at character boundaries, early stop of `Debug`, quoting, Android tags, raw target escaping in tags and prefixes, privacy format strings | `cargo test -p rnr-log` (unit) |
-| Layer under scoped subscribers: span `record` updates, explicit parents, scope, escaping, line and span bounds, filtered events never formatted, re-entrancy on one and on 8 threads, async `Instrument` spans across polls, native `log.*` fields kept, privacy/sink mismatch rejected, whole-message bound | `rust/rnr-log/tests/layer.rs` |
+| Bounded escaping writer, truncation at character boundaries, early stop of `Debug`, quoting, Android tags, raw target escaping in tags and prefixes, privacy format strings | `cargo test -p rnrs-log` (unit) |
+| Layer under scoped subscribers: span `record` updates, explicit parents, scope, escaping, line and span bounds, filtered events never formatted, re-entrancy on one and on 8 threads, async `Instrument` spans across polls, native `log.*` fields kept, privacy/sink mismatch rejected, whole-message bound | `rust/rnrs-log/tests/layer.rs` |
 | Child processes under a 30 s timeout: an entered span whose field `Debug` logs and records into the same span (neither deadlocks nor recurses); logging from a thread-local destructor after the layer's buffer is gone (no abort). Against the first version (84db9c5) they fail by deadlock timeout and `SIGABRT` | `tests/subprocess.rs` |
 | Managed install, each in its own process: `Full` with 4 concurrent installers, `log::max_level`, identical and conflicting repeats, target filtering of `tracing` and bridged `log` records (`sled=warn`, `noisy=off`), conflicts in the order rnr-first (later installers refused), 8 threads × 250 lines all delivered whole | `tests/install_full.rs` |
 | Tracing occupied first: `NotInstalled`, `log` slot and level untouched, one direct warning | `tests/install_tracing_occupied.rs` |

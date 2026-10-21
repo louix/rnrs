@@ -31,7 +31,7 @@
 
 using namespace facebook;
 
-extern "C" bool rnr_set_app_data_dir(const uint8_t* ptr, size_t len);  // rust/rnr-android
+extern "C" bool rnr_set_app_data_dir(const uint8_t* ptr, size_t len);  // rust/rnrs-android
 
 @interface RnrRuntimeModule () <NativeRnrRuntimeSpec, RCTTurboModuleWithJSIBindings, RCTInvalidating>
 @end
@@ -59,7 +59,7 @@ RCT_EXPORT_MODULE(RnrRuntime)
 }
 
 // Modules that persist data get <Application Support>/rnr (app-private, backed up) through
-// rnr_core::platform::app_data_dir(), before any module exists. Path only: nothing is created
+// rnrs_core::platform::app_data_dir(), before any module exists. Path only: nothing is created
 // here, so if the directory cannot be created, the module that needs it gets that error when
 // it asks, and the runtime itself still starts. Repeated calls with the same path are accepted.
 + (void)setAppDataDir

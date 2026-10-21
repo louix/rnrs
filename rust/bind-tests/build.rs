@@ -1,3 +1,3 @@
 fn main() {
-    rnr_build::generate("android");
+    rnrs_build::generate("android");
 }

@@ -8,9 +8,9 @@
 use std::future::Future;
 
 #[allow(unused_imports)]
-use rnr_core::bind::{MaybeSend, NativeObject};
+use rnrs_core::bind::{MaybeSend, NativeObject};
 #[allow(unused_imports)]
-use rnr_core::{CancelToken, Native};
+use rnrs_core::{CancelToken, Native};
 
 /// Record `HttpResponse`: converted field by field, by value.
 #[derive(Debug, Clone, PartialEq)]

@@ -2,19 +2,19 @@
 name = "rnrs"
 version = "0.1.0"
 edition = "2021"
-description = "The Rust crate module authors depend on: rnr-core re-exported, plus optional framework parts behind features. Provided by @rnrs/runtime (not on crates.io)."
+description = "The Rust crate module authors depend on: rnrs-core re-exported, plus optional framework parts behind features. Provided by @rnrs/runtime (not on crates.io)."
 
 # Headless by default. Disabled optional dependencies are neither resolved nor locked for apps
 # (only workspace members resolve all their features), so a module using `rnrs` alone needs
 # neither @rnrs/surface nor any GPU crate to build.
 [features]
-# Rendering surfaces (rnr-surface, from @rnrs/surface, which the app must install).
-surface = ["dep:rnr-surface"]
+# Rendering surfaces (rnrs-surface, from @rnrs/surface, which the app must install).
+surface = ["dep:rnrs-surface"]
 # The wgpu adapter (rnrs::gpu, with wgpu re-exported as rnrs::gpu::wgpu, pinned exactly by
-# rnr-surface): renderers that draw with wgpu. Pulls in wgpu for the target only when enabled.
-wgpu = ["surface", "rnr-surface/wgpu"]
+# rnrs-surface): renderers that draw with wgpu. Pulls in wgpu for the target only when enabled.
+wgpu = ["surface", "rnrs-surface/wgpu"]
 
 [dependencies]
 # Exact: released together with this crate in @rnrs/runtime.
-rnr-core = "=0.1.0"
-rnr-surface = { version = "0.1", optional = true }
+rnrs-core = "=0.1.0"
+rnrs-surface = { version = "0.1", optional = true }

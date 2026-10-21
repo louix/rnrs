@@ -1,6 +1,6 @@
 //! Implementation of the key-value spec (../kv.spec.ts) over sled. Plain Rust: no JS, JSI or
 //! platform code; the database directory comes from the framework
-//! (`rnr_core::platform::app_data_dir()`, the app's private storage on Android and iOS).
+//! (`rnrs_core::platform::app_data_dir()`, the app's private storage on Android and iOS).
 //!
 //! - Disk work runs on Tokio's blocking pool (the framework's native executor is Tokio). An
 //!   operation awaits its blocking job to the end, so it stays admitted, and counted against
@@ -18,7 +18,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{mpsc, Arc, Mutex, MutexGuard, OnceLock, Weak};
 use std::time::Duration;
 
-use rnr_core::{CancelToken, Native};
+use rnrs_core::{CancelToken, Native};
 
 pub mod rnr_interface;
 use rnr_interface as spec;
@@ -49,7 +49,7 @@ pub fn check_name(name: &str) -> Result<(), String> {
 
 fn database_path(name: &str) -> Result<PathBuf, String> {
     check_name(name)?;
-    Ok(rnr_core::platform::app_data_dir()?.join("kv").join(name))
+    Ok(rnrs_core::platform::app_data_dir()?.join("kv").join(name))
 }
 
 // ---- process-wide registry -----------------------------------------------------------

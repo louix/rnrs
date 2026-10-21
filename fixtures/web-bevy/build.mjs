@@ -71,7 +71,7 @@ run('esbuild', [
   `--alias:react=./${npm}/react`,
   `--alias:react-dom=./${npm}/react-dom`,
   `--alias:react-native=./${npm}/react-native-web`,
-  `--alias:@rnrs/example-bevy3d=./.generated/rnr/rnr_bevy3d/index.ts`,
+  `--alias:@rnrs/example-bevy3d=./.generated/rnr/rnrs_bevy3d/index.ts`,
   '--define:process.env.NODE_ENV="development"',
   '--outfile=' + path.join(fixture, 'dist/main.js'),
 ]);

@@ -37,6 +37,7 @@ import {
   isFrameworkCrate,
   loadPackage,
   plan,
+  renamedCrate,
   writeAtomic,
 } from './cli.mjs';
 import { emitGlue } from './emit-rust.mjs';
@@ -122,7 +123,7 @@ export function selectModules(appDir, target) {
       );
     crates.set(ident, pkg.chain.join(' -> '));
   }
-  // Rust crates named rnr-* are the framework's namespace: a module crate may depend on one
+  // Rust crates named rnrs-* (and the former rnr-*) are the framework's namespace: a module crate may depend on one
   // only if this app installs the package that provides it (framework crates come with
   // @rnrs/runtime). Otherwise cargo would look for it on crates.io.
   const provided = new Set(
@@ -134,9 +135,9 @@ export function selectModules(appDir, target) {
       if (provided.has(dep.replace(/-/g, '_'))) continue;
       const hint = KNOWN_LIBRARIES[dep]
         ? `; add ${KNOWN_LIBRARIES[dep]} to the app's dependencies`
-        : '';
+        : renamedHint(dep);
       errors.push(
-        `${pkg.chain.join(' -> ')}: its crate ${how}, which no installed package provides (rnr-* crates are never taken from crates.io)${hint}`,
+        `${pkg.chain.join(' -> ')}: its crate ${how}, which no installed package provides (rnrs-* and rnr-* crates are never taken from crates.io)${hint}`,
       );
     }
   }
@@ -172,7 +173,7 @@ function activation(pkg, options = {}) {
   });
 }
 
-/** Framework-namespace crates (rnr-*, rnrs) `pkg`'s crate needs with its active features,
+/** Framework-namespace crates (rnrs-*, rnr-*, rnrs) `pkg`'s crate needs with its active features,
  *  directly or through crates it reaches by path, including library crates that enabled rnrs
  *  features need: Map name -> reason. */
 export function frameworkNeeds(pkg, options = {}) {
@@ -200,13 +201,20 @@ export function frameworkNeeds(pkg, options = {}) {
 }
 
 /** Library crates the framework ships in npm packages, for diagnostics. */
-export const KNOWN_LIBRARIES = { 'rnr-surface': '@rnrs/surface' };
+export const KNOWN_LIBRARIES = { 'rnrs-surface': '@rnrs/surface' };
 
-/** Crate names the framework reserves: rnr-* and the rnrs facade. */
-export const isFrameworkNamespace = (name) => /^rnr[-_]/.test(name) || sameCrate(name, 'rnrs');
+/** Crate names the framework reserves: rnrs-*, the rnrs facade, and the former rnr-* names
+ *  (none of them published; any of them from a registry would be an unrelated crate). */
+export const isFrameworkNamespace = (name) => /^rnrs?[-_]/.test(name) || sameCrate(name, 'rnrs');
+
+/** For a former framework crate name: the hint naming its replacement. */
+const renamedHint = (name) => {
+  const now = renamedCrate(name);
+  return now ? `; ${name} was renamed ${now}: depend on ${now} (or the rnrs facade) instead` : '';
+};
 
 /** Library crates the rnrs facade's features pull in (rust/rnrs/Cargo.toml [features]). */
-const RNRS_FEATURE_CRATES = { surface: 'rnr-surface', wgpu: 'rnr-surface' };
+const RNRS_FEATURE_CRATES = { surface: 'rnrs-surface', wgpu: 'rnrs-surface' };
 
 /** Framework-namespace packages a parsed manifest depends on (normal and build dependencies,
  *  any target; dev-dependencies are not part of the bundle). */
@@ -215,7 +223,7 @@ const frameworkNamespace = (manifest) =>
     .filter((d) => d.kind !== 'dev' && isFrameworkNamespace(d.package))
     .map((d) => d.package);
 
-/** Names of framework-namespace crates (rnr-*, rnrs) a Cargo.toml depends on. */
+/** Names of framework-namespace crates (rnrs-*, rnr-*, rnrs) a Cargo.toml depends on. */
 export function rnrCrateDependencies(cargoToml) {
   return [...new Set(frameworkNamespace(readManifest(cargoToml)))];
 }
@@ -241,7 +249,7 @@ export function explainMissing(stderr) {
     ? "rnrs is provided by @rnrs/runtime and patched into the bundle only when one of the app's module crates (or a crate they reach through path dependencies) depends on it; a crate that reaches rnrs another way (a registry or git dependency) is not supported: depend on rnrs from the module crate itself"
     : KNOWN_LIBRARIES[name]
       ? `${name} comes from ${KNOWN_LIBRARIES[name]}: add it to the app's dependencies (it is needed, for example, by rnrs's "${Object.keys(RNRS_FEATURE_CRATES).find((f) => RNRS_FEATURE_CRATES[f] === name) ?? name}" feature)`
-      : `no installed package provides ${name}`;
+      : `no installed package provides ${name}${renamedHint(name)}`;
   return `${stderr.trimEnd()}\n${name} is a framework crate, never taken from crates.io: ${fix}.\n`;
 }
 
@@ -258,8 +266,8 @@ const toml = (value) => JSON.stringify(value.split(path.sep).join('/'));
 
 /** The app's Rust logging choice (`rustNativeApp.logging` in its package.json), fixed at build
  *  time: null (default: off, nothing linked), `{mode: 'managed', filter, iosPrivacy}` (the
- *  bundle installs rnr-log's subscriber and log bridge at startup), or `{mode: 'external'}`
- *  (rnr-log is linked for an app-owned subscriber; rnr installs nothing). */
+ *  bundle installs rnrs-log's subscriber and log bridge at startup), or `{mode: 'external'}`
+ *  (rnrs-log is linked for an app-owned subscriber; rnr installs nothing). */
 export function appLogging(appDir) {
   const app = readJson(path.join(appDir, 'package.json'));
   const logging = app.rustNativeApp?.logging;
@@ -318,50 +326,53 @@ export function generateBundle(appDir, target, outDir) {
       );
   }
   const crateDir = path.join(outDir, 'bundle');
-  // Android and iOS share the native JSI backend crate (named rnr-android for history).
+  // Android and iOS share the native JSI backend crate (named rnrs-android for history).
   const native = target === 'android' || target === 'ios';
-  const backend = native ? 'rnr-android' : 'rnr-web';
+  const backend = native ? 'rnrs-android' : 'rnrs-web';
   const deps = [
-    `rnr-core = { path = ${toml(path.join(FRAMEWORK_RUST, 'rnr-core'))}${native ? ', features = ["tokio"]' : ''} }`,
+    `rnrs-core = { path = ${toml(path.join(FRAMEWORK_RUST, 'rnrs-core'))}${native ? ', features = ["tokio"]' : ''} }`,
     `${backend} = { path = ${toml(path.join(FRAMEWORK_RUST, backend))} }`,
     ...(target === 'web' ? [`wasm-bindgen = "=${wasmBindgenVersion()}"`] : []),
     ...modules.map((p) => `${p.crate} = { path = ${toml(p.cratePath)} }`),
   ];
   const webSurface =
-    target === 'web' ? libraries.find((p) => p.crate === 'rnr-surface') : undefined;
-  if (webSurface) deps.push(`rnr-surface = { path = ${toml(webSurface.cratePath)} }`);
-  // Rust logging (off unless the app opts in): rnr-log for managed and external modes; in
+    target === 'web' ? libraries.find((p) => p.crate === 'rnrs-surface') : undefined;
+  if (webSurface) deps.push(`rnrs-surface = { path = ${toml(webSurface.cratePath)} }`);
+  // Rust logging (off unless the app opts in): rnrs-log for managed and external modes; in
   // managed mode the build script validates the filter with the same Targets parser.
   const logging = appLogging(appDir);
-  if (logging) deps.push(`rnr-log = { path = ${toml(path.join(FRAMEWORK_RUST, 'rnr-log'))} }`);
+  if (logging) deps.push(`rnrs-log = { path = ${toml(path.join(FRAMEWORK_RUST, 'rnrs-log'))} }`);
   const managed = logging?.mode === 'managed';
   const buildDeps = managed
     ? `\n[build-dependencies]\ntracing-subscriber = { version = "0.3", default-features = false, features = ["registry", "std"] }\n`
     : '';
   const privacy = managed && logging.iosPrivacy === 'public' ? 'Public' : 'Private';
   const install = managed
-    ? `    rnr_log::install_for_bundle(${JSON.stringify(logging.filter)}, rnr_log::Privacy::${privacy});\n`
+    ? `    rnrs_log::install_for_bundle(${JSON.stringify(logging.filter)}, rnrs_log::Privacy::${privacy});\n`
     : '';
   const rnrs = usesRnrs(selected)
     ? `rnrs = { path = ${toml(path.join(FRAMEWORK_RUST, 'rnrs'))} }\n`
     : '';
   const cargo = `# @generated by rnrs bundle (${target}); do not edit. Rebuilt from the app's dependencies.
 [package]
-name = "rnr-bundle"
+name = "rnrs-bundle"
 version = "0.0.0"
 edition = "2021"
 publish = false
 
+# The library keeps its internal artifact name: librnr_bundle.a (linked by the runtime's
+# CMake and pod), rnr_bundle.wasm and wasm-bindgen's rnr_bundle.js.
 [lib]
+name = "rnr_bundle"
 path = "src/lib.rs"
 crate-type = [${native ? '"staticlib"' : '"cdylib"'}]
 
 [dependencies]
 ${deps.join('\n')}
 ${buildDeps}
-# Modules depend on rnr-core = "0.1"${rnrs ? ' or rnrs = "0.1"' : ''}; resolve ${rnrs ? 'them to the framework copies' : 'it to this framework copy'}${libraries.length ? ", and library packages' crates to their installed copies" : ''}.
+# Modules depend on rnrs-core = "0.1"${rnrs ? ' or rnrs = "0.1"' : ''}; resolve ${rnrs ? 'them to the framework copies' : 'it to this framework copy'}${libraries.length ? ", and library packages' crates to their installed copies" : ''}.
 [patch.crates-io]
-rnr-core = { path = ${toml(path.join(FRAMEWORK_RUST, 'rnr-core'))} }
+rnrs-core = { path = ${toml(path.join(FRAMEWORK_RUST, 'rnrs-core'))} }
 ${rnrs}${libraries.map((p) => `${p.crate} = { path = ${toml(p.cratePath)} }\n`).join('')}
 # A standalone workspace: never part of an enclosing one.
 [workspace]
@@ -386,21 +397,21 @@ mod glue {
 ${mods.map((m) => `    pub mod ${m.ident} {\n        include!(${JSON.stringify(m.file)});\n    }`).join('\n')}
 }
 
-static MODULES: &[&rnr_core::bind::ModuleDef] = ${list};
+static MODULES: &[&rnrs_core::bind::ModuleDef] = ${list};
 ${
   native
-    ? `pub use rnr_android::*;
+    ? `pub use rnrs_android::*;
 
 /// Registers the bundled modules; called once by the framework JSI adapter.
 #[no_mangle]
 pub extern "C" fn rnr_bundle_init() {
-${install}    rnr_android::register(MODULES);
+${install}    rnrs_android::register(MODULES);
 }
 `
     : `#[wasm_bindgen::prelude::wasm_bindgen(start)]
 fn start() {
-${install}    rnr_web::register(MODULES);
-${webSurface ? '    rnr_surface::web_exports::keep_exports();' : ''}
+${install}    rnrs_web::register(MODULES);
+${webSurface ? '    rnrs_surface::web_exports::keep_exports();' : ''}
 }
 `
 }`;
@@ -472,7 +483,7 @@ function resolve(manifest, cargo, { locked = false, env = process.env, ...option
 const lockIsCurrent = (manifest, cargo, options) =>
   resolve(manifest, cargo, { ...options, locked: true });
 
-/** The framework crates must resolve to this framework's own copies. `rnr-core` is not
+/** The framework crates must resolve to this framework's own copies. `rnrs-core` is not
  *  published and its crates.io name is not reserved: a module whose requirement the patch
  *  cannot satisfy would otherwise make cargo fetch an unrelated crates.io package. */
 export function checkProvenance(metadata, libraries = []) {
@@ -494,7 +505,7 @@ export function checkProvenance(metadata, libraries = []) {
         'align that requirement with the installed library package rather than letting cargo fetch a crates.io package of the same name.',
     );
   const errors = [];
-  for (const name of ['rnr-core', 'rnr-android', 'rnr-web', 'rnr-log', 'rnrs']) {
+  for (const name of ['rnrs-core', 'rnrs-android', 'rnrs-web', 'rnrs-log', 'rnrs']) {
     for (const pkg of metadata.packages.filter((p) => p.name === name)) {
       const expected = path.join(FRAMEWORK_RUST, name, 'Cargo.toml');
       if (pkg.source !== null || realpathSync(pkg.manifest_path) !== realpathSync(expected))
@@ -505,18 +516,18 @@ export function checkProvenance(metadata, libraries = []) {
   }
   if (errors.length)
     throw new BundleError(
-      `${errors.join('\n')}\nA module requires a framework crate version this @rnrs/runtime does not provide (it patches rnr-core = "0.1"); ` +
-        "fix the module's rnr-core requirement rather than letting cargo fetch an unrelated crates.io package.",
+      `${errors.join('\n')}\nA module requires a framework crate version this @rnrs/runtime does not provide (it patches rnrs-core = "0.1"); ` +
+        "fix the module's rnrs-core requirement rather than letting cargo fetch an unrelated crates.io package.",
     );
-  // Nothing else in the rnr-* namespace may come from a registry or git either, whether or not
-  // a package declared it (a module requiring rnr-surface without @rnrs/surface installed).
+  // Nothing else in the rnrs-* (or former rnr-*) namespace may come from a registry or git either, whether or not
+  // a package declared it (a module requiring rnrs-surface without @rnrs/surface installed).
   const foreign = metadata.packages.filter(
     (p) => isFrameworkNamespace(p.name) && p.source !== null,
   );
   if (foreign.length)
     throw new BundleError(
       foreign.map((p) => `${p.name} ${p.version} resolved from ${p.source}`).join('\n') +
-        '\nCrates named rnr-* are reserved for the framework and its npm library packages and are never taken from a registry; install the package that provides it.',
+        '\nCrates named rnrs-* (and the former rnr-* names) are reserved for the framework and its npm library packages and are never taken from a registry; install the package that provides it.',
     );
 }
 
@@ -662,13 +673,13 @@ export function iosTriples(sdk, archs) {
   });
 }
 
-/** The exact wasm-bindgen version the framework's rnr-web crate pins; the CLI must match it. */
+/** The exact wasm-bindgen version the framework's rnrs-web crate pins; the CLI must match it. */
 export function wasmBindgenVersion() {
-  const toml = readFileSync(path.join(FRAMEWORK_RUST, 'rnr-web/Cargo.toml'), 'utf8');
+  const toml = readFileSync(path.join(FRAMEWORK_RUST, 'rnrs-web/Cargo.toml'), 'utf8');
   const version = toml.match(/^wasm-bindgen\s*=\s*"=([^"]+)"/m)?.[1];
   if (!version)
     throw new BundleError(
-      'rnr-web/Cargo.toml does not pin wasm-bindgen exactly (wasm-bindgen = "=x.y.z")',
+      'rnrs-web/Cargo.toml does not pin wasm-bindgen exactly (wasm-bindgen = "=x.y.z")',
     );
   return version;
 }
@@ -767,8 +778,8 @@ export function buildBundle(
       `cargo could not resolve the bundle's dependencies:\n${resolved.stderr.trim()}`,
     );
   }
-  // RNR_BUNDLE_FEATURES (diagnostics and lab builds only, e.g. "rnr-web/diagnostics",
-  // "rnr-android/diagnostics" for the native JSI backend crate, or "rnr-surface/lab-hooks").
+  // RNR_BUNDLE_FEATURES (diagnostics and lab builds only, e.g. "rnrs-web/diagnostics",
+  // "rnrs-android/diagnostics" for the native JSI backend crate, or "rnrs-surface/lab-hooks").
   const features = env.RNR_BUNDLE_FEATURES ? ['--features', env.RNR_BUNDLE_FEATURES] : [];
   const lockArgs = [...(hadLock ? ['--locked'] : []), ...cargoFlags({ offline }), ...features];
   if (appLogging(appDir)?.mode === 'managed') {

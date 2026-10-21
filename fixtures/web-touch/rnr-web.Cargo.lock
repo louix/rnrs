@@ -92,22 +92,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "20675572f6f24e9e76ef639bc5552774ed45f1c30e2951e1e99c59888861c539"
 
 [[package]]
-name = "rnr-bundle"
+name = "rnrs-bundle"
 version = "0.0.0"
 dependencies = [
- "rnr-core",
- "rnr-surface",
- "rnr-web",
+ "rnrs-core",
+ "rnrs-surface",
+ "rnrs-web",
  "touch-probe",
  "wasm-bindgen",
 ]
 
 [[package]]
-name = "rnr-core"
+name = "rnrs-core"
 version = "0.1.0"
 
 [[package]]
-name = "rnr-surface"
+name = "rnrs-surface"
 version = "0.1.0"
 dependencies = [
  "js-sys",
@@ -117,11 +117,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "rnr-web"
+name = "rnrs-web"
 version = "0.1.0"
 dependencies = [
  "js-sys",
- "rnr-core",
+ "rnrs-core",
  "wasm-bindgen",
  "wasm-bindgen-futures",
 ]
@@ -162,8 +162,8 @@ dependencies = [
 name = "touch-probe"
 version = "0.1.0"
 dependencies = [
- "rnr-core",
- "rnr-surface",
+ "rnrs-core",
+ "rnrs-surface",
 ]
 
 [[package]]

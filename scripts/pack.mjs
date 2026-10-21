@@ -1,6 +1,6 @@
 // Builds npm tarballs (no publishing) for the framework and the module packages:
 //   @rnrs/runtime: staged from its canonical sources (packages/rnr-runtime incl. cpp/ and ios/,
-//                 rust/rnr-{core,android,web,log}, rust/rnrs) into one self-contained package.
+//                 rust/rnrs-{core,android,web,log}, rust/rnrs) into one self-contained package.
 //   @rnrs/cli:     the rnrs CLI, staged from packages/rnr-cli and the generator (tools/rnr-gen).
 //   modules:      `rnrs pack-js` writes each package's JS wrapper, then `npm pack` (its
 //                 package.json `files` list) takes manifest, spec, Rust crate and wrapper.
@@ -53,12 +53,12 @@ copy('packages/rnr-runtime/android/src', 'android/src');
 copy('packages/rnr-runtime/cpp', 'cpp');
 copy('packages/rnr-runtime/ios', 'ios');
 copy('packages/rnr-runtime/RnrRuntime.podspec', 'RnrRuntime.podspec');
-for (const crate of ['rnr-core', 'rnr-android', 'rnr-web', 'rnr-log', 'rnrs']) {
+for (const crate of ['rnrs-core', 'rnrs-android', 'rnrs-web', 'rnrs-log', 'rnrs']) {
   copy(`rust/${crate}/Cargo.toml`, `rust/${crate}/Cargo.toml`);
   copy(`rust/${crate}/src`, `rust/${crate}/src`);
 }
-// rnr-log compiles its Apple unified-logging writer (src/apple_log.c) in a build script.
-copy('rust/rnr-log/build.rs', 'rust/rnr-log/build.rs');
+// rnrs-log compiles its Apple unified-logging writer (src/apple_log.c) in a build script.
+copy('rust/rnrs-log/build.rs', 'rust/rnrs-log/build.rs');
 
 function pack(dir) {
   const json = JSON.parse(
@@ -84,8 +84,8 @@ expectFiles(
     /^src\/[\w-]+\.ts$/,
     /^src\/specs\/NativeRnrRuntime\.ts$/,
     /^cli\/run\.mjs$/,
-    /^rust\/(rnr-(core|android|web|log)|rnrs)\/(Cargo\.toml|src\/[\w/-]+\.rs)$/,
-    /^rust\/rnr-log\/(build\.rs|src\/apple_log\.c)$/,
+    /^rust\/(rnrs-(core|android|web|log)|rnrs)\/(Cargo\.toml|src\/[\w/-]+\.rs)$/,
+    /^rust\/rnrs-log\/(build\.rs|src\/apple_log\.c)$/,
     /^android\/(build\.gradle|CMakeLists\.txt)$/,
     /^android\/src\/main\/(java\/dev\/rustjsilab\/rnr\/\w+\.kt|jni\/\w+\.(cpp|h))$/,
     /^cpp\/\w+\.(cpp|h)$/,

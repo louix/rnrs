@@ -2,10 +2,10 @@
 // a headless module depending only on rnrs (renamed) builds and tests with no @rnrs/surface
 // anywhere, and its app lock holds no surface or GPU crate. Enabling rnrs's "surface" feature is
 // refused until @rnrs/surface is installed, and then resolves from the installed package.
-// Builds only rnr-core, rnrs and the module (host).
+// Builds only rnrs-core, rnrs and the module (host).
 //
 // Offline, so it needs a warm registry cache in CARGO_HOME (the framework's own dependencies,
-// e.g. tokio for rnr-core's native backend, come from crates.io): `cargo fetch` of the repository
+// e.g. tokio for rnrs-core's native backend, come from crates.io): `cargo fetch` of the repository
 // workspace warms it. The lock assertions are the proof; no surface or GPU crate is ever needed.
 // Without cargo the test is skipped, unless RNR_REQUIRE_CARGO=1, which makes that a failure and
 // requires CARGO_HOME to be set, so the warm-up and the test use the same cache. The strict
@@ -50,7 +50,7 @@ const lockPackages = (lock) =>
     ].map((m) => [m[1], m[2] ?? null]),
   );
 const SURFACE_OR_GPU =
-  /^(rnr-surface|raw-window-handle|wgpu.*|naga|pollster|ash|metal|objc2.*|web-sys|js-sys|wasm-bindgen.*)$/;
+  /^(rnrs-surface|raw-window-handle|wgpu.*|naga|pollster|ash|metal|objc2.*|web-sys|js-sys|wasm-bindgen.*)$/;
 
 test(
   'packed rnrs: a headless module needs no @rnrs/surface or GPU crate, offline; surface needs the installed library',
@@ -145,7 +145,7 @@ test(
         ? readdirSync(cache).flatMap((d) => readdirSync(path.join(cache, d)))
         : [];
       assert.ok(
-        !cached.some((f) => /^(rnrs|rnr-surface|rnr-core)-\d/.test(f)),
+        !cached.some((f) => /^(rnrs|rnrs-surface|rnrs-core)-\d/.test(f)),
         'framework crates are never in the registry cache',
       );
       for (const target of ['android', 'web']) {
@@ -153,7 +153,7 @@ test(
         assert.equal(r.code, 0, r.out);
         const lock = readFileSync(path.join(app, `rnr-${target}.Cargo.lock`), 'utf8');
         const pkgs = lockPackages(lock);
-        for (const name of ['rnrs', 'rnr-core', 'demo-headless'])
+        for (const name of ['rnrs', 'rnrs-core', 'demo-headless'])
           assert.equal(pkgs.get(name), null, `${target}: ${name} resolved from its installed path`);
         const unwanted = [...pkgs.keys()].filter(
           (n) =>
@@ -176,21 +176,21 @@ test(
       assert.equal(r.code, 1, r.out);
       assert.match(
         r.out,
-        /app -> demo-headless: its crate enables rnrs's "surface" feature, which needs rnr-surface, which no installed package provides .*; add @rnrs\/surface to the app's dependencies/,
+        /app -> demo-headless: its crate enables rnrs's "surface" feature, which needs rnrs-surface, which no installed package provides .*; add @rnrs\/surface to the app's dependencies/,
       );
       assert.doesNotMatch(r.out, /no matching package/);
-      // Installed as a direct dependency: rnr-surface resolves from the package, and no GPU crate.
+      // Installed as a direct dependency: rnrs-surface resolves from the package, and no GPU crate.
       npm(path.join(packDir, 'rnrs-surface-0.1.0.tgz'));
       r = rnrs('lock', '--target', 'android', '--app', app, '--offline');
       assert.equal(r.code, 0, r.out);
       const pkgs = lockPackages(readFileSync(path.join(app, 'rnr-android.Cargo.lock'), 'utf8'));
-      assert.equal(pkgs.get('rnr-surface'), null, 'from the installed package path');
+      assert.equal(pkgs.get('rnrs-surface'), null, 'from the installed package path');
       assert.deepEqual(
         [...pkgs.keys()].filter((n) => /^(wgpu.*|naga|pollster|ash)$/.test(n)),
         [],
-        'surface alone pulls in no GPU crate (rnr-surface/wgpu is off)',
+        'surface alone pulls in no GPU crate (rnrs-surface/wgpu is off)',
       );
-      // rnrs's "wgpu" feature: the adapter's wgpu enters the lock, exactly as rnr-surface pins it.
+      // rnrs's "wgpu" feature: the adapter's wgpu enters the lock, exactly as rnrs-surface pins it.
       writeFileSync(
         toml,
         readFileSync(toml, 'utf8').replace(
@@ -205,7 +205,7 @@ test(
         gpuLock,
         /\[\[package\]\]\nname = "wgpu"\nversion = "30\.0\.1"\nsource = "registry\+/,
       );
-      assert.equal(lockPackages(gpuLock).get('rnr-surface'), null);
+      assert.equal(lockPackages(gpuLock).get('rnrs-surface'), null);
     } finally {
       rmSync(work, { recursive: true, force: true });
     }

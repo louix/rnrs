@@ -659,30 +659,38 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "19b30a45b0cd0bcca8037f3d0dc3421eaf95327a17cad11964fb8179b4fc4832"
 
 [[package]]
-name = "rnr-bundle"
+name = "rnrs"
+version = "0.1.0"
+dependencies = [
+ "rnrs-core",
+ "rnrs-surface",
+]
+
+[[package]]
+name = "rnrs-bundle"
 version = "0.0.0"
 dependencies = [
- "rnr-core",
- "rnr-surface",
- "rnr-vello2d",
- "rnr-web",
- "rnr-webgpu-triangle",
+ "rnrs-core",
+ "rnrs-surface",
+ "rnrs-vello2d",
+ "rnrs-web",
+ "rnrs-webgpu-triangle",
  "wasm-bindgen",
 ]
 
 [[package]]
-name = "rnr-core"
+name = "rnrs-core"
 version = "0.1.0"
 
 [[package]]
-name = "rnr-surface"
+name = "rnrs-surface"
 version = "0.1.0"
 dependencies = [
  "js-sys",
  "log",
  "pollster",
  "raw-window-handle",
- "rnr-core",
+ "rnrs-core",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
@@ -690,43 +698,35 @@ dependencies = [
 ]
 
 [[package]]
-name = "rnr-vello2d"
+name = "rnrs-vello2d"
 version = "0.1.0"
 dependencies = [
  "js-sys",
  "libc",
  "log",
  "pollster",
- "rnr-core",
- "rnr-surface",
+ "rnrs-core",
+ "rnrs-surface",
  "vello_cpu",
  "wasm-bindgen",
  "wgpu",
 ]
 
 [[package]]
-name = "rnr-web"
+name = "rnrs-web"
 version = "0.1.0"
 dependencies = [
  "js-sys",
- "rnr-core",
+ "rnrs-core",
  "wasm-bindgen",
  "wasm-bindgen-futures",
 ]
 
 [[package]]
-name = "rnr-webgpu-triangle"
+name = "rnrs-webgpu-triangle"
 version = "0.1.0"
 dependencies = [
  "rnrs",
-]
-
-[[package]]
-name = "rnrs"
-version = "0.1.0"
-dependencies = [
- "rnr-core",
- "rnr-surface",
 ]
 
 [[package]]

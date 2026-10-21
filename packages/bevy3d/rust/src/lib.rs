@@ -1,7 +1,7 @@
 //! The module author's implementation of packages/bevy3d/bevy3d.spec.ts: a bounded Bevy example
-//! on an rnr-surface (Android; iOS simulator; browser WebGPU prototype). Rust owns the scene, its simulation and the render loop on one
+//! on an rnrs-surface (Android; iOS simulator; browser WebGPU prototype). Rust owns the scene, its simulation and the render loop on one
 //! render thread ([`render`]; in the browser, the host's frame callback on the main thread, see `web.rs`); TypeScript only sets latest-value controls. No JS, JSI or
-//! platform code: the window comes from rnr-surface, and Bevy never sees it ([`gpu`]).
+//! platform code: the window comes from rnrs-surface, and Bevy never sees it ([`gpu`]).
 //!
 //! Ownership and teardown (as vello2d): each scene's [`SceneCore`] is registered with the
 //! runtime teardown scope of the adapter generation that created the module, so an RN reload
@@ -13,9 +13,9 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use rnr_core::lifecycle::{Retire, TeardownScope};
-use rnr_core::Native;
-use rnr_surface::Surface;
+use rnrs_core::lifecycle::{Retire, TeardownScope};
+use rnrs_core::Native;
+use rnrs_surface::Surface;
 
 #[cfg(not(target_arch = "wasm32"))]
 mod gpu;

@@ -101,7 +101,7 @@ name = "counter"
 version = "0.1.0"
 dependencies = [
  "gloo-timers",
- "rnr-core",
+ "rnrs-core",
  "tokio",
 ]
 
@@ -548,7 +548,7 @@ name = "meter"
 version = "0.1.0"
 dependencies = [
  "gloo-timers",
- "rnr-core",
+ "rnrs-core",
  "tokio",
 ]
 
@@ -753,56 +753,56 @@ dependencies = [
 ]
 
 [[package]]
-name = "rnr-bench"
+name = "rnrs-bench"
 version = "0.1.0"
 dependencies = [
- "rnr-core",
+ "rnrs-core",
 ]
 
 [[package]]
-name = "rnr-blake3"
+name = "rnrs-blake3"
 version = "0.1.0"
 dependencies = [
  "blake3",
- "rnr-core",
+ "rnrs-core",
 ]
 
 [[package]]
-name = "rnr-bundle"
+name = "rnrs-bundle"
 version = "0.0.0"
 dependencies = [
  "counter",
  "meter",
- "rnr-bench",
- "rnr-blake3",
- "rnr-core",
- "rnr-http",
- "rnr-web",
+ "rnrs-bench",
+ "rnrs-blake3",
+ "rnrs-core",
+ "rnrs-http",
+ "rnrs-web",
  "values",
  "wasm-bindgen",
 ]
 
 [[package]]
-name = "rnr-core"
+name = "rnrs-core"
 version = "0.1.0"
 
 [[package]]
-name = "rnr-http"
+name = "rnrs-http"
 version = "0.1.0"
 dependencies = [
  "futures-util",
  "gloo-timers",
  "reqwest",
- "rnr-core",
+ "rnrs-core",
  "tokio",
 ]
 
 [[package]]
-name = "rnr-web"
+name = "rnrs-web"
 version = "0.1.0"
 dependencies = [
  "js-sys",
- "rnr-core",
+ "rnrs-core",
  "wasm-bindgen",
  "wasm-bindgen-futures",
 ]
@@ -1164,7 +1164,7 @@ name = "values"
 version = "0.1.0"
 dependencies = [
  "gloo-timers",
- "rnr-core",
+ "rnrs-core",
  "tokio",
 ]
 

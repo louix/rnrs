@@ -12,7 +12,7 @@ import { createRoot } from 'react-dom/client';
 import init, * as wasm from './rnr/pkg/rnr_bundle.js';
 import { installWebBackend, type RnrWasm } from '@rnrs/runtime/web';
 import { createSurfaceBootstrap } from '@rnrs/surface/browser';
-import { createBevy3DModuleForTesting } from '../../.generated/rnr/rnr_bevy3d';
+import { createBevy3DModuleForTesting } from '../../.generated/rnr/rnrs_bevy3d';
 import App from './.generated/app/App';
 import QuietView from './View';
 import type { Scene } from '@rnrs/example-bevy3d';

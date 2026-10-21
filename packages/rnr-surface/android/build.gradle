@@ -1,6 +1,6 @@
 // @rnrs/surface Android library: the RnrSurfaceView Fabric component (a SurfaceView) and its
 // view manager. No native code of its own: the JNI entry points are Rust functions in the
-// rnr-surface crate, linked into the framework's librnr.so through the app's Rust bundle.
+// rnrs-surface crate, linked into the framework's librnr.so through the app's Rust bundle.
 // Applications add nothing: autolinking includes this project and its codegen output.
 apply plugin: "com.android.library"
 apply plugin: "org.jetbrains.kotlin.android"

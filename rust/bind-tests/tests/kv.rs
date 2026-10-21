@@ -4,13 +4,13 @@
 use std::time::Duration;
 
 use bind_tests::harness::{Harness, Settled};
-use bind_tests::modules::rnr_kv as kv_glue;
+use bind_tests::modules::rnrs_kv as kv_glue;
 use bind_tests::V;
 
 fn harness() -> Harness {
     let dir = std::env::temp_dir().join(format!("rnr-kv-glue-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
-    rnr_core::platform::set_app_data_dir(dir).unwrap();
+    rnrs_core::platform::set_app_data_dir(dir).unwrap();
     Harness::new(&kv_glue::MODULE, 32)
 }
 
@@ -27,7 +27,7 @@ fn concurrent_closes_through_the_adapter_resolve_only_after_the_in_flight_write(
     let h = harness();
     let mut env = h.env();
     let store = open(&h, &mut env, "glue-close");
-    let gate = rnr_kv::testing::hold_gate();
+    let gate = rnrs_kv::testing::hold_gate();
     let put = h.call(&mut env, "Store.put", store.clone(), vec![V::str("__gate/1"), V::buf(b"held")]).unwrap().num() as u64;
     std::thread::sleep(Duration::from_millis(50));
     let closes: Vec<u64> = (0..2).map(|_| h.call(&mut env, "Store.close", store.clone(), vec![]).unwrap().num() as u64).collect();
@@ -52,7 +52,7 @@ fn a_failed_close_through_the_adapter_is_the_outcome_of_every_close() {
     let h = harness();
     let mut env = h.env();
     let store = open(&h, &mut env, "glue-close-fail");
-    rnr_kv::testing::fail_next_close_flush("glue-close-fail");
+    rnrs_kv::testing::fail_next_close_flush("glue-close-fail");
     for _ in 0..2 {
         h.call(&mut env, "Store.close", store.clone(), vec![]).unwrap();
     }

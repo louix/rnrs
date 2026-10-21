@@ -5,7 +5,7 @@ edition = "2021"
 description = "Value-conversion fixture module implementation (packages/values/values.spec.ts)."
 
 [dependencies]
-rnr-core = "0.1"
+rnrs-core = "0.1"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { version = "1.47", default-features = false, features = ["time"] }

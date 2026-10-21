@@ -91,7 +91,7 @@ test('discovery follows dependencies transitively, dedupes, and ignores dev/peer
       const lib = readFileSync(path.join(crateDir, 'src/lib.rs'), 'utf8');
       assert.match(
         lib,
-        /static MODULES: &\[&rnr_core::bind::ModuleDef\] = &\[&glue::values::MODULE, &glue::counter::MODULE\];/,
+        /static MODULES: &\[&rnrs_core::bind::ModuleDef\] = &\[&glue::values::MODULE, &glue::counter::MODULE\];/,
       );
       assert.match(lib, /rnr_bundle_init/);
     },
@@ -210,8 +210,8 @@ test('ios packages generate, check and bundle as a native staticlib', async () =
         const { crateDir } = generateBundle(app, 'ios', path.join(app, '.rnr/ios'));
         const cargo = readFileSync(path.join(crateDir, 'Cargo.toml'), 'utf8');
         assert.match(cargo, /crate-type = \["staticlib"\]/);
-        assert.match(cargo, /rnr-core = \{ path = .*, features = \["tokio"\] \}/);
-        assert.match(cargo, /^rnr-android = \{ path = /m);
+        assert.match(cargo, /rnrs-core = \{ path = .*, features = \["tokio"\] \}/);
+        assert.match(cargo, /^rnrs-android = \{ path = /m);
         assert.match(
           readFileSync(path.join(crateDir, 'src/lib.rs'), 'utf8'),
           /pub extern "C" fn rnr_bundle_init\(\)/,
@@ -273,14 +273,14 @@ test('iOS SDK/architecture selection and the cargo environment', async () => {
 test('framework crates resolved from anywhere but the framework copy are rejected', async () => {
   const { checkProvenance } = await import('../bundle.mjs');
   const registry = {
-    name: 'rnr-core',
+    name: 'rnrs-core',
     version: '0.1.9',
     source: 'registry+https://github.com/rust-lang/crates.io-index',
     manifest_path: '/elsewhere/Cargo.toml',
   };
   assert.throws(
     () => checkProvenance({ packages: [registry] }),
-    /rnr-core 0\.1\.9 resolved from registry\+https:\/\/github.com\/rust-lang\/crates.io-index, not the framework's/,
+    /rnrs-core 0\.1\.9 resolved from registry\+https:\/\/github.com\/rust-lang\/crates.io-index, not the framework's/,
   );
   assert.doesNotThrow(() =>
     checkProvenance({
@@ -289,7 +289,7 @@ test('framework crates resolved from anywhere but the framework copy are rejecte
   );
 });
 
-test('module crates must require an rnr-core version the framework provides', async () => {
+test('module crates must require an rnrs-core version the framework provides', async () => {
   const { checkCoreRequirement } = await import('../cli.mjs');
   const dir = mkdtempSync(path.join(tmpdir(), 'rnr-core-req-'));
   const pkg = { cratePath: dir };
@@ -300,25 +300,25 @@ test('module crates must require an rnr-core version the framework provides', as
     );
   try {
     for (const ok of [
-      'rnr-core = "0.1"',
-      'rnr-core = "^0.1.0"',
-      'rnr-core = { version = "0.1", features = ["tokio"] }',
-      'rnr-core = { path = "../core" }',
+      'rnrs-core = "0.1"',
+      'rnrs-core = "^0.1.0"',
+      'rnrs-core = { version = "0.1", features = ["tokio"] }',
+      'rnrs-core = { path = "../core" }',
     ]) {
       with_(ok);
       assert.doesNotThrow(() => checkCoreRequirement(pkg), ok);
     }
     for (const bad of [
-      'rnr-core = "0.2"',
-      'rnr-core = "1"',
-      'rnr-core = "0.1.7"',
-      'rnr-core = ">=0.1"',
-      'rnr-core = "*"',
+      'rnrs-core = "0.2"',
+      'rnrs-core = "1"',
+      'rnrs-core = "0.1.7"',
+      'rnrs-core = ">=0.1"',
+      'rnrs-core = "*"',
     ]) {
       with_(bad);
       assert.throws(
         () => checkCoreRequirement(pkg),
-        /is not satisfied by this framework's rnr-core 0\.1\.0/,
+        /is not satisfied by this framework's rnrs-core 0\.1\.0/,
         bad,
       );
     }
@@ -387,7 +387,7 @@ test('library packages are selected and target-checked, patched by crate name, a
       });
       libraryPackage(app, '@rnrs/surface-test', {
         targets: ['android'],
-        crate: 'rnr-surface-test',
+        crate: 'rnrs-surface-test',
       });
     },
     (app) => {
@@ -408,18 +408,18 @@ test('library packages are selected and target-checked, patched by crate name, a
       const patch = cargo.slice(cargo.indexOf('[patch.crates-io]'));
       assert.match(
         patch,
-        /^rnr-surface-test = \{ path = ".*\/node_modules\/@rnrs\/surface-test\/rust" \}$/m,
+        /^rnrs-surface-test = \{ path = ".*\/node_modules\/@rnrs\/surface-test\/rust" \}$/m,
       );
       // Not a dependency of the bundle itself: only module crates that use it pull it in.
-      assert.doesNotMatch(cargo.slice(0, cargo.indexOf('[patch.crates-io]')), /rnr-surface-test/);
+      assert.doesNotMatch(cargo.slice(0, cargo.indexOf('[patch.crates-io]')), /rnrs-surface-test/);
       const lib = readFileSync(path.join(crateDir, 'src/lib.rs'), 'utf8');
       assert.match(
         lib,
-        /^\/\/ Library crates: rnr-surface-test \(app -> renderer -> @rnrs\/surface-test\)$/m,
+        /^\/\/ Library crates: rnrs-surface-test \(app -> renderer -> @rnrs\/surface-test\)$/m,
       );
       assert.match(
         lib,
-        /static MODULES: &\[&rnr_core::bind::ModuleDef\] = &\[&glue::counter::MODULE\];/,
+        /static MODULES: &\[&rnrs_core::bind::ModuleDef\] = &\[&glue::counter::MODULE\];/,
       );
       assert.throws(
         () => selectModules(app, 'web'),
@@ -466,24 +466,24 @@ test('library packages declare only targets and library, and are refused by modu
 test('library crates resolved from anywhere but the installed package are rejected', async () => {
   const { checkProvenance } = await import('../bundle.mjs');
   const lib = {
-    crate: 'rnr-surface',
+    crate: 'rnrs-surface',
     cratePath: path.join(ROOT, 'packages/rnr-surface/rust'),
     chain: ['app', '@rnrs/surface'],
   };
   const registry = {
-    name: 'rnr-surface',
+    name: 'rnrs-surface',
     version: '0.1.3',
     source: 'registry+https://github.com/rust-lang/crates.io-index',
     manifest_path: '/elsewhere/Cargo.toml',
   };
   assert.throws(
     () => checkProvenance({ packages: [registry] }, [lib]),
-    /rnr-surface 0\.1\.3 resolved from registry\+.*, not the installed library package app -> @rnrs\/surface/,
+    /rnrs-surface 0\.1\.3 resolved from registry\+.*, not the installed library package app -> @rnrs\/surface/,
   );
   // Without the library package installed it is still refused: rnr-* is a reserved namespace.
   assert.throws(
     () => checkProvenance({ packages: [registry] }),
-    /Crates named rnr-\* are reserved for the framework/,
+    /Crates named rnrs-\* \(and the former rnr-\* names\) are reserved for the framework/,
   );
 });
 
@@ -511,10 +511,10 @@ test('web surface is a direct bundle dependency and retained export; headless/na
         const direct = cargo.split('[patch.crates-io]')[0];
         const lib = readFileSync(path.join(crateDir, 'src/lib.rs'), 'utf8');
         if (target === 'web' && surface) {
-          assert.match(direct, /^rnr-surface = \{ path = /m);
-          assert.match(lib, /rnr_surface::web_exports::keep_exports\(\)/);
+          assert.match(direct, /^rnrs-surface = \{ path = /m);
+          assert.match(lib, /rnrs_surface::web_exports::keep_exports\(\)/);
         } else {
-          assert.doesNotMatch(direct, /^rnr-surface = /m);
+          assert.doesNotMatch(direct, /^rnrs-surface = /m);
           assert.doesNotMatch(lib, /keep_exports/);
         }
       },

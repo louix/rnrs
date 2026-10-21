@@ -24,7 +24,7 @@
 use std::cell::{Cell, RefCell};
 use std::sync::{Arc, Weak};
 
-use rnr_core::lifecycle::{Retire, TeardownScope};
+use rnrs_core::lifecycle::{Retire, TeardownScope};
 use wasm_bindgen::JsCast;
 
 use super::{adapter_label, describe, Frame, Gpu, GpuState, Next, Options, Renderer, Status, SurfaceState, TargetInfo};

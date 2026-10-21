@@ -11,7 +11,7 @@
     ],
     "spec": "blake3.spec.ts",
     "rust": {
-      "crate": "rnr-blake3",
+      "crate": "rnrs-blake3",
       "path": "rust",
       "module": "Blake3"
     },

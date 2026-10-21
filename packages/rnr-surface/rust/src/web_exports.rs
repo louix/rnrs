@@ -134,7 +134,7 @@ pub(crate) fn released(key: u64, token: u64) {
     }
 }
 
-/// Lab only: while held, every GPU setup (rnr_surface::gpu, browser) pauses after the renderer's
+/// Lab only: while held, every GPU setup (rnrs_surface::gpu, browser) pauses after the renderer's
 /// `create` and before its validation result is awaited, so a test can detach and re-attach in a
 /// deterministic interleaving; releasing resumes them in order. Returns the number of setups
 /// waiting at the gate before this call (released ones included). Lab only: never needed by

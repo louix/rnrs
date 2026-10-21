@@ -8,9 +8,9 @@
 use std::future::Future;
 
 #[allow(unused_imports)]
-use rnr_core::bind::{MaybeSend, NativeObject};
+use rnrs_core::bind::{MaybeSend, NativeObject};
 #[allow(unused_imports)]
-use rnr_core::{CancelToken, Native};
+use rnrs_core::{CancelToken, Native};
 
 /// Native object `Gauge`. JS wrappers, in-flight operations and other owners hold
 /// `Native` clones; the object is dropped with its last owner.

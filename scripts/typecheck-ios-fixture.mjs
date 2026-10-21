@@ -15,9 +15,9 @@ const PATHS = {
   '@rnrs/example-counter': '.generated/rnr/counter/index.ts',
   '@rnrs/labs-meter': '.generated/rnr/meter/index.ts',
   '@rnrs/labs-values': '.generated/rnr/values/index.ts',
-  '@rnrs/example-blake3': '.generated/rnr/rnr_blake3/index.ts',
-  '@rnrs/example-http': '.generated/rnr/rnr_http/index.ts',
-  '@rnrs/example-kv': '.generated/rnr/rnr_kv/index.ts',
+  '@rnrs/example-blake3': '.generated/rnr/rnrs_blake3/index.ts',
+  '@rnrs/example-http': '.generated/rnr/rnrs_http/index.ts',
+  '@rnrs/example-kv': '.generated/rnr/rnrs_kv/index.ts',
 };
 for (const [name, write] of [
   ['ios-fixture-typecheck', writeIosFixture],

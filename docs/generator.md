@@ -13,7 +13,7 @@ Experimental. The API, file layout and IR are not frozen. See [ownership](owners
 
 The author writes no C++, Kotlin, Java, Swift, JSI or wasm-bindgen code. Everything else is generated build output under the ignored `.generated/rnr/` directory, or handwritten framework infrastructure shared by every module:
 
-- `<crate>/glue.rs`: Rust dispatch and conversions, generic over `rnr_core::bind::Env`.
+- `<crate>/glue.rs`: Rust dispatch and conversions, generic over `rnrs_core::bind::Env`.
 - `<crate>/index.ts`: the JS wrapper classes.
 - `<crate>/ir.json`.
 - `bundle-android.rs` and `bundle-web.rs`: the per-target module lists.
@@ -176,10 +176,10 @@ Converted strings, records and arrays have value semantics: mutating a Rust valu
 ```text
 JS wrapper (generated TS) ─┬─ src/rnr/runtime.ts (promises, cancellation, singletons)
                            ├─ Android: __rnrRuntime.install → cpp/RnrJsi.cpp (generic JSI adapter, shared with iOS)
-                           │            → rust/rnr-android C ABI → generated glue
-                           └─ Browser: src/rnr/web-backend.ts → rust/rnr-web (wasm-bindgen)
+                           │            → rust/rnrs-android C ABI → generated glue
+                           └─ Browser: src/rnr/web-backend.ts → rust/rnrs-web (wasm-bindgen)
                                         → generated glue
-generated glue ── rnr_core::bind::Env ── author traits ── rnr-core Host / Budget / Native
+generated glue ── rnrs_core::bind::Env ── author traits ── rnrs-core Host / Budget / Native
 ```
 
 The generated glue converts each argument through `Env` and has no per-platform code. Android implements `Env` with a C function table over the C++ call context: values are indices into a per-call `jsi::Value` arena, and native objects are `NativeBox` pointers owned by `jsi::NativeState`. The browser implements it over `js_sys`. One conversion implementation therefore serves both platforms, with no serialization detour.
@@ -203,7 +203,7 @@ Earlier description (still accurate apart from the glue location):
 
 - `node tools/rnr-gen/cli.mjs generate` writes the interfaces and the hidden outputs. Unchanged files are not rewritten.
 - `node tools/rnr-gen/cli.mjs check` fails if a committed interface differs from what the spec produces.
-- The `build.rs` of `bind-tests` (formerly also `lab-android` and `web-bundle`, now replaced by per-app bundles) calls `rnr-build`. That runs `rnr-gen build-outputs`, which regenerates the hidden glue from the checked-in inputs, fails the build if a committed interface is stale, and declares cargo dependencies on the specs, packages and generator.
+- The `build.rs` of `bind-tests` (formerly also `lab-android` and `web-bundle`, now replaced by per-app bundles) calls `rnrs-build`. That runs `rnr-gen build-outputs`, which regenerates the hidden glue from the checked-in inputs, fails the build if a committed interface is stale, and declares cargo dependencies on the specs, packages and generator.
 - Verified from a clean export of the tree with no `.generated/`: `rnr-gen check`, `cargo test --workspace --all-features` (which regenerated all hidden glue) and `tsc` all passed.
 
 ## Limits

@@ -1,7 +1,7 @@
 import init, * as wasm from './rnr/pkg/rnr_bundle.js';
 import { installWebBackend, initRnr, type RnrWasm } from '@rnrs/runtime/web';
 import { createSurfaceBootstrap } from '@rnrs/surface/browser';
-import { createVello2DModuleForTesting } from '../../.generated/rnr/rnr_vello2d';
+import { createVello2DModuleForTesting } from '../../.generated/rnr/rnrs_vello2d';
 import { FrameWriter } from '../../packages/vello2d/frame';
 
 const checks: { name: string; ok: boolean; detail: string }[] = [];

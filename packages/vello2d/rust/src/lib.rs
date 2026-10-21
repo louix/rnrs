@@ -1,7 +1,7 @@
 //! The module author's implementation of packages/vello2d/vello2d.spec.ts: a 2D renderer on
-//! an rnr-surface. TypeScript owns all state and submits whole frames ([`frame`]); this crate
+//! an rnrs-surface. TypeScript owns all state and submits whole frames ([`frame`]); this crate
 //! owns only the render thread, raster context, GPU resources and the latest frame
-//! ([`render`]). No JS, JSI or platform code: the window comes from rnr-surface.
+//! ([`render`]). No JS, JSI or platform code: the window comes from rnrs-surface.
 //!
 //! Ownership and teardown: each renderer's [`RendererCore`] (its shared render state and its
 //! surface) is registered with the runtime teardown scope of the adapter generation that
@@ -15,9 +15,9 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use rnr_core::lifecycle::{Retire, TeardownScope};
-use rnr_core::Native;
-use rnr_surface::Surface;
+use rnrs_core::lifecycle::{Retire, TeardownScope};
+use rnrs_core::Native;
+use rnrs_surface::Surface;
 
 pub mod frame;
 mod cpu;
@@ -234,7 +234,7 @@ mod tests {
         assert_eq!(retained.stats().unwrap().state, "closed");
         assert!(!retained.submit(frame_bytes()).unwrap());
         struct W;
-        impl rnr_surface::PlatformWindow for W {
+        impl rnrs_surface::PlatformWindow for W {
             fn raw_window_handle(&self) -> Result<raw_window_handle::RawWindowHandle, raw_window_handle::HandleError> {
                 Ok(raw_window_handle::RawWindowHandle::AndroidNdk(raw_window_handle::AndroidNdkWindowHandle::new(std::ptr::NonNull::<u8>::dangling().cast())))
             }
@@ -245,7 +245,7 @@ mod tests {
                 0x7e57
             }
         }
-        assert_eq!(rnr_surface::platform::attach(key, Box::new(W), rnr_surface::Extent { width: 1, height: 1, scale: 1.0 }), Err(rnr_surface::platform::AttachError::Closed));
+        assert_eq!(rnrs_surface::platform::attach(key, Box::new(W), rnrs_surface::Extent { width: 1, height: 1, scale: 1.0 }), Err(rnrs_surface::platform::AttachError::Closed));
         // A renderer created after teardown (a create that raced it) is retired at once.
         let late = m.create(RendererOptions { resolution_scale: 1.0, timing_records: None }).unwrap();
         assert_eq!(late.stats().unwrap().state, "closed");

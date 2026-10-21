@@ -206,7 +206,7 @@ class RnrSurfaceView(context: Context) : SurfaceView(context), SurfaceHolder.Cal
 
   companion object {
     private const val TAG = "RnrSurface"
-    /** Touch phase codes of `nativeTouch` (rnr-surface touch.rs `Phase::from_code`). */
+    /** Touch phase codes of `nativeTouch` (rnrs-surface touch.rs `Phase::from_code`). */
     private const val DOWN = 0
     private const val MOVE = 1
     private const val UP = 2

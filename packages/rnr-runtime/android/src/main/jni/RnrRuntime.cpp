@@ -6,7 +6,7 @@
 
 using namespace facebook;
 
-extern "C" bool rnr_set_app_data_dir(const uint8_t* ptr, size_t len);  // rust/rnr-android
+extern "C" bool rnr_set_app_data_dir(const uint8_t* ptr, size_t len);  // rust/rnrs-android
 
 namespace rnr {
 
@@ -74,7 +74,7 @@ class JRuntimeScope : public jni::HybridClass<JRuntimeScope> {
 };
 
 // The application's private data directory for module implementations
-// (rnr_core::platform::app_data_dir), set by the Kotlin module before modules exist.
+// (rnrs_core::platform::app_data_dir), set by the Kotlin module before modules exist.
 struct JRnrPlatform : jni::JavaClass<JRnrPlatform> {
   static constexpr auto kJavaDescriptor = "Ldev/rustjsilab/rnr/RnrPlatform;";
   static jboolean setAppDataDir(jni::alias_ref<jclass>, jni::alias_ref<jni::JString> path) {

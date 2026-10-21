@@ -22,6 +22,7 @@ import {
   isFrameworkCrate,
   loadPackage,
   plan,
+  renamedCrate,
   writeAtomic,
 } from './cli.mjs';
 import { KNOWN_TARGETS, declaredTargets } from './targets.mjs';
@@ -272,7 +273,7 @@ export function testPackage(
   // The framework crates the crate uses with the features this cargo test activates (dev-
   // dependencies included), patched to their installed copies like an app bundle does: only
   // those it needs (an unused patch would be recorded in its Cargo.lock).
-  const patches = { 'rnr-core': path.join(FRAMEWORK_RUST, 'rnr-core') };
+  const patches = { 'rnrs-core': path.join(FRAMEWORK_RUST, 'rnrs-core') };
   for (const [crate, how] of frameworkNeeds(pkg, { dev: true, ...cargoFeatureFlags(cargoArgs) })) {
     const framework = path.join(FRAMEWORK_RUST, crate);
     const library = KNOWN_LIBRARIES[crate];
@@ -287,7 +288,7 @@ export function testPackage(
       patches[crate] = loadPackage(libDir).cratePath;
     } else
       throw new AuthorError(
-        `${pkg.manifestPath}: the crate ${how}, which neither @rnrs/runtime nor a known library package provides (crates named rnr-* or rnrs are never taken from crates.io)`,
+        `${pkg.manifestPath}: the crate ${how}, which neither @rnrs/runtime nor a known library package provides (crates named rnrs-*, rnr-* or rnrs are never taken from crates.io)${renamedCrate(crate) ? `; ${crate} was renamed ${renamedCrate(crate)}` : ''}`,
       );
   }
   const env = {

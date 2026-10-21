@@ -1,7 +1,7 @@
 //! The BLAKE3 module through generated glue, against the official test vectors
 //! (fixtures/blake3/test_vectors.json, BLAKE3 1.8.2).
 use bind_tests::harness::{Harness, Settled};
-use bind_tests::modules::rnr_blake3 as blake3_glue;
+use bind_tests::modules::rnrs_blake3 as blake3_glue;
 use bind_tests::V;
 
 const NONE: V = V::Undefined;
@@ -115,7 +115,7 @@ fn concurrent_update_laters_through_the_glue_commit_whole_updates_only() {
     let ok: Vec<u64> = settled.iter().filter(|s| s.1 == Settled::Ok(String::new())).map(|s| s.0).collect();
     assert_eq!(ok.len(), 1, "{settled:?}");
     let failed = settled.iter().find(|s| s.0 != ok[0]).unwrap();
-    assert_eq!(failed.1, Settled::Failed(rnr_blake3::BUSY.into()));
+    assert_eq!(failed.1, Settled::Failed(rnrs_blake3::BUSY.into()));
     let winner = if ok[0] == ia { &a } else { assert_eq!(ok[0], ib); &b };
     let mut expected = blake3::Hasher::new();
     expected.update(b"head").update(winner);
@@ -129,7 +129,7 @@ fn concurrent_update_laters_through_the_glue_commit_whole_updates_only() {
     assert_eq!(h.settle(&mut env, 1)[0].1, Settled::Ok(String::new()));
     match sync {
         Ok(_) => { expected.update(b"x"); }
-        Err(e) => assert_eq!(e, format!("Error: {}", rnr_blake3::BUSY)),
+        Err(e) => assert_eq!(e, format!("Error: {}", rnrs_blake3::BUSY)),
     }
     expected.update(&big);
     assert_eq!(h.call(&mut env, "Hasher.finalize", hasher, vec![]).unwrap().bytes(), expected.finalize().as_bytes().to_vec());

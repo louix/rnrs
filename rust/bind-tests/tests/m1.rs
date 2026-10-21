@@ -2,7 +2,7 @@
 use bind_tests::harness::{Harness, Settled};
 use bind_tests::modules::{counter, meter};
 use bind_tests::{dispose, V};
-use rnr_core::Budget;
+use rnrs_core::Budget;
 
 const NONE: V = V::Undefined;
 

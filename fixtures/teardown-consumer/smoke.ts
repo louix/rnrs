@@ -1,4 +1,4 @@
-// Focused checks of the runtime-teardown hook (rnr-core lifecycle) through the web backend
+// Focused checks of the runtime-teardown hook (rnrs-core lifecycle) through the web backend
 // (RnrWebAdapter -> Adapter::teardown -> TeardownScope::retire_all), using only the fixture's
 // public API: a resource registered with an adapter generation's scope is retired when that
 // generation is torn down, even though JS still holds its wrapper.

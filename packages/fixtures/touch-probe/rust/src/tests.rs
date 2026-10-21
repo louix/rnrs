@@ -2,9 +2,9 @@ use std::ptr::NonNull;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use raw_window_handle::{AndroidDisplayHandle, AndroidNdkWindowHandle, HandleError, RawDisplayHandle, RawWindowHandle};
-use rnr_surface::platform::{self, Revoked};
-use rnr_surface::touch::Phase;
-use rnr_surface::{Extent, PlatformWindow};
+use rnrs_surface::platform::{self, Revoked};
+use rnrs_surface::touch::Phase;
+use rnrs_surface::{Extent, PlatformWindow};
 
 use super::*;
 use crate::spec::{Probe as _, TouchProbeModule as _};

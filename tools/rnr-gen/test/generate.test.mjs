@@ -71,7 +71,7 @@ test('bundles list modules per declared target', () => {
   const android = outputs.find((o) => o.file.endsWith('bundle-android.rs')).content;
   assert.match(
     android,
-    /MODULES: &\[&rnr_core::bind::ModuleDef\] = &\[&counter::MODULE, &meter::MODULE, &values::MODULE, &rnr_blake3::MODULE, &rnr_http::MODULE, &rnr_kv::MODULE, &rnr_bench::MODULE\]/,
+    /MODULES: &\[&rnrs_core::bind::ModuleDef\] = &\[&counter::MODULE, &meter::MODULE, &values::MODULE, &rnrs_blake3::MODULE, &rnrs_http::MODULE, &rnrs_kv::MODULE, &rnrs_bench::MODULE\]/,
   );
 });
 
@@ -84,21 +84,21 @@ test('bundle crates must depend on exactly the module crates of their target', a
     const file = path.join(dir, `Cargo-${Math.abs(deps.length)}-${deps.join('_')}.toml`);
     write(
       file,
-      `[package]\nname = "b"\n\n[dependencies]\n${deps.map((d) => `${d} = { path = "x" }`).join('\n')}\nrnr-core = "1"\n\n[build-dependencies]\nmeter = "1"\n`,
+      `[package]\nname = "b"\n\n[dependencies]\n${deps.map((d) => `${d} = { path = "x" }`).join('\n')}\nrnrs-core = "1"\n\n[build-dependencies]\nmeter = "1"\n`,
     );
     return file;
   };
   const packages = appPackages().map((p) => ({ ...p, crateIdent: p.crate.replace(/-/g, '_') }));
   assert.deepEqual(
     checkBundleManifest(
-      manifest(['counter', 'meter', 'values', 'rnr-blake3', 'rnr-http', 'rnr-kv', 'rnr-bench']),
+      manifest(['counter', 'meter', 'values', 'rnrs-blake3', 'rnrs-http', 'rnrs-kv', 'rnrs-bench']),
       'android',
       packages,
     ),
     [],
   );
   const missing = checkBundleManifest(
-    manifest(['counter', 'values', 'rnr-blake3', 'rnr-http', 'rnr-kv', 'rnr-bench']),
+    manifest(['counter', 'values', 'rnrs-blake3', 'rnrs-http', 'rnrs-kv', 'rnrs-bench']),
     'android',
     packages,
   );
@@ -108,7 +108,7 @@ test('bundle crates must depend on exactly the module crates of their target', a
     p.crate === 'values' ? { ...p, targets: ['android'] } : p,
   );
   const extra = checkBundleManifest(
-    manifest(['counter', 'meter', 'values', 'rnr-blake3', 'rnr-http', 'rnr-kv', 'rnr-bench']),
+    manifest(['counter', 'meter', 'values', 'rnrs-blake3', 'rnrs-http', 'rnrs-kv', 'rnrs-bench']),
     'web',
     fakeAndroidOnly,
   );
@@ -127,9 +127,9 @@ test('build-outputs writes one target bundle into the given directory only', asy
     'bundle-web.rs',
     'counter',
     'meter',
-    'rnr_bench',
-    'rnr_blake3',
-    'rnr_http',
+    'rnrs_bench',
+    'rnrs_blake3',
+    'rnrs_http',
     'values',
   ]);
 });

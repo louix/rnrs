@@ -27,7 +27,7 @@ scene.stats(); scene.close();
 | --- | --- |
 | Rust render thread (`render.rs`) | the wgpu device, the Bevy `App` (ECS world, simulation, render world), the offscreen texture, the swapchain and the `WindowLease`. It calls `app.update()` and presents. |
 | TypeScript | only the controls (paused, colour, speed) and the layout; it reads `stats()`. No per-frame JS work. |
-| Framework (`@rnrs/surface`, `rnr-core`) | the platform view and window lifetime, admission, and the teardown hook, all unchanged. |
+| Framework (`@rnrs/surface`, `rnrs-core`) | the platform view and window lifetime, admission, and the teardown hook, all unchanged. |
 
 Bevy never sees the window: no winit, no `WindowPlugin` primary window, no Bevy event loop, no second registry. The integration ("external render adapter") is:
 

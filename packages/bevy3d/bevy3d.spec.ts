@@ -45,7 +45,7 @@ export interface SceneStats {
   /** Last fed touch position, logical pixels (layout units) from the surface's top-left. */
   lastTouchX: number;
   lastTouchY: number;
-  /** rnr-surface's queue, since the scene was created: accepted records, moves coalesced,
+  /** rnrs-surface's queue, since the scene was created: accepted records, moves coalesced,
    *  overflow resets, and pushes refused (stale attachment, not opted in, capacity) or
    *  dropped (pointer canceled by a reset or unknown). */
   touchAccepted: number;

@@ -72,7 +72,7 @@ test(
       assert.equal(lockBundle(dir, 'web', opts(dir)).changed, true);
       const lock = readFileSync(lockFile(dir, 'web'), 'utf8');
       assert.match(lock, /name = "counter"/);
-      assert.match(lock, /name = "rnr-bundle"/);
+      assert.match(lock, /name = "rnrs-bundle"/);
       for (const p of [dir, ROOT, tmpdir(), process.env.HOME].filter(Boolean))
         assert.ok(!lock.includes(p), `lock mentions ${p}`);
       assert.equal(readFileSync(path.join(dir, '.rnr/.gitignore'), 'utf8').split('\n').at(-2), '*');
@@ -130,7 +130,7 @@ test(
 );
 
 test(
-  'a module whose rnr-core requirement the framework patch cannot satisfy is rejected',
+  'a module whose rnrs-core requirement the framework patch cannot satisfy is rejected',
   { skip },
   () => {
     const dir = app([]);
@@ -149,7 +149,7 @@ test(
         cargoToml,
         readFileSync(cargoToml, 'utf8')
           .replace('name = "counter"', 'name = "bad_core"')
-          .replace('rnr-core = "0.1"', 'rnr-core = "0.0.1"'),
+          .replace('rnrs-core = "0.1"', 'rnrs-core = "0.0.1"'),
       );
       json(path.join(dir, 'package.json'), { name: 'app', dependencies: { 'bad-core': '1' } });
       // Offline: an unsatisfiable patch fails resolution (online it could fetch an unrelated

@@ -1,4 +1,4 @@
-//! Lab fixture: a GPU-free consumer of rnr-surface touch input (touch-probe.spec.ts).
+//! Lab fixture: a GPU-free consumer of rnrs-surface touch input (touch-probe.spec.ts).
 //!
 //! A probe owns one [`Surface`] with touch enabled and no renderer. Nothing drains in the
 //! background: [`Probe::drain`] (JS's `drain()`) moves the queued records on the calling
@@ -9,10 +9,10 @@
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use rnr_core::lifecycle::{Retire, TeardownScope};
-use rnr_core::Native;
-use rnr_surface::touch::{ResetReason, TouchEvent, TouchPhase, TouchRecord, MAX_POINTERS};
-use rnr_surface::Surface;
+use rnrs_core::lifecycle::{Retire, TeardownScope};
+use rnrs_core::Native;
+use rnrs_surface::touch::{ResetReason, TouchEvent, TouchPhase, TouchRecord, MAX_POINTERS};
+use rnrs_surface::Surface;
 
 pub mod rnr_interface;
 #[cfg(target_arch = "wasm32")]

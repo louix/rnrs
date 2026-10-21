@@ -83,12 +83,12 @@ dependencies = [
  "blake3",
  "counter",
  "meter",
- "rnr-bench",
- "rnr-blake3",
- "rnr-build",
- "rnr-core",
- "rnr-http",
- "rnr-kv",
+ "rnrs-bench",
+ "rnrs-blake3",
+ "rnrs-build",
+ "rnrs-core",
+ "rnrs-http",
+ "rnrs-kv",
  "tokio",
  "values",
 ]
@@ -253,7 +253,7 @@ name = "counter"
 version = "0.1.0"
 dependencies = [
  "gloo-timers",
- "rnr-core",
+ "rnrs-core",
  "tokio",
 ]
 
@@ -933,8 +933,8 @@ name = "log-probe"
 version = "0.1.0"
 dependencies = [
  "log",
- "rnr-core",
- "rnr-log",
+ "rnrs-core",
+ "rnrs-log",
  "tracing",
 ]
 
@@ -955,7 +955,7 @@ name = "meter"
 version = "0.1.0"
 dependencies = [
  "gloo-timers",
- "rnr-core",
+ "rnrs-core",
  "tokio",
 ]
 
@@ -1465,33 +1465,41 @@ dependencies = [
 ]
 
 [[package]]
-name = "rnr-android"
+name = "rnrs"
 version = "0.1.0"
 dependencies = [
- "rnr-core",
+ "rnrs-core",
+ "rnrs-surface",
 ]
 
 [[package]]
-name = "rnr-bench"
+name = "rnrs-android"
 version = "0.1.0"
 dependencies = [
- "rnr-core",
+ "rnrs-core",
 ]
 
 [[package]]
-name = "rnr-blake3"
+name = "rnrs-bench"
+version = "0.1.0"
+dependencies = [
+ "rnrs-core",
+]
+
+[[package]]
+name = "rnrs-blake3"
 version = "0.1.0"
 dependencies = [
  "blake3",
- "rnr-core",
+ "rnrs-core",
 ]
 
 [[package]]
-name = "rnr-build"
+name = "rnrs-build"
 version = "0.1.0"
 
 [[package]]
-name = "rnr-core"
+name = "rnrs-core"
 version = "0.1.0"
 dependencies = [
  "async-executor",
@@ -1500,27 +1508,27 @@ dependencies = [
 ]
 
 [[package]]
-name = "rnr-http"
+name = "rnrs-http"
 version = "0.1.0"
 dependencies = [
  "futures-util",
  "gloo-timers",
  "reqwest",
- "rnr-core",
+ "rnrs-core",
  "tokio",
 ]
 
 [[package]]
-name = "rnr-kv"
+name = "rnrs-kv"
 version = "0.1.0"
 dependencies = [
- "rnr-core",
+ "rnrs-core",
  "sled",
  "tokio",
 ]
 
 [[package]]
-name = "rnr-log"
+name = "rnrs-log"
 version = "0.1.0"
 dependencies = [
  "cc",
@@ -1533,14 +1541,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "rnr-surface"
+name = "rnrs-surface"
 version = "0.1.0"
 dependencies = [
  "js-sys",
  "log",
  "pollster",
  "raw-window-handle",
- "rnr-core",
+ "rnrs-core",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
@@ -1548,7 +1556,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rnr-vello2d"
+name = "rnrs-vello2d"
 version = "0.1.0"
 dependencies = [
  "js-sys",
@@ -1556,36 +1564,28 @@ dependencies = [
  "log",
  "pollster",
  "raw-window-handle",
- "rnr-core",
- "rnr-surface",
+ "rnrs-core",
+ "rnrs-surface",
  "vello_cpu",
  "wasm-bindgen",
  "wgpu",
 ]
 
 [[package]]
-name = "rnr-web"
+name = "rnrs-web"
 version = "0.1.0"
 dependencies = [
  "js-sys",
- "rnr-core",
+ "rnrs-core",
  "wasm-bindgen",
  "wasm-bindgen-futures",
 ]
 
 [[package]]
-name = "rnr-webgpu-triangle"
+name = "rnrs-webgpu-triangle"
 version = "0.1.0"
 dependencies = [
  "rnrs",
-]
-
-[[package]]
-name = "rnrs"
-version = "0.1.0"
-dependencies = [
- "rnr-core",
- "rnr-surface",
 ]
 
 [[package]]
@@ -1844,7 +1844,7 @@ dependencies = [
 name = "teardown-probe"
 version = "0.1.0"
 dependencies = [
- "rnr-core",
+ "rnrs-core",
 ]
 
 [[package]]
@@ -1956,8 +1956,8 @@ name = "touch-probe"
 version = "0.1.0"
 dependencies = [
  "raw-window-handle",
- "rnr-core",
- "rnr-surface",
+ "rnrs-core",
+ "rnrs-surface",
 ]
 
 [[package]]
@@ -2100,7 +2100,7 @@ name = "values"
 version = "0.1.0"
 dependencies = [
  "gloo-timers",
- "rnr-core",
+ "rnrs-core",
  "tokio",
 ]
 
@@ -2620,7 +2620,7 @@ checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
 name = "worklets-probe"
 version = "0.1.0"
 dependencies = [
- "rnr-core",
+ "rnrs-core",
 ]
 
 [[package]]

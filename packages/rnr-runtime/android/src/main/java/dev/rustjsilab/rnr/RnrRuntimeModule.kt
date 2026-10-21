@@ -34,7 +34,7 @@ class RnrRuntimeModule(context: ReactApplicationContext) :
   init {
     RnrTestHooks.attach(context)
     // Modules that persist data get <filesDir>/rnr (app-private internal storage) through
-    // rnr_core::platform::app_data_dir(), before any module exists. Not created here: if the
+    // rnrs_core::platform::app_data_dir(), before any module exists. Not created here: if the
     // directory cannot be created, the module that needs it gets that error when it asks,
     // and the runtime itself still starts.
     val dir = java.io.File(context.filesDir, "rnr")
@@ -126,7 +126,7 @@ internal object RnrLibrary {
   fun ensureLoaded() {}
 }
 
-/** Platform facts handed to the Rust side (rnr_core::platform). */
+/** Platform facts handed to the Rust side (rnrs_core::platform). */
 object RnrPlatform {
   init {
     RnrLibrary.ensureLoaded()
