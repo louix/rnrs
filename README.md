@@ -1,4 +1,4 @@
-# rnr: React Native modules in TypeScript + Rust
+# rnrs: React Native modules in TypeScript + Rust
 
 Write a TypeScript spec and a Rust implementation. You get a module for Android, iOS and the browser, with no Swift, Kotlin, C++ or JSI code in your package or your app.
 
@@ -21,7 +21,7 @@ impl rnr_interface::XorModule for Module {
 xorModule().xor(bytes.buffer, 7);
 ```
 
-**Experimental, unpublished.** Packages are local tarballs. Baseline: React Native 0.88.0 (Expo SDK 58 pins); Android is validated on it, iOS and Expo validation is in progress ([status](docs/status.md)). Functional tests: Pixel 2 XL (Android 11), Pixel 8a (GrapheneOS, Android 17; regression smokes), iPhone 12 Pro, headless Chromium. Benchmarks: Pixel 2 XL and iPhone 12 Pro only. Not for production.
+**Experimental:** APIs may change; see [platform support and limits](docs/status.md).
 
 - [Quickstart](docs/quickstart.md)
 - [Status and limits](docs/status.md)

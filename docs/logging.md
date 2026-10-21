@@ -1,6 +1,6 @@
 # Rust logging
 
-Experimental, 2026-10-19 (first slice). Libraries emit standard [`tracing`](https://docs.rs/tracing) events or [`log`](https://docs.rs/log) records. The app decides, once, where they go: the platform log through `rnrs-log` (`rust/rnrs-log`, packaged in `@rnrs/runtime`). Nothing is logged unless the app opts in.
+Libraries emit standard [`tracing`](https://docs.rs/tracing) events or [`log`](https://docs.rs/log) records. The app decides, once, where they go: the platform log through `rnrs-log` (`rust/rnrs-log`, packaged in `@rnrs/runtime`). Nothing is logged unless the app opts in.
 
 ## Who does what
 

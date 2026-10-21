@@ -4,7 +4,7 @@
 presentation, rendered with React Native Web 0.21.4 / React DOM 19.3.0. Rust owns the scene and its simulation; the
 browser host's requestAnimationFrame drives one Bevy update and one canvas submit per frame.
 No thread, no pixels across the bridge, no CPU copy, no Canvas 2D or WebGL fallback. Design and
-limits: [docs/bevy3d.md](../../docs/bevy3d.md#browser-webgpu).
+limits: [docs/bevy3d.md](../../packages/bevy3d/README.md#browser-webgpu).
 
 ```sh
 nix develop .#web --offline

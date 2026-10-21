@@ -1,14 +1,6 @@
 # Quickstart: a Rust module from a TypeScript spec
 
-You write a TypeScript spec and Rust, and nothing else: no Swift, Kotlin, C++ or JSI. Everything here is experimental and unpublished. Packages exist only as local tarballs, and React Native 0.88.0 is the only targeted version (validation in progress; see [status](status.md)). Read [status](status.md) first.
-
-How each step was checked:
-
-| Mark | Meaning |
-| --- | --- |
-| ✅ | Run on Linux. Step 1: verbatim on 2026-10-19. Steps 2–4 (web, Android): on 2026-10-20 by `scripts/consumer/fresh-author.sh`, which runs these commands with the app files of [`fixtures/fresh-crc`](../fixtures/fresh-crc) and runs the result in headless Chromium and on a Pixel 2 XL. |
-| 🔁 | Same commands as a repo script whose recorded run passed (`scripts/consumer/*`, see [packaging](packaging.md#clean-consumers)). Not rerun for this guide. |
-| ⚠ | Written from the code. Never executed as shown. |
+Write a TypeScript spec and a Rust implementation; rnrs generates the platform glue. This guide targets React Native 0.88 and browser Wasm. See [platform support](status.md).
 
 ## 0. Tools
 
@@ -28,9 +20,9 @@ The repo's flake shells provide the system tools, but **not** Rust toolchains or
 | `nix develop "$REPO#web"` | x86_64 Linux | Node 24, rustup, wasm-bindgen, esbuild, Chromium |
 | `nix develop "$REPO#ios"` | macOS | Node 24, rustup, CocoaPods. Xcode comes from the system. |
 
-`$REPO` is the absolute path of this checkout (`REPO=/absolute/path/to/this/checkout`, as in step 1). Use the absolute path: `.` only works from the repo root, and the module and apps live outside it. Run every command inside that shell, or pass it as `nix develop "$REPO#web" --command bash -c '…'`. Do not start a login shell (`bash -l`) inside it: your profile can reset `PATH` and hide the shell's `cargo`, `rustup` and `wasm-bindgen`. Check with `command -v cargo wasm-bindgen` and `rustup toolchain list`.
+`$REPO` is the absolute path of this checkout (`REPO=/absolute/path/to/this/checkout`, set before entering the shell). Use the absolute path: `.` only works from the repo root, and the module and apps live outside it. Run every command inside that shell, or pass it as `nix develop "$REPO#web" --command bash -c '…'`. Do not start a login shell (`bash -l`) inside it: your profile can reset `PATH` and hide the shell's `cargo`, `rustup` and `wasm-bindgen`. Check with `command -v cargo wasm-bindgen` and `rustup toolchain list`.
 
-There is no Android or web shell on macOS, and no shell for aarch64 Linux. If Nix doesn't have flakes enabled, run `nix --extra-experimental-features 'nix-command flakes' develop …` ⚠. Without Nix, install the table's versions yourself ⚠.
+There is no Android or web shell on macOS, and no shell for aarch64 Linux. If Nix doesn't have flakes enabled, run `nix --extra-experimental-features 'nix-command flakes' develop …`. Without Nix, install the table's versions yourself.
 
 Then install the toolchain with rustup. This needs the network:
 
@@ -44,36 +36,28 @@ rnrs installs nothing. If a Rust target is missing, `rnrs build` stops before co
 
 The repo scripts instead `source scripts/rust-env.sh` from the repo root. It only exports `RUSTUP_HOME`, `CARGO_HOME` (both under `.generated/`) and `RUSTUP_TOOLCHAIN`. It installs nothing; `build-android.sh` and `build-web.sh` do the installing.
 
-## 1. Pack the framework
+## 1. Choose a workspace
+
+Use an empty directory outside any other npm package:
 
 ```sh
-REPO=/absolute/path/to/this/checkout
-PACK="$REPO/.generated/pack"
-WORK=/absolute/path/to/a/scratch/dir           # outside the repo
-cd "$REPO" && npm ci --ignore-scripts && node scripts/pack.mjs   # ✅ writes $PACK/*.tgz
+WORK=/absolute/path/to/your/workspace
 ```
 
-The framework is two packages, released together at the same version:
+The CLI package is `@rnrs/cli`; its executable is `rnrs`. Use `npm exec --package=@rnrs/cli` to scaffold, then `npx rnrs` after installing the project's dependencies. Do not install the unrelated unscoped npm package `rnrs`.
 
-| Package | Who depends on it | Contents |
-| --- | --- | --- |
-| `@rnrs/runtime` | apps (dependency), module packages (peer and dev dependency) | JS runtime, Android/iOS native library, browser backend, the spec types (`@rnrs/runtime/spec`), the framework Rust crates |
-| `@rnrs/cli` | module packages (dev dependency); `@rnrs/runtime` (dependency, for its native build hooks) | the `rnrs` command: `init`, `generate`, `check`, `test`, `pack-js`, `build`, `bundle`, `lock` |
+To test changes to the framework itself, use the [local package workflow](lab.md#local-package-testing).
 
-Nothing is published. Once the packages are on npm, a one-off `npm exec --package=@rnrs/cli -- rnrs init` scaffolds a module without installing anything (npm also fetches the CLI's peer `@rnrs/runtime`). `npx rnrs …` is meant for a project where `@rnrs/cli` is installed: without one, npx would look up an unscoped `rnrs` package on the registry, which is not this CLI. Below, the local tarballs stand in for the registry.
-
-## 2. Create the module ✅
+## 2. Create the module
 
 Start in an empty directory outside any other npm package. Write a minimal `package.json` first; without one, npm installs into the nearest parent package.
 
 ```sh
 mkdir -p "$WORK/crc" && cd "$WORK/crc"
 echo '{"name": "@demo/crc", "private": true}' > package.json
-npm exec --package="$PACK/rnrs-cli-0.1.0.tgz" --package="$PACK/rnrs-runtime-0.1.0.tgz" -- rnrs init
-#   or: … -- rnrs init --targets android,web
-#   published: npm exec --package=@rnrs/cli -- rnrs init
-npm install --save-dev "$PACK/rnrs-cli-0.1.0.tgz" "$PACK/rnrs-runtime-0.1.0.tgz"
-#   published: npm install    (installs the devDependencies init wrote)
+npm exec --package=@rnrs/cli -- rnrs init
+# Or restrict platforms: … -- rnrs init --targets android,web
+npm install
 ```
 
 `rnrs init` writes these files and never installs anything (npm exec itself fetches the CLI):
@@ -126,10 +110,10 @@ impl rnr_interface::CrcModule for Module {
 ```
 
 - **Generated trait:** run `npx rnrs generate` after you edit the spec, and read `rust/src/rnr_interface.rs` for the exact signatures. Supported types are listed in [status](status.md#spec-types); the full rules are in [generator](generator.md).
-- **`rnrs`:** the framework crate (`rnrs::core` is rnrs-core), not on crates.io. `rnrs test` and app builds resolve it to the copy inside `@rnrs/runtime`. Renderers enable its `surface` feature, and apps using them install `@rnrs/surface`.
+- **`rnrs`:** the framework crate (`rnrs::core` is rnrs-core). `rnrs test` and app builds resolve it to the copy inside `@rnrs/runtime`. Renderers enable its `surface` feature, and apps using them install `@rnrs/surface`.
 - **The spec import:** `@rnrs/runtime/spec` also resolves in editors and `tsc` with `moduleResolution` `bundler` or `nodenext`.
 
-## 3. Test and pack ✅
+## 3. Test and pack
 
 ```sh
 npx rnrs test          # generates the interface, then cargo test
@@ -146,7 +130,7 @@ npm pack              # prepack runs rnrs generate + rnrs pack-js → demo-crc-0
 
 ## 4. Use it in an app
 
-Apps depend on `@rnrs/runtime` and the module; `@rnrs/runtime` brings `@rnrs/cli` along for its Gradle task and Xcode script phase. The commands below also install the `@rnrs/cli` tarball only because nothing is published: npm would otherwise look up `@rnrs/runtime`'s dependency on the registry.
+Apps install `@rnrs/runtime` and the module. The runtime supplies the CLI for native build hooks. Here we install the module archive created in step 3; consumers can instead install your published package by name.
 
 In JS, with no other setup on Android or iOS:
 
@@ -157,7 +141,7 @@ const sum = crcModule().crc32(new Uint8Array([1, 2]).buffer);   // pass an Array
 
 The first build writes `rnr-<target>.Cargo.lock` in the app root; commit it. The generated `.rnr/` directory should be git-ignored.
 
-### Web (Vite) ✅ `nix develop "$REPO#web"`
+### Web (Vite)  `nix develop "$REPO#web"`
 
 ```sh
 mkdir -p "$WORK/web-app" && cd "$WORK/web-app"
@@ -170,36 +154,36 @@ import {crcModule} from '@demo/crc';
 initRnr(bundle)          // once, before any module call (no top-level await: Vite's default target)
   .then(() => console.log(crcModule().crc32Hex('123456789')));   // cbf43926
 TS
-npm install "$PACK/rnrs-cli-0.1.0.tgz" "$PACK/rnrs-runtime-0.1.0.tgz" "$WORK/crc/demo-crc-0.1.0.tgz"
+npm install @rnrs/runtime "$WORK/crc/demo-crc-0.1.0.tgz"
 npx rnrs build --target web --app .    # needs cargo, the wasm32 target, the pinned wasm-bindgen CLI
 npx vite build
 ```
 
 The build stops before compiling if the `wasm32-unknown-unknown` target is missing or the `wasm-bindgen` CLI is not the version the framework pins. The error names the fix command. `RNR_WASM_BINDGEN` selects another CLI.
 
-### Android ✅ `nix develop "$REPO"`
+### Android  `nix develop "$REPO"`
 
-1. Create an RN **0.88.0** app. The scripts unpack `@react-native-community/template@0.88.0`; `npx @react-native-community/cli@20.2.0 init App --version 0.88.0` should work too ⚠.
-2. Install the tarballs and build:
+1. Create an RN **0.88.0** app. The scripts unpack `@react-native-community/template@0.88.0`; `npx @react-native-community/cli@20.2.0 init App --version 0.88.0` should work too.
+2. Install the packages and build:
 
 ```sh
 cd "$WORK/App"
-npm install "$PACK/rnrs-cli-0.1.0.tgz" "$PACK/rnrs-runtime-0.1.0.tgz" "$WORK/crc/demo-crc-0.1.0.tgz"
+npm install @rnrs/runtime "$WORK/crc/demo-crc-0.1.0.tgz"
 cd android && ./gradlew --no-daemon --init-script "$REPO/scripts/consumer/nix-sdk.init.gradle" \
   assembleRelease -PreactNativeArchitectures=arm64-v8a
 ```
 
-- **The init script** is needed only with the Nix SDK, which has only build-tools 37.0.0. It sets library modules' `buildToolsVersion` and does not edit the app. With a normal SDK that has the template's default build-tools, leave it out ⚠.
+- **The init script** is needed only with the Nix SDK, which has only build-tools 37.0.0. It sets library modules' `buildToolsVersion` and does not edit the app. With a normal SDK that has the template's default build-tools, leave it out.
 - **Tools:** the framework's Gradle task runs `node` and `cargo`. If they are not on the Gradle process's `PATH` (Android Studio started outside your shell), set `NODE_BINARY` or `-Prnr.node=/absolute/path/to/node`, and `RNR_CARGO`. A relative path is rejected. With `RNR_CARGO`, also set `RUSTC` to the matching `rustc`, or the missing-target check is skipped and cargo reports it instead. A missing `aarch64-linux-android` target is reported before compiling, with the `rustup target add` command.
 - **ABIs:** only arm64 is tested.
 
-### iOS 🔁 `nix develop "$REPO#ios"` (Mac)
+### iOS  `nix develop "$REPO#ios"` (Mac)
 
 Not rerun for this flow. These are the commands of `scripts/consumer/ios-app.sh`, which builds the repo's own modules.
 
 ```sh
 cd "$WORK/App"
-npm install "$PACK/rnrs-cli-0.1.0.tgz" "$PACK/rnrs-runtime-0.1.0.tgz" "$WORK/crc/demo-crc-0.1.0.tgz"   # needs "ios" in the module's targets
+npm install @rnrs/runtime "$WORK/crc/demo-crc-0.1.0.tgz"   # needs "ios" in the module's targets
 cd ios && RCT_USE_RN_DEP=1 RCT_USE_PREBUILT_RNCORE=1 pod install           # RN's prebuilt core and dependencies (as Expo uses)
 ```
 
@@ -216,7 +200,7 @@ cd ios && RCT_USE_RN_DEP=1 RCT_USE_PREBUILT_RNCORE=1 pod install           # RN'
 
 ### Expo
 
-Not validated. Expo Go cannot load custom native code. Prebuild and dev builds were never tried.
+Use Expo SDK 58 with prebuild and a custom development or release build. The iOS simulator flow is validated; Android prebuild has been checked but its app has not been built or run. Expo Go cannot load custom native code.
 
 ## 5. Runtime rules
 
@@ -248,5 +232,5 @@ Lifecycle details: [ownership](ownership.md).
 | `the Rust target … is not installed` | Run the `rustup target add …` command it prints, in the shell that builds. |
 | `cannot run cargo` | Install rustup and the toolchain (step 0), or set `RNR_CARGO`. |
 | `needs the wasm-bindgen CLI …` | Run the `cargo install wasm-bindgen-cli --version … --locked` it prints, or use `nix develop "$REPO#web"`. |
-| `generated from different specs` at runtime | Wrapper and glue are out of sync: reinstall matching tarballs and rebuild. |
+| `generated from different specs` at runtime | Wrapper and glue are out of sync: reinstall matching module packages and rebuild. |
 | Android Studio sync warns that the bundle is not built | Expected; the first Gradle build builds it. |

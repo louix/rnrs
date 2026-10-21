@@ -43,3 +43,23 @@ Use `npm run fmt` / `npm run fmt:check` for maintained JS/TS formatting, `npm ru
 `.npmrc` saves exact npm versions. Once Renovate is enabled, routine updates wait 14 days with required publication timestamps and strict age filtering; direct npm dependencies are pinned, peer ranges remain separate. This bot policy does not block manual `npm install`, does not enforce Cargo exact pins, and release age does not guarantee safety. Review release notes and test results, and commit lockfile changes.
 
 Security fixes may bypass the delay: Renovate vulnerability-alert PRs explicitly use zero delay and require review (no automerge). GitHub dependency graph/Dependabot alerts and Renovate access are required. For a manual security exception, record the advisory and reason in the update PR, install the exact fixed version, and run relevant checks.
+
+## Local package testing
+
+Build framework packages from this checkout when testing changes before publishing:
+
+```sh
+REPO=/absolute/path/to/this/checkout
+cd "$REPO"
+npm ci --ignore-scripts
+node scripts/pack.mjs
+PACK="$REPO/.generated/pack"
+```
+
+Install the matching runtime and CLI archives together in the test project, so npm does not resolve one from the registry. Rendering projects also need the surface archive. Substitute these paths for registry package names in the quickstart.
+
+```sh
+npm install "$PACK/rnrs-runtime-0.1.0.tgz" "$PACK/rnrs-cli-0.1.0.tgz"
+```
+
+The clean-consumer scripts in `scripts/consumer/` build independent apps from these packages. `fresh-author.sh web|android` also creates a new module outside the repository. Run `npm run test:rnrs-offline` in the configured Rust environment to verify packaged framework resolution without a registry fallback.

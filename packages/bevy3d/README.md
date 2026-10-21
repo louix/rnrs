@@ -1,10 +1,10 @@
 # Bevy example
 
-Experimental Rust-owned Bevy scene with TypeScript controls. Android requires API 26 and Rust 1.97.1 for this example. The iOS experimental build does not render on the simulator. Browser WebGPU has known Firefox unmount crashes and headless software-device loss; there is no production-readiness or performance claim.
+Rust-owned Bevy scene with TypeScript controls. Android requires API 26 and Rust 1.97.1 for this example. The iOS build does not render on the simulator. Browser WebGPU has known Firefox unmount crashes and headless software-device loss; there is no production-readiness or performance claim.
 
 ## Browser WebGPU
 
-The browser host drives Bevy on requestAnimationFrame with no render worker or Canvas 2D fallback. Visible output and lifecycle safety must be checked separately from successful GPU submission. Reproduce using [the browser fixture](../fixtures/web-bevy/README.md).
+The browser host drives Bevy on requestAnimationFrame with no render worker or Canvas 2D fallback. Visible output and lifecycle safety must be checked separately from successful GPU submission. Reproduce using [the browser fixture](../../fixtures/web-bevy/README.md).
 
 ## Native touch
 

@@ -1,6 +1,6 @@
 # `@rnrs/example-http`: reqwest on Android, iOS and in the browser
 
-Experimental, 2026-10-19. An author package like `@rnrs/example-blake3`: a TS spec (`packages/http/http.spec.ts`), a Rust crate wrapping reqwest 0.12, and the generated, committed interface. It has no platform code. Targets: `android`, `ios` and `web`. iOS runs the same native code as Android: the crate has no iOS-specific branch (see [iOS](#ios)).
+An author package like `@rnrs/example-blake3`: a TS spec (`packages/http/http.spec.ts`), a Rust crate wrapping reqwest 0.12, and the generated, committed interface. It has no platform code. Targets: `android`, `ios` and `web`. iOS runs the same native code as Android: the crate has no iOS-specific branch (see [iOS](#ios)).
 
 ## Contract
 
@@ -35,7 +35,7 @@ Every request races its work against the deadline and the cancellation token. Th
 
 ## Lifecycle
 
-The lab runner streams an endless response, then reloads React Native. In the next runtime the process-wide counters show `active` 0, `bufferedBytes` 0 and `droppedEarly` +1, and the server saw the connection closed by the client. The old runtime's promise never settles: late results are discarded with the runtime. Teardown cancels the operation, as for any module.
+Runtime teardown cancels pending requests and discards late results.
 
 ## iOS
 

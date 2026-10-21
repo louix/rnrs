@@ -1,20 +1,18 @@
 # Platforms and limits (2026-10-20)
 
-Experimental. Nothing is published to npm or crates.io, and every package is `private`. The API, IR and file layout may change.
-
 ## Platforms
 
 | | Status | Tested on |
 | --- | --- | --- |
 | Android | Works | Pixel 2 XL (Android 11): full suites, and the only benchmark phone. Pixel 8a (GrapheneOS, Android 17): http/kv consumer regressions and a comparison smoke. arm64 release builds only. |
-| iOS | Experimental | Core modules tested on iPhone 12 Pro (iOS 26.7.1, RN 0.83.1), Xcode 26.6, arm64 release builds. Runtime lifecycle, surfaces and touch also have simulator runs; touch is not validated on a physical iPhone. |
-| Web (browser Wasm) | Experimental | Headless Chromium 155 suites; Firefox 156 triangle and Bevy steady rendering observed. Bevy unmount crashes Firefox; headless software WebGPU can lose the device. No WASI, Node.js or worker threads. |
-| React Native | **0.88.0; Android suites pass except one unexplained lab failure; iOS simulator passed** | Bridgeless, Hermes V1. Pixel 2 XL on 0.88.0: clean-template consumer, lab conformance and lifecycle suite (reload, destroy, GC finalizers, external buffers), Worklets, surface and Bevy touch runs pass. Async results also recover from RN 0.88 dropping queued drain tasks after a swallowed scheduler error ([details](ownership.md#async-completion-and-cancellation); scheduler-probe passes on the Pixel 2 XL). One unexplained lab failure: at commit 50edb96 one Pixel 2 XL lifecycle-suite run timed out after 120 s waiting for the background step's result (`bg-result`), with no app logs kept; its `adb reverse` ports (8766/8787, which the app reports through) were already gone at cleanup, unlike every passing run. Three reruns of the same APK and the run at 91e04b7 passed (4/5). Cause unknown, not attributed; the app and runner now log the background outcome and failed reports. Bounded batch at 46ae1e2 (lab suite, capture on): 6 complete passes, 1 incomplete run, 3 not run. Run 7 lost its reporting transport: the adb reverse mappings were gone while `adb get-state` was `device`, the device logcat stream ended 32 s in, and 3 s later the app logged that its `drained` report failed (`Network request failed`); a USB reconnect is inferred, not confirmed (no host or device adb restart). Its steps up to and including background passed; its later steps did not complete and are not counted. The 50edb96 failure's cause remains unknown; its symptom (reverse ports gone) is compatible with the same transport loss. RN 0.88 iOS simulator checks pass at c34c7ec: scheduler recovery, core lifecycle and surface lifecycle. Physical-iPhone results remain on 0.83.1; the new install was blocked by the free-profile app limit. Older versions are not supported. |
+| iOS | Fixture-tested | Core modules tested on iPhone 12 Pro (iOS 26.7.1, RN 0.83.1), Xcode 26.6, arm64 release builds. Runtime lifecycle, surfaces and touch also have simulator runs; touch is not validated on a physical iPhone. |
+| Web (browser Wasm) | Fixture-tested | Headless Chromium 155 suites; Firefox 156 triangle and Bevy steady rendering observed. Bevy unmount crashes Firefox; headless software WebGPU can lose the device. No WASI, Node.js or worker threads. |
+| React Native | 0.88.0 | New Architecture (bridgeless), Hermes V1. Android consumer, lifecycle, Worklets, surface and touch suites pass; iOS simulator core, scheduler and surface suites pass. One earlier Android lifecycle timeout remains unexplained; six subsequent complete runs passed, followed by an incomplete run with lost reporting transport. Physical-iPhone results remain on 0.83.1 because the new install hit the free-profile app limit. Older RN versions are not supported. |
 | Expo | iOS simulator validated; Android prebuild only | SDK 58.0.16, RN 0.88.0, React 19.3.0: default autolinking, unchanged generated native trees, release iOS simulator build and two cold launches pass. Android was not built or run. Expo Go cannot load custom native code. |
-| Rust | 1.90.0 default | The optional Bevy 0.20 example uses Rust 1.97.1 and requires Android API 26. See [Bevy](bevy3d.md). |
+| Rust | 1.90.0 default | The optional Bevy 0.20 example uses Rust 1.97.1 and requires Android API 26. See [Bevy](../packages/bevy3d/README.md). |
 | 16 KB pages | Linked 16 KB-aligned | Only run on 4 KB-page devices; see [page-size](page-size.md). |
-| Worklets / Reanimated | Experimental, Android-tested | Pixel 2 XL: Worklets 0.13.0, Reanimated 4.7.1, Gesture Handler 3.3.0 (Expo SDK 58 pins) on RN 0.88.0. iOS shared-code builds and runtime regressions do not validate iOS Worklets; web Worklets are untested. See [endpoint limits](#worklets-limits). |
-| Rendering surfaces | Experimental | Android device, iOS simulator and browser fixtures. iOS Bevy does not render on the simulator. Canvas 2D and WebGPU have distinct contracts; see [surface](surface.md) and [Bevy](bevy3d.md). |
+| Worklets / Reanimated | Android-tested | Pixel 2 XL: Worklets 0.13.0, Reanimated 4.7.1, Gesture Handler 3.3.0 (Expo SDK 58 pins) on RN 0.88.0. iOS shared-code builds and runtime regressions do not validate iOS Worklets; web Worklets are untested. See [endpoint limits](#worklets-limits). |
+| Rendering surfaces | Fixture-tested | Android device, iOS simulator and browser fixtures. iOS Bevy does not render on the simulator. Canvas 2D and WebGPU have distinct contracts; see [surface](surface.md) and [Bevy](../packages/bevy3d/README.md). |
 
 ## Worklets limits
 
@@ -45,7 +43,6 @@ Opt-in endpoints expose allow-listed synchronous methods with scalar values and 
 | Per-target lock files, `--locked` for CI | Yes. |
 | Rust logging to logcat / os_log / console | Yes, opt-in per app ([logging](logging.md)). No forwarding to the JS console. |
 | Async runtime | Tokio, owned by the framework (native). Browser-local futures (web). There is no app-chosen or bring-your-own runtime. |
-| Production use, security sandboxing, published packages | **No.** |
 
 ## Example modules
 
@@ -55,8 +52,8 @@ Opt-in endpoints expose allow-listed synchronous methods with scalar values and 
 | [`meter`](../packages/meter) | native objects as arguments and results | android, ios, web |
 | [`values`](../packages/values) | strings, records, unions, buffers | android, ios, web |
 | [`blake3`](../packages/blake3) | wrapping a crate, busy-gated async object | android, ios, web |
-| [`http`](../packages/http) ([doc](http.md)) | reqwest; different native and web transports | android, ios, web |
-| [`kv`](../packages/kv) ([doc](kv.md)) | sled, app data dir; refused on web | android, ios |
+| [`http`](../packages/http) ([doc](../packages/http/README.md)) | reqwest; different native and web transports | android, ios, web |
+| [`kv`](../packages/kv) ([doc](../packages/kv/README.md)) | sled, app data dir; refused on web | android, ios |
 | [`fixtures/fresh-crc`](../fixtures/fresh-crc) | `rnrs init` package wrapping a crates.io crate (crc32fast), built outside the repo | android, ios, web (iOS not built for it) |
 | [`fixtures/author`](../fixtures/author) | smallest out-of-repo author package | android, web |
 | [`bench`](../packages/bench) | benchmark module (lab) | android, ios, web |

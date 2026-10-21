@@ -1,6 +1,6 @@
 # Generator: TS spec → Rust interface → bindings
 
-Experimental. The API, file layout and IR are not frozen. See [ownership](ownership.md) for lifecycle rules and [status](status.md) for platform validation and limits.
+See [ownership](ownership.md) for lifecycle rules and [status](status.md) for platform validation and limits.
 
 ## What a module author writes
 
@@ -208,11 +208,11 @@ Earlier description (still accurate apart from the glue location):
 
 ## Limits
 
-- Experimental. Generated names, the IR and the file layout may change. The error type is `String`, and the error schema is open.
+- The error type is `String`, and the error schema is open.
 - Platform and toolchain coverage is fixture-specific; see [status](status.md).
 - Not yet supported: tuples, `Record<string, T>`, typed-array views (by design: ArrayBuffer only), number-literal or boolean-literal discriminators, recursive types, and generic types. Native objects inside records or unions, and in arrays returned by object methods, are also unsupported. Object methods may use only their own native type.
 - The helper intrinsics are captured when `@rnrs/runtime`'s `src/runtime.ts` first loads. Prototype changes made before that point are not defended against.
-- The own-property guarantees address inherited data/setter pollution, not arbitrary monkey-patching of built-ins. Review probes confirmed browser wasm-bindgen glue still looks up facilities such as `Array.of`, `Function.prototype.call`, and `Reflect.get` dynamically; replacing them can intercept calls or corrupt async results. Android's diagnostic global `__rnrSettle` is also writable. These are explicit experimental limits, not a security isolation boundary.
+- The own-property guarantees address inherited data/setter pollution, not arbitrary monkey-patching of built-ins. Review probes confirmed browser wasm-bindgen glue still looks up facilities such as `Array.of`, `Function.prototype.call`, and `Reflect.get` dynamically; replacing them can intercept calls or corrupt async results. Android's diagnostic global `__rnrSettle` is also writable. These are limits, not a security isolation boundary.
 - On the web, the settle call builds its argument list with `Array.of`.
 - Each property read or define is a JS helper call (on Android, from C++ through JSI); the cost is unmeasured.
 - Unknown record properties are ignored (no strict mode). Unions dispatch on the discriminator only; there is no structural matching.

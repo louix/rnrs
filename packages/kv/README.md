@@ -1,6 +1,6 @@
 # `@rnrs/example-kv`: sled on Android and iOS
 
-Experimental, 2026-10-19. An author package: a TS spec (`packages/kv/kv.spec.ts`), a Rust crate wrapping sled 0.34, and the generated interface. It has no platform code. Its targets are `android` and `ios`:
+An author package: a TS spec (`packages/kv/kv.spec.ts`), a Rust crate wrapping sled 0.34, and the generated interface. It has no platform code. Its targets are `android` and `ios`:
 - There is no browser backend and no fallback. An app whose dependency graph selects it for the web is refused by `rnrs build --target web`, naming the chain (`scripts/consumer/kv-web-rejected.sh`), and the packaged `rnr/web.ts` throws at import.
 - The lab therefore builds its browser harness from its own graph (`web/package.json`, lock `web/rnr-web.Cargo.lock`), which does not include kv.
 - On iOS the same crate runs unchanged; the framework supplies `<Application Support>/rnr` (see [iOS](#ios)).
@@ -15,7 +15,7 @@ sled 0.34 is old (2021) and still pre-1.0. It was chosen as requested for this e
 - **Store operations:** `get`, `put`, `remove`, `keys(prefix, limit ≤ 10000)`, `flush()` and `close()`, all async, with ArrayBuffer values and string keys.
 - **Deleting:** `deleteDatabase(name)` deletes only that database's directory, and fails (`busy:`) while it is open, opening or closing in the process.
 - **Diagnostics:** `diagnostics()` returns process-wide `openDatabases`, `handles` and `running`.
-- **Durability:** a resolved `put` is in sled's memory and log buffers. Only writes completed before a resolved `flush()` or `close()` are guaranteed to survive a process kill. Before that, data reaches disk only when sled writes out a full log buffer, or at the final release of the database (which flushes). The crate asks sled for a flush every 500 ms (`flush_every_ms`), but sled 0.34.7 starts that background flusher only on Windows, Linux, macOS and the BSDs (`src/db.rs:72-94`). On Android and iOS it does nothing. Earlier versions of this document claimed a background flush on Android; that was wrong.
+- **Durability:** a resolved `put` is in sled's memory and log buffers. Only writes completed before a resolved `flush()` or `close()` are guaranteed to survive a process kill. Before that, data reaches disk only when sled writes out a full log buffer, or at the final release of the database (which flushes). The crate asks sled for a flush every 500 ms (`flush_every_ms`), but sled 0.34.7 starts that background flusher only on Windows, Linux, macOS and the BSDs (`src/db.rs:72-94`). On Android and iOS it does nothing.
 - **Cancellation:** an AbortSignal rejects with AbortError, but writes do not observe it. A cancelled `put` may still be applied; nothing is rolled back.
 - **`close()`:** every call, concurrent or later, joins the same outcome.
   - Stops new operations on that handle; they reject with `closed:`. An operation is either refused or counted before `close` waits.
@@ -26,7 +26,7 @@ sled 0.34 is old (2021) and still pre-1.0. It was chosen as requested for this e
 
 ## Framework additions (minimal)
 
-- **`rnrs_core::platform::app_data_dir()`** (new, documented in rnrs-core). The app-private directory supplied by the backend:
+- **`rnrs_core::platform::app_data_dir()`**. The app-private directory supplied by the backend:
   - On Android the framework's Kotlin module selects `Context.getFilesDir()/rnr` and passes the path through JNI (`RnrPlatform.setAppDataDir`, then `rnr_set_app_data_dir`) before modules exist. Directory creation is deferred until use.
   - The first value wins, and a different one is an error.
   - Without a backend-provided directory (for example the browser) it returns an error.
@@ -53,20 +53,6 @@ sled 0.34 is old (2021) and still pre-1.0. It was chosen as requested for this e
 - **Lifecycle:** the database thread and the `rnr-kv-closer` thread behave as on Android. When iOS suspends the app, unflushed data stays in memory, and the app can then be killed without notice. As on Android, only flushed data is promised; call `flush()` before the app may go to the background. Backgrounding itself is not tested.
 - **Same code:** no platform code and no iOS-specific branch in the crate. sled 0.34.7 has no iOS-specific code paths beyond the gaps above (flusher, file lock, and its memory-limit probe, which is irrelevant because the cache size is set).
 
-
-
-iPhone 12 Pro, iOS 26.7.1, release Hermes, RN 0.83.1. Clean consumer: the pristine template plus JS only, with `npm install` of `@rnrs/runtime`, `@rnrs/example-http` and `@rnrs/example-kv` (`RNR_IOS_FIXTURE=modules scripts/consumer/ios-app.sh`, runner `scripts/consumer/ios-modules-test.mjs`; details and hashes in [iOS](ios.md#reproduce)). Three consecutive passing runs on one fresh build:
-
-| Check | Result (3 of 3 runs) |
-| --- | --- |
-| Consumer smoke | 5/5, the same `fixtures/kv-consumer/smoke.ts` as on Android: values, keys, remove, flush; name validation; close vs 24 in-flight writes (each write whole or refused `closed:`, as seen after reopening); two shared handles and `deleteDatabase` refused while open; cleanup |
-| Cancellation | An aborted `put` rejects with AbortError; the value read afterwards is absent in run 1 and whole in runs 2 and 3. Cancellation does not guarantee rollback. |
-| Concurrent `close()` | Three concurrent calls all resolve only after every in-flight write has settled; a later call joins the same outcome and the handle then refuses with `closed:`; a reopen sees exactly the writes that succeeded |
-| Reload after 24 unawaited writes | The next runtime reopened the shared database: flushed marker present, 24 writes whole, 0 torn. `deleteDatabase` then succeeded once the old runtime's handle was released. The 24 writes were issued without awaiting, just before the reload. The native work may well have finished first: the `armed` report, taken right before the reload, showed kv `running` 2 in run1 and 0 in run2 and run3 (raw records in the results). This checks reopening and integrity after a reload, not cancellation of writes in progress. |
-| Kill after flush | Token written and `flush()`ed with the handle left open; the runner sent SIGKILL to the app process; after a relaunch the token was read back |
-| Files | The data container's Application Support held only `rnr/kv/rnr-ios-persist/{blobs,conf,db}` before the kill and only `rnrs`, `rnr/kv` after the cleanup (listed with `devicectl device info files`) |
-
-Also on the Mac (macOS host, not the phone): the crate's own Rust tests passed 3 times in a row with `cargo test -p rnr-kv`.
 
 ## Limits
 

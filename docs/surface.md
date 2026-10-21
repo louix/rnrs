@@ -1,6 +1,6 @@
 # Rendering surfaces
 
-Experimental platform surfaces with Rust-owned rendering, lifecycle gates and opt-in native touch input. Android device and browser coverage are fixture-specific; iOS touch coverage is simulator-only. See [Bevy](bevy3d.md) for that renderer's additional limits.
+Platform surfaces with Rust-owned rendering, lifecycle gates and opt-in native touch input. Android device and browser coverage are fixture-specific; iOS touch coverage is simulator-only. See [Bevy](../packages/bevy3d/README.md) for that renderer's additional limits.
 
 ## Ownership split
 
@@ -225,7 +225,7 @@ Touch input can run directly into Rust with `touchInput="rust"` and `Surface::en
 
 ## Touch input (Android, opt-in; 2026-10-20)
 
-**Prototype.** Native touch from the `SurfaceView` straight to Rust (`rnrs-surface` `touch.rs`), without JS. Engine-independent: a renderer drains plain records. Android only. Device evidence and the Bevy consumer: [bevy3d.md](bevy3d.md#native-touch). Not a winit window or event loop, and not a promise of winit compatibility. The records could later be mapped onto winit-style events.
+**Prototype.** Native touch from the `SurfaceView` straight to Rust (`rnrs-surface` `touch.rs`), without JS. Engine-independent: a renderer drains plain records. Android only. Device evidence and the Bevy consumer: [bevy3d.md](../packages/bevy3d/README.md#native-touch). Not a winit window or event loop, and not a promise of winit compatibility. The records could later be mapped onto winit-style events.
 
 **Opt-in on both sides.**
 - The renderer calls `Surface::enable_touch()`.
@@ -261,7 +261,7 @@ Touch input can run directly into Rust with `touchInput="rust"` and `Surface::en
 | Time | `MotionEvent.getEventTime()`: `SystemClock.uptimeMillis`, monotonic. Not comparable with `Date`, `Instant` or another device's clock. |
 
 **React Native interplay (only what was tested).**
-- Overlays: a native-backed RN view (`ReactViewGroup`, e.g. a `Pressable`) drawn above the surface consumes its own touches (RN 0.83 `ReactViewGroup.onTouchEvent` returns true unless `pointerEvents` forbids it), so the surface below should get none. On the Pixel 2 XL, a tap on the TSX `Pressable` above the surface paused the scene through JS and fed nothing to Rust ([bevy3d.md](bevy3d.md#native-touch)).
+- Overlays: a native-backed RN view (`ReactViewGroup`, e.g. a `Pressable`) drawn above the surface consumes its own touches (RN 0.83 `ReactViewGroup.onTouchEvent` returns true unless `pointerEvents` forbids it), so the surface below should get none. On the Pixel 2 XL, a tap on the TSX `Pressable` above the surface paused the scene through JS and fed nothing to Rust ([bevy3d.md](../packages/bevy3d/README.md#native-touch)).
 - JS still gets touch events for the surface view itself through the root view's dispatcher (responders, `onTouchStart`). Whether a JS responder, parent `Pressable`, `ScrollView` or RNGH handler also acting on the same gesture behaves well is **untested**; no interop is claimed.
 - The Worklets gesture path (`bevy-worklets`) is unchanged and uses the default `"none"`.
 

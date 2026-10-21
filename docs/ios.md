@@ -1,6 +1,6 @@
 # iOS backend
 
-Experimental, 2026-10-19. iOS uses the same runtime as Android: the generic JSI adapter, the runtime scope, the Rust C ABI (`rnrs-android`, which despite its name has no Android code), the binding-owned Tokio runtime and the executor budget. Only the lifecycle module and the build integration are iOS-specific. Module authors still write only a TypeScript spec and Rust.
+iOS uses the same runtime as Android: the generic JSI adapter, the runtime scope, the Rust C ABI (`rnrs-android`, which despite its name has no Android code), the binding-owned Tokio runtime and the executor budget. Only the lifecycle module and the build integration are iOS-specific. Module authors still write only a TypeScript spec and Rust.
 
 ## Layout
 
