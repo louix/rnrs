@@ -21,15 +21,15 @@
     "frame.ts",
     "rust/Cargo.toml",
     "rust/src",
-    "rnr"
+    "rnrs"
   ],
-  "main": "rnr/index.ts",
-  "types": "rnr/index.ts",
-  "react-native": "rnr/index.ts",
+  "main": "rnrs/index.ts",
+  "types": "rnrs/index.ts",
+  "react-native": "rnrs/index.ts",
   "exports": {
     ".": {
-      "types": "./rnr/index.ts",
-      "default": "./rnr/index.ts"
+      "types": "./rnrs/index.ts",
+      "default": "./rnrs/index.ts"
     },
     "./frame": {
       "types": "./frame.ts",

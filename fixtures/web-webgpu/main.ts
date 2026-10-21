@@ -3,11 +3,11 @@
 // ?expect=webgpu is the test-only SwiftShader launch (software WebGPU: correctness only, no
 // performance claim). The optional pixel probe copies the presented canvas into a 2D canvas: a
 // TEST-ONLY readback, never part of the presentation path.
-import init, * as wasm from './rnr/pkg/rnr_bundle.js';
-import { installWebBackend, type RnrWasm } from '@rnrs/runtime/web';
+import init, * as wasm from './rnrs/pkg/rnrs_bundle.js';
+import { installWebBackend, type RnrsWasm } from '@rnrs/runtime/web';
 import { createSurfaceBootstrap } from '@rnrs/surface/browser';
-import { createWebgpuTriangleModuleForTesting } from '../../.generated/rnr/rnrs_webgpu_triangle';
-import { createVello2DModuleForTesting } from '../../.generated/rnr/rnrs_vello2d';
+import { createWebgpuTriangleModuleForTesting } from '../../.generated/rnrs/rnrs_webgpu_triangle';
+import { createVello2DModuleForTesting } from '../../.generated/rnrs/rnrs_vello2d';
 import { FrameWriter } from '../../packages/vello2d/frame';
 
 const expect = new URLSearchParams(location.search).get('expect');
@@ -22,7 +22,7 @@ const frames = (n = 2) =>
     requestAnimationFrame(step);
   });
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-const diagnostics = () => Array.from(wasm.rnr_surface_diagnostics()) as number[];
+const diagnostics = () => Array.from(wasm.rnrs_surface_diagnostics()) as number[];
 async function until(what: string, condition: () => boolean, ms = 10_000) {
   const end = performance.now() + ms;
   while (!condition()) {
@@ -41,7 +41,7 @@ async function test(name: string, run: () => Promise<void>) {
 function setup() {
   let boot!: ReturnType<typeof createSurfaceBootstrap>;
   const backend = installWebBackend(
-    wasm as unknown as RnrWasm,
+    wasm as unknown as RnrsWasm,
     (same) => (boot = createSurfaceBootstrap(same)),
   );
   const module = createWebgpuTriangleModuleForTesting(8);
@@ -222,10 +222,13 @@ async function webgpu() {
     });
 
     await test('resize during setup configures at the current extent', async () => {
-      const token = wasm.rnr_surface_attach(key, 64, 48, 1) as number;
+      const token = wasm.rnrs_surface_attach(key, 64, 48, 1) as number;
       const scratch = document.createElement('canvas');
-      assert(wasm.rnr_surface_bind_canvas(key, token, scratch) === 'ok', 'bound');
-      assert(wasm.rnr_surface_resize(key, token, 96, 40, 1) === 'ok', 'resized while initializing');
+      assert(wasm.rnrs_surface_bind_canvas(key, token, scratch) === 'ok', 'bound');
+      assert(
+        wasm.rnrs_surface_resize(key, token, 96, 40, 1) === 'ok',
+        'resized while initializing',
+      );
       assert(triangle.stats().surfaceWidth === 96, 'extent recorded');
       const submitted = triangle.stats().framesSubmitted;
       await until('ready', () => triangle.stats().gpuState !== 'initializing');
@@ -237,45 +240,45 @@ async function webgpu() {
         scratch.width === 96 && scratch.height === 40,
         'surface configured at the resized extent',
       );
-      const r = wasm.rnr_surface_render(key, token, true);
+      const r = wasm.rnrs_surface_render(key, token, true);
       assert(
         r.status === 'submitted' && triangle.stats().framesSubmitted === submitted + 1,
         'explicit submitted outcome: ' + r.status,
       );
       assert(
-        wasm.rnr_surface_render(key, token, false).status === 'unchanged',
+        wasm.rnrs_surface_render(key, token, false).status === 'unchanged',
         'no resubmission without a change',
       );
       assert(triangle.setBackground(0, 0.5, 1), 'background accepted');
       assert(
-        wasm.rnr_surface_render(key, token, false).status === 'submitted',
+        wasm.rnrs_surface_render(key, token, false).status === 'submitted',
         'a change resubmits',
       );
       assert(
-        wasm.rnr_surface_resize(key, token, 80, 40, 1) === 'ok' &&
-          wasm.rnr_surface_render(key, token, false).status === 'submitted' &&
+        wasm.rnrs_surface_resize(key, token, 80, 40, 1) === 'ok' &&
+          wasm.rnrs_surface_render(key, token, false).status === 'submitted' &&
           scratch.width === 80,
         'resize reconfigures and redraws',
       );
-      wasm.rnr_surface_detach(key, token);
+      wasm.rnrs_surface_detach(key, token);
     });
 
     await test('late setup after detach and after replacement is discarded', async () => {
-      const token = wasm.rnr_surface_attach(key, 64, 48, 1) as number;
+      const token = wasm.rnrs_surface_attach(key, 64, 48, 1) as number;
       assert(token > 0, 'attached');
       const scratch = document.createElement('canvas');
-      assert(wasm.rnr_surface_bind_canvas(key, token, scratch) === 'ok', 'bound');
+      assert(wasm.rnrs_surface_bind_canvas(key, token, scratch) === 'ok', 'bound');
       const discarded = triangle.stats().initsDiscarded;
-      wasm.rnr_surface_detach(key, token);
+      wasm.rnrs_surface_detach(key, token);
       assert(triangle.stats().gpuState === 'none', 'detach ends setup state at once');
       // Overlapping replacement: a second attachment binds while the first setup is in flight.
-      const second = wasm.rnr_surface_attach(key, 64, 48, 1) as number;
-      assert(wasm.rnr_surface_bind_canvas(key, second, scratch) === 'ok', 'rebound');
+      const second = wasm.rnrs_surface_attach(key, 64, 48, 1) as number;
+      assert(wasm.rnrs_surface_bind_canvas(key, second, scratch) === 'ok', 'rebound');
       assert(
-        wasm.rnr_surface_attach(key, 64, 48, 1) === 0,
+        wasm.rnrs_surface_attach(key, 64, 48, 1) === 0,
         'authority still refuses a concurrent attachment',
       );
-      wasm.rnr_surface_detach(key, second);
+      wasm.rnrs_surface_detach(key, second);
       await until(
         'stale setups discarded',
         () => triangle.stats().initsDiscarded === discarded + 2,
@@ -285,21 +288,21 @@ async function webgpu() {
         st.gpuState === 'none' && st.state === 'detached',
         'nothing kept from stale setups: ' + st.gpuState,
       );
-      assert(wasm.rnr_surface_render(key, second, true).status === 'stale', 'old token rejected');
+      assert(wasm.rnrs_surface_render(key, second, true).status === 'stale', 'old token rejected');
     });
 
     await test('runtime teardown during setup closes the producer and leaves no owners', async () => {
       const other = createWebgpuTriangleModuleForTesting(8);
       const t = other.create();
       const k = t.surfaceKey();
-      const token = wasm.rnr_surface_attach(k, 32, 32, 1) as number;
+      const token = wasm.rnrs_surface_attach(k, 32, 32, 1) as number;
       assert(
-        wasm.rnr_surface_bind_canvas(k, token, document.createElement('canvas')) === 'ok',
+        wasm.rnrs_surface_bind_canvas(k, token, document.createElement('canvas')) === 'ok',
         'bound',
       );
       const before = diagnostics()[1];
       other.teardown();
-      assert(wasm.rnr_surface_render(k, token, true).status === 'closed', 'closed by teardown');
+      assert(wasm.rnrs_surface_render(k, token, true).status === 'closed', 'closed by teardown');
       assert(diagnostics()[1] === before - 1, 'producer owner released at teardown');
       await sleep(500); // the in-flight setup settles; it must drop its device, not keep it
     });
@@ -367,28 +370,28 @@ async function reentrancy() {
       const k = t.surfaceKey();
       const canvas = document.createElement('canvas');
       const discarded = t.stats().initsDiscarded;
-      wasm.rnr_surface_hold_gpu_setups_for_testing(true);
+      wasm.rnrs_surface_hold_gpu_setups_for_testing(true);
       try {
-        const a = wasm.rnr_surface_attach(k, 64, 48, 1) as number;
-        assert(wasm.rnr_surface_bind_canvas(k, a, canvas) === 'ok', 'first bound');
+        const a = wasm.rnrs_surface_attach(k, 64, 48, 1) as number;
+        assert(wasm.rnrs_surface_bind_canvas(k, a, canvas) === 'ok', 'first bound');
         await until(
           'first setup past create, at the gate',
           () =>
-            wasm.rnr_surface_hold_gpu_setups_for_testing(true) === 1 ||
+            wasm.rnrs_surface_hold_gpu_setups_for_testing(true) === 1 ||
             t.stats().gpuState === 'failed',
         );
         assert(
           t.stats().gpuState === 'initializing',
           'first setup held, not failed: ' + JSON.stringify(t.stats()),
         );
-        wasm.rnr_surface_detach(k, a);
-        const b = wasm.rnr_surface_attach(k, 64, 48, 1) as number;
-        assert(b > 0 && wasm.rnr_surface_bind_canvas(k, b, canvas) === 'ok', 'second bound');
+        wasm.rnrs_surface_detach(k, a);
+        const b = wasm.rnrs_surface_attach(k, 64, 48, 1) as number;
+        assert(b > 0 && wasm.rnrs_surface_bind_canvas(k, b, canvas) === 'ok', 'second bound');
         await until(
           'second setup at the gate too (the renderer was there)',
-          () => wasm.rnr_surface_hold_gpu_setups_for_testing(true) === 2,
+          () => wasm.rnrs_surface_hold_gpu_setups_for_testing(true) === 2,
         );
-        wasm.rnr_surface_hold_gpu_setups_for_testing(false);
+        wasm.rnrs_surface_hold_gpu_setups_for_testing(false);
         await until('setup finished', () => t.stats().gpuState !== 'initializing');
         const st = t.stats();
         assert(
@@ -400,13 +403,13 @@ async function reentrancy() {
           'the first setup was discarded: ' + st.initsDiscarded,
         );
         assert(
-          wasm.rnr_surface_render(k, b, true).status === 'submitted',
+          wasm.rnrs_surface_render(k, b, true).status === 'submitted',
           'the new attachment draws',
         );
-        assert(wasm.rnr_surface_render(k, a, true).status === 'stale', 'the old token is stale');
-        wasm.rnr_surface_detach(k, b);
+        assert(wasm.rnrs_surface_render(k, a, true).status === 'stale', 'the old token is stale');
+        wasm.rnrs_surface_detach(k, b);
       } finally {
-        wasm.rnr_surface_hold_gpu_setups_for_testing(false);
+        wasm.rnrs_surface_hold_gpu_setups_for_testing(false);
         t.close();
       }
     });
@@ -418,22 +421,22 @@ async function reentrancy() {
       const t = h.module.create();
       const k = t.surfaceKey();
       assert(t.armHookProbeForTesting('create'), 'create probe armed');
-      const token = wasm.rnr_surface_attach(k, 64, 48, 1) as number;
+      const token = wasm.rnrs_surface_attach(k, 64, 48, 1) as number;
       assert(
-        wasm.rnr_surface_bind_canvas(k, token, document.createElement('canvas')) === 'ok',
+        wasm.rnrs_surface_bind_canvas(k, token, document.createElement('canvas')) === 'ok',
         'bound',
       );
       await until('setup finished', () => t.stats().gpuState !== 'initializing');
       assert(t.stats().gpuState === 'ready', 'ready after the create hook: ' + t.stats().lastError);
       assert(t.hookProbeLog() === 'create: set_state=true', 'create hook: ' + t.hookProbeLog());
       assert(
-        wasm.rnr_surface_render(k, token, true).status === 'submitted',
+        wasm.rnrs_surface_render(k, token, true).status === 'submitted',
         'first frame submitted',
       );
       const submitted = t.stats().framesSubmitted;
       assert(t.armHookProbeForTesting('draw'), 'draw probe armed');
       assert(t.setBackground(1, 0, 0), 'a change requests the draw');
-      const r = wasm.rnr_surface_render(k, token, false);
+      const r = wasm.rnrs_surface_render(k, token, false);
       assert(r.status === 'closed', 'the close from inside draw is applied: ' + r.status);
       assert(
         t.hookProbeLog().endsWith('draw: set_state=true, closed'),
@@ -445,7 +448,7 @@ async function reentrancy() {
         'nothing submitted for the attachment closed by its own hook: ' + JSON.stringify(st),
       );
       assert(!t.setBackground(0, 0, 0), 'closed: false');
-      assert(wasm.rnr_surface_render(k, token, true).status === 'closed', 'stays closed');
+      assert(wasm.rnrs_surface_render(k, token, true).status === 'closed', 'stays closed');
     });
   } finally {
     notes.hostErrors = h.errors;
@@ -503,11 +506,11 @@ async function view() {
   };
   tick();
   setInterval(tick, 500);
-  (globalThis as any).rnrDiagnostics = snapshot;
+  (globalThis as any).rnrsDiagnostics = snapshot;
 }
 
 async function main() {
-  await init({ module_or_path: new URL('../rnr/pkg/rnr_bundle_bg.wasm', import.meta.url) });
+  await init({ module_or_path: new URL('../rnrs/pkg/rnrs_bundle_bg.wasm', import.meta.url) });
   notes.userAgent = navigator.userAgent;
   notes.navigatorGpu = 'gpu' in navigator;
   if (expect === 'unsupported') await unsupported();
@@ -524,7 +527,7 @@ main()
     if (expect === 'view' && !checks.length) return;
     const ok = checks.length > 0 && checks.every((c) => c.ok);
     const blocked = typeof notes.blocked === 'string' ? notes.blocked : undefined;
-    (globalThis as any).__rnrResult = {
+    (globalThis as any).__rnrsResult = {
       ok,
       blocked,
       checks,
@@ -536,7 +539,7 @@ main()
         (blocked ? '; prototype: visible presentation unproven (BLOCKED)' : ''),
     };
     document.getElementById('out')!.textContent = JSON.stringify(
-      (globalThis as any).__rnrResult,
+      (globalThis as any).__rnrsResult,
       null,
       2,
     );

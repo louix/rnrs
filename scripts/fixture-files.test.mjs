@@ -14,7 +14,7 @@ const HELPER = path.resolve(
 );
 
 function copy(names, setup = () => {}) {
-  const root = mkdtempSync(path.join(tmpdir(), 'rnr-fixture-files-'));
+  const root = mkdtempSync(path.join(tmpdir(), 'rnrs-fixture-files-'));
   try {
     const fixture = path.join(root, 'fixtures/x');
     const app = path.join(root, 'app');

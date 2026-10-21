@@ -1,10 +1,10 @@
 //! The author's implementation of xor.spec.ts.
-pub mod rnr_interface;
+pub mod rnrs_interface;
 
 #[derive(Default)]
 pub struct Module;
 
-impl rnr_interface::XorModule for Module {
+impl rnrs_interface::XorModule for Module {
     fn xor(&self, mut data: Vec<u8>, key: f64) -> Result<Vec<u8>, String> {
         if !(key.fract() == 0.0 && (0.0..=255.0).contains(&key)) {
             return Err("key must be an integer from 0 to 255".into());
@@ -20,7 +20,7 @@ impl rnr_interface::XorModule for Module {
 
 #[cfg(test)]
 mod tests {
-    use super::rnr_interface::XorModule;
+    use super::rnrs_interface::XorModule;
 
     #[test]
     fn xor_round_trips_and_validates() {

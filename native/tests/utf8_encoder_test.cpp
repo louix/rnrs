@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-using rnr::Utf8Encoder;
+using rnrs::Utf8Encoder;
 
 static int failures = 0;
 #define CHECK(cond, ...) do { if (!(cond)) { std::printf("FAIL %s:%d: ", __FILE__, __LINE__); std::printf(__VA_ARGS__); std::printf("\n"); failures++; } } while (0)
@@ -39,7 +39,7 @@ static std::string reference(const std::u16string& s) {
 
 struct Fragment { bool ascii; std::u16string units; };
 
-// Measure, then write into exactly the measured size plus guard bytes, as RnrJsi.cpp does.
+// Measure, then write into exactly the measured size plus guard bytes, as RnrsJsi.cpp does.
 static std::string encode(const std::vector<Fragment>& fragments, size_t* measuredOut = nullptr) {
   auto feed = [&](Utf8Encoder& e) {
     for (auto& f : fragments) {

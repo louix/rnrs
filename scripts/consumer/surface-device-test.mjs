@@ -3,9 +3,9 @@
 //
 // Usage (inside `nix develop`): node scripts/consumer/surface-device-test.mjs <adb-serial>
 //
-// 1. Installs the APK, starts it, waits for `RNR_SMOKE` (the in-app lifecycle sequence) and
+// 1. Installs the APK, starts it, waits for `RNRS_SMOKE` (the in-app lifecycle sequence) and
 //    takes a screenshot.
-// 2. Background (HOME) and foreground (relaunch the activity): reads `RNR_SURFACE_STATS` to
+// 2. Background (HOME) and foreground (relaunch the activity): reads `RNRS_SURFACE_STATS` to
 //    check that the window detaches and re-attaches and that presenting resumes.
 // 3. Rotation (user_rotation, auto-rotate disabled for the run, both restored afterwards):
 //    checks a resize or re-attach at the rotated size.
@@ -66,7 +66,7 @@ const logLines = (tag) =>
         return { truncated: true, length: text.length };
       }
     });
-const latestStats = () => logLines('RNR_SURFACE_STATS').at(-1);
+const latestStats = () => logLines('RNRS_SURFACE_STATS').at(-1);
 async function waitFor(pred, timeoutMs, what) {
   const end = Date.now() + timeoutMs;
   for (;;) {
@@ -137,11 +137,11 @@ try {
   start();
   await sleep(1000);
   notePid();
-  const smoke = await waitFor(() => logLines('RNR_SMOKE')[0], 120000, 'RNR_SMOKE');
+  const smoke = await waitFor(() => logLines('RNRS_SMOKE')[0], 120000, 'RNRS_SMOKE');
   result.smoke = {
     ...smoke,
-    details: logLines('RNR_SMOKE_CHECK'),
-    samples: logLines('RNR_SMOKE_SAMPLES')[0],
+    details: logLines('RNRS_SMOKE_CHECK'),
+    samples: logLines('RNRS_SMOKE_SAMPLES')[0],
   };
   check(
     'in-app lifecycle sequence',
@@ -154,10 +154,10 @@ try {
 
   // Background and foreground.
   // JS timers pause in the background, so the detach is checked through the platform view's
-  // log lines (RnrSurface tag) while backgrounded and through the counters after foreground.
+  // log lines (RnrsSurface tag) while backgrounded and through the counters after foreground.
   const before = latestStats().A;
   const surfaceLog = () =>
-    adb('logcat', '-d', '-s', 'RnrSurface:*')
+    adb('logcat', '-d', '-s', 'RnrsSurface:*')
       .split('\n')
       .filter((l) => l.includes('surface '));
   const logBefore = surfaceLog().length;
@@ -249,9 +249,9 @@ try {
   await sleep(1000);
   notePid();
   const restarted = await waitFor(
-    () => logLines('RNR_SMOKE')[0],
+    () => logLines('RNRS_SMOKE')[0],
     120000,
-    'RNR_SMOKE after restart',
+    'RNRS_SMOKE after restart',
   ).catch((e) => ({ ok: false, error: String(e) }));
   check(
     'process restart: lifecycle sequence passes again',

@@ -1,6 +1,6 @@
 // Clean consumer app for the surface prototype: the only source change to the RN template.
-// Runs the milestone 1 lifecycle sequence (smoke.ts), logs `RNR_SMOKE <json>`, then stays in a
-// steady state logging `RNR_SURFACE_STATS <json>` every second so a device script can drive
+// Runs the milestone 1 lifecycle sequence (smoke.ts), logs `RNRS_SMOKE <json>`, then stays in a
+// steady state logging `RNRS_SURFACE_STATS <json>` every second so a device script can drive
 // background/foreground and reload and compare counters. A TSX overlay is drawn above the
 // surface to show SurfaceView composition.
 import React, { useEffect, useMemo, useState } from 'react';
@@ -19,11 +19,11 @@ export default function App() {
       .then((result) => {
         // logcat truncates lines near 4 KB: one line per check detail, then a compact summary.
         result.checks.forEach((c, i) =>
-          console.log('RNR_SMOKE_CHECK ' + JSON.stringify({ i, ...c })),
+          console.log('RNRS_SMOKE_CHECK ' + JSON.stringify({ i, ...c })),
         );
-        console.log('RNR_SMOKE_SAMPLES ' + JSON.stringify(result.samples));
+        console.log('RNRS_SMOKE_SAMPLES ' + JSON.stringify(result.samples));
         console.log(
-          'RNR_SMOKE ' +
+          'RNRS_SMOKE ' +
             JSON.stringify({
               ok: result.ok,
               checks: result.checks.map((c) => ({ name: c.name, ok: c.ok })),
@@ -32,18 +32,20 @@ export default function App() {
         setStatus(result.checks.map((c) => `${c.ok ? 'ok  ' : 'FAIL'} ${c.name}`).join('\n'));
       })
       .catch((error) => {
-        console.log('RNR_SMOKE ' + JSON.stringify({ ok: false, checks: [], error: String(error) }));
+        console.log(
+          'RNRS_SMOKE ' + JSON.stringify({ ok: false, checks: [], error: String(error) }),
+        );
         setStatus(String(error));
       })
       .finally(() => {
         timer = setInterval(() => {
           try {
             console.log(
-              'RNR_SURFACE_STATS ' +
+              'RNRS_SURFACE_STATS ' +
                 JSON.stringify({ submitted: frames.submitted(), A: renderers.A.stats() }),
             );
           } catch (error) {
-            console.log('RNR_SURFACE_STATS ' + JSON.stringify({ error: String(error) }));
+            console.log('RNRS_SURFACE_STATS ' + JSON.stringify({ error: String(error) }));
           }
         }, 1000);
       });

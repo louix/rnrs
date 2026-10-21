@@ -78,11 +78,11 @@ test('real devicectl output (iPhone 12 Pro, iOS 26.7.1): two HelloWorld apps run
   // Trimmed from `devicectl device info apps` / `info processes` JSON (result.apps, result.runningProcesses).
   const apps = [
     {
-      bundleIdentifier: 'dev.rustjsilab.rnr.ios931d4aba',
+      bundleIdentifier: 'dev.rustjsilab.rnrs.ios931d4aba',
       url: 'file:///private/var/containers/Bundle/Application/FA846506-38A0-462B-B6BB-18AE6842F782/HelloWorld.app/',
     },
     {
-      bundleIdentifier: 'dev.rustjsilab.rnr.rnrcompare',
+      bundleIdentifier: 'dev.rustjsilab.rnrs.rnrscompare',
       url: 'file:///private/var/containers/Bundle/Application/30073C78-A5C9-40DB-95EE-843555935AD9/HelloWorld.app/',
     },
   ];
@@ -100,7 +100,7 @@ test('real devicectl output (iPhone 12 Pro, iOS 26.7.1): two HelloWorld apps run
     selectAppPid({
       apps,
       processes,
-      bundleId: 'dev.rustjsilab.rnr.rnrcompare',
+      bundleId: 'dev.rustjsilab.rnrs.rnrscompare',
       executable: 'HelloWorld',
     }),
     1142,
@@ -109,7 +109,7 @@ test('real devicectl output (iPhone 12 Pro, iOS 26.7.1): two HelloWorld apps run
     selectAppPid({
       apps,
       processes,
-      bundleId: 'dev.rustjsilab.rnr.ios931d4aba',
+      bundleId: 'dev.rustjsilab.rnrs.ios931d4aba',
       executable: 'HelloWorld',
     }),
     1123,

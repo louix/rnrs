@@ -14,10 +14,10 @@ use rnrs_core::Native;
 use rnrs_surface::touch::{ResetReason, TouchEvent, TouchPhase, TouchRecord, MAX_POINTERS};
 use rnrs_surface::Surface;
 
-pub mod rnr_interface;
+pub mod rnrs_interface;
 #[cfg(target_arch = "wasm32")]
 mod web;
-use rnr_interface as spec;
+use rnrs_interface as spec;
 
 /// Recent records kept for `drain()`'s `recent`.
 pub const RECENT: usize = 32;

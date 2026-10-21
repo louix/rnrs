@@ -6,8 +6,8 @@ use std::sync::{Arc, Mutex, Weak};
 use rnrs::gpu::{self, wgpu, Frame, Gpu, GpuSurface, Next, Options, TargetInfo};
 use rnrs::{Native, TeardownScope};
 
-pub mod rnr_interface;
-use rnr_interface as spec;
+pub mod rnrs_interface;
+use rnrs_interface as spec;
 
 const SHADER: &str = r#"
 @vertex fn vs(@builtin(vertex_index) i: u32) -> @builtin(position) vec4<f32> {
@@ -108,7 +108,7 @@ impl spec::WebgpuTriangleModule for Module {
 
     fn create(&self) -> Result<Native<Triangle>, String> {
         let scope = self.scope.as_ref().ok_or("the triangle module was created outside a runtime adapter")?;
-        let options = Options { label: "rnr-webgpu-triangle", ..Options::default() };
+        let options = Options { label: "rnrs-webgpu-triangle", ..Options::default() };
         let probe = Arc::new(Mutex::new(Probe::default()));
         let renderer_probe = probe.clone();
         let surface = Arc::new(GpuSurface::spawn(scope, options, wgpu::Color::BLACK, move || Draw { probe: renderer_probe })?);

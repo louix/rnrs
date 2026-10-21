@@ -1,5 +1,5 @@
 //! The module author's implementation of the Counter spec (packages/counter/counter.spec.ts).
-//! It is ordinary Rust: the generated traits in `rnr_interface`, `&self` methods with interior
+//! It is ordinary Rust: the generated traits in `rnrs_interface`, `&self` methods with interior
 //! mutability and standard futures. Timers come from the library the target needs (Tokio
 //! natively, browser timers on Wasm). No JS, JSI or platform code.
 use std::sync::Mutex;
@@ -7,8 +7,8 @@ use std::time::Duration;
 
 use rnrs_core::{CancelToken, Native};
 
-pub mod rnr_interface;
-use rnr_interface as spec;
+pub mod rnrs_interface;
+use rnrs_interface as spec;
 
 /// The module instance (one per JS runtime).
 #[derive(Default)]

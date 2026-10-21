@@ -1,5 +1,5 @@
-// JS-thread contention pilot (docs/research/js-contention-plan.md). Active only when the app is
-// started with a data URI rnrgame://contention?profile=…&placement=…&instrumented=0|1&touch=0|1&run=…
+// JS-thread contention pilot. Active only when the app is
+// started with a data URI rnrsgame://contention?profile=…&placement=…&instrumented=0|1&touch=0|1&run=…
 // (read with Linking.getInitialURL; no native code). Without it the game is unchanged.
 //
 // Only the stall *schedule* is deterministic; actual stall timing depends on the device. Stalls
@@ -26,7 +26,7 @@ export interface Config {
 }
 
 export function parseConfig(url: string | null | undefined): Config | null {
-  if (!url || !url.startsWith('rnrgame://contention')) return null;
+  if (!url || !url.startsWith('rnrsgame://contention')) return null;
   const q = new Map<string, string>();
   const i = url.indexOf('?');
   if (i >= 0) {
@@ -426,7 +426,7 @@ export type Phase = 'pending' | 'warmup' | 'throughput' | 'touch' | 'done';
 
 /** One contention run: phases by wall time (performance.now), stalls, per-tick, touch, ring and
  *  stats records. The app calls it from its rAF tick, touch handler and a 1 s timer; it logs
- *  RNR_CONTENTION lines (phase events, then chunked data, then "done" last). */
+ *  RNRS_CONTENTION lines (phase events, then chunked data, then "done" last). */
 export class Session {
   cfg: Config;
   phase: Phase = 'pending';
@@ -525,7 +525,7 @@ export class Session {
     this.phases.push({ phase, perf: t, date: Date.now() });
     this.hermes.push({ phase, perf: t, stats: hermesStats() });
     this.log(
-      'RNR_CONTENTION ' + JSON.stringify({ run: this.cfg.run, event: 'phase', phase, perf: t }),
+      'RNRS_CONTENTION ' + JSON.stringify({ run: this.cfg.run, event: 'phase', phase, perf: t }),
     );
     if (phase === 'throughput' || phase === 'touch') {
       const ms = phase === 'throughput' ? THROUGHPUT_MS : TOUCH_MS;
@@ -580,7 +580,7 @@ export class Session {
 
   private dump(): void {
     const run = this.cfg.run;
-    const tag = 'RNR_CONTENTION_DATA';
+    const tag = 'RNRS_CONTENTION_DATA';
     const lines: string[] = [];
     lines.push(...chunkLines(tag, run, 'config', this.cfg));
     lines.push(...chunkLines(tag, run, 'phases', this.phases));
@@ -616,7 +616,7 @@ export class Session {
       );
     }
     lines.push(
-      'RNR_CONTENTION ' +
+      'RNRS_CONTENTION ' +
         JSON.stringify({
           run,
           event: 'done',

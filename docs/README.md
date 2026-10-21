@@ -1,14 +1,19 @@
 # Documentation
 
-- [Quickstart](quickstart.md): create, package and consume a module.
-- [Platforms and limits](status.md).
+Tutorials:
+
+- [Quickstart](quickstart.md): where to start, and the authoring loop.
+- [Setup](setup.md): tools, and using a module in a web, Android, iOS or Expo app.
+- [Headless module](headless.md): native objects passed to and returned from Rust, in React Native and the browser.
+- [Draw a triangle](triangle.md): a Rust GPU renderer in a React component.
+
+Reference:
+
+- [Platform support](support.md) and example modules.
 - [Generator](generator.md): spec types, conversions and generated interfaces.
-- [Packaging](packaging.md): discovery, targets and lockfiles.
-- [Ownership](ownership.md): buffers, native objects, cancellation and teardown.
-- [Logging](logging.md), [iOS integration](ios.md), [Android page sizes](page-size.md).
-- Example modules: [HTTP](../packages/http/README.md), [key-value storage](../packages/kv/README.md), [rendering surfaces](surface.md), [Bevy](../packages/bevy3d/README.md).
-- [Maintainer tests and reproduction](lab.md).
+- [Ownership](ownership.md): runtime rules, buffers, native objects, cancellation and teardown.
+- [Packaging](packaging.md): module packages, discovery, targets and lock files.
+- [Rendering surfaces](surface.md), [logging](logging.md) and [iOS integration](ios.md).
+- Example module guides: [HTTP](../packages/http/README.md), [key-value storage](../packages/kv/README.md), [BLAKE3](../packages/blake3/README.md), [Bevy](../packages/bevy3d/README.md).
 
-Dated reports and recorded outputs are preserved outside the tracked source in the companion archive. New test runs write ignored output; keep their provenance with the run.
-
-- [Draw a triangle](triangle.md): a complete Rust GPU renderer and React component.
+Working on rnrs itself: [development](development.md).

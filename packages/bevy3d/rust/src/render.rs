@@ -171,7 +171,7 @@ pub fn spawn(surface: &Surface, cap: usize) -> Result<Arc<Shared>, String> {
     });
     let (thread_shared, thread_surface) = (shared.clone(), surface.clone());
     std::thread::Builder::new()
-        .name("rnr-bevy3d".into())
+        .name("rnrs-bevy3d".into())
         .spawn(move || {
             let _slot = slot; // released after run() has dropped every GPU resource
             run(&thread_shared, &thread_surface);
@@ -191,7 +191,7 @@ fn fail_touch(gfx: &mut Gfx, shared: &Shared, attachment: u64) {
 }
 
 fn fail(shared: &Shared, error: String) {
-    log::error!("rnr-bevy3d: {error}");
+    log::error!("rnrs-bevy3d: {error}");
     let mut stats = lock(&shared.stats);
     stats.gpu = "failed";
     stats.last_error = Some(error);
@@ -363,7 +363,7 @@ fn run(shared: &Shared, surface: &Surface) {
                 lock(&shared.stats).frames_presented += 1;
             }
             Err(PresentError::Skipped(why)) => {
-                log::debug!("rnr-bevy3d: present skipped: {why}");
+                log::debug!("rnrs-bevy3d: present skipped: {why}");
                 wait_until = Some(Instant::now() + SKIP_WAIT);
                 lock(&shared.stats).presents_skipped += 1;
             }

@@ -55,12 +55,12 @@ for (const file of ['App.tsx', 'smoke.ts']) {
   sources[file] = hash(to);
 }
 buildBundle(app, 'web', {
-  out: path.join(fixture, 'rnr'),
+  out: path.join(fixture, 'rnrs'),
   locked: existsSync(lockFile(app, 'web')),
-  offline: process.env.RNR_OFFLINE !== '0',
+  offline: process.env.RNRS_OFFLINE !== '0',
 });
 // Aliases resolve from the working directory: one React (the fixture's) for react-dom,
-// react-native-web and the @rnr packages; react-native is React Native Web.
+// react-native-web and the @rnrs packages; react-native is React Native Web.
 const npm = path.relative(root, path.join(fixture, 'node_modules'));
 run('esbuild', [
   path.join(fixture, 'main.tsx'),
@@ -71,7 +71,7 @@ run('esbuild', [
   `--alias:react=./${npm}/react`,
   `--alias:react-dom=./${npm}/react-dom`,
   `--alias:react-native=./${npm}/react-native-web`,
-  `--alias:@rnrs/example-bevy3d=./.generated/rnr/rnrs_bevy3d/index.ts`,
+  `--alias:@rnrs/example-bevy3d=./.generated/rnrs/rnrs_bevy3d/index.ts`,
   '--define:process.env.NODE_ENV="development"',
   '--outfile=' + path.join(fixture, 'dist/main.js'),
 ]);
@@ -80,22 +80,22 @@ const info = {
   commit: git(['rev-parse', 'HEAD']),
   dirty: git(['status', '--porcelain', '--untracked-files=no']) !== '', // tracked changes only (results are written here)
   rustc: execFileSync('rustc', ['-V'], { encoding: 'utf8' }).trim(),
-  wasmSha256: hash(path.join(fixture, 'rnr/pkg/rnr_bundle_bg.wasm')),
+  wasmSha256: hash(path.join(fixture, 'rnrs/pkg/rnrs_bundle_bg.wasm')),
   mainJsSha256: hash(path.join(fixture, 'dist/main.js')),
   consumerSources: sources,
 };
 writeFileSync(path.join(fixture, 'dist/build-info.json'), JSON.stringify(info, null, 2) + '\n');
 console.log('build', JSON.stringify(info));
 if (process.argv.includes('--test')) {
-  const env = { ...process.env, RNR_WEB_ROOT: fixture };
+  const env = { ...process.env, RNRS_WEB_ROOT: fixture };
   run('node', ['scripts/web-test.mjs', path.join(fixture, 'result-unsupported.json')], {
     ...env,
-    RNR_WEB_QUERY: 'expect=unsupported',
+    RNRS_WEB_QUERY: 'expect=unsupported',
   });
   run('node', ['scripts/web-test.mjs', path.join(fixture, 'result-swiftshader.json')], {
     ...env,
-    RNR_WEB_QUERY: 'expect=webgpu',
-    RNR_WEB_UNSAFE_WEBGPU: '1',
-    RNR_WEB_TIMEOUT_MS: '120000',
+    RNRS_WEB_QUERY: 'expect=webgpu',
+    RNRS_WEB_UNSAFE_WEBGPU: '1',
+    RNRS_WEB_TIMEOUT_MS: '120000',
   });
 }

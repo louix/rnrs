@@ -1,16 +1,16 @@
 # Browser touch input fixture
 
-Browser PointerEvents → `@rnrs/surface` canvas host → `rnr_surface_touch` → the `touch.rs` queue,
+Browser PointerEvents → `@rnrs/surface` canvas host → `rnrs_surface_touch` → the `touch.rs` queue,
 consumed by the GPU-free `@rnrs/labs-touch-probe` (docs/surface.md, "Touch input (browser)").
 
 From the worktree root, after `npm ci --ignore-scripts`, inside `nix develop .#web`:
 
 ```sh
 source scripts/rust-env.sh   # worktree-local Rust 1.90.0 + wasm32-unknown-unknown
-node fixtures/web-touch/build.mjs --test   # RNR_OFFLINE=0 on a cold cargo cache
+node fixtures/web-touch/build.mjs --test   # RNRS_OFFLINE=0 on a cold cargo cache
 ```
 
-`driver.mjs` runs in `scripts/web-test.mjs` (`RNR_WEB_DRIVER`) and turns the page's requests into
+`driver.mjs` runs in `scripts/web-test.mjs` (`RNRS_WEB_DRIVER`) and turns the page's requests into
 CDP `Input.dispatchMouseEvent` / `Input.dispatchTouchEvent`. Those are trusted, browser-generated
 PointerEvents in headless Chromium (`--disable-gpu`), not hardware input.
 

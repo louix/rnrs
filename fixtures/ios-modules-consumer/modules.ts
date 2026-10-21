@@ -1,19 +1,19 @@
 // iOS device test of @rnrs/example-http and @rnrs/example-kv in a clean consumer app
-// (scripts/consumer/ios-app.sh with RNR_IOS_FIXTURE=modules builds it,
+// (scripts/consumer/ios-app.sh with RNRS_IOS_FIXTURE=modules builds it,
 // scripts/consumer/ios-modules-test.mjs runs it). Public APIs and @rnrs/runtime/testing only.
 //
-// The runner passes its configuration as launch arguments (`-rnrPhase run`), which iOS puts in
+// The runner passes its configuration as launch arguments (`-rnrsPhase run`), which iOS puts in
 // the NSUserDefaults argument domain, read here through React Native's Settings:
-//   rnrHttpBase      the runner's HTTP test server (scripts/http-test-server.mjs) on the Mac's LAN address
-//   rnrHttpsLocal    an HTTPS server on the Mac with a throwaway self-signed certificate
-//   rnrHttpsPublic   optional publicly trusted HTTPS URL ('' skips the check)
-//   rnrPhase         'run' (first launch) or 'verify' (after the runner killed and relaunched the app)
-//   rnrNonce         the token the 'run' launch flushes and the 'verify' launch must read back
+//   rnrsHttpBase      the runner's HTTP test server (scripts/http-test-server.mjs) on the Mac's LAN address
+//   rnrsHttpsLocal    an HTTPS server on the Mac with a throwaway self-signed certificate
+//   rnrsHttpsPublic   optional publicly trusted HTTPS URL ('' skips the check)
+//   rnrsPhase         'run' (first launch) or 'verify' (after the runner killed and relaunched the app)
+//   rnrsNonce         the token the 'run' launch flushes and the 'verify' launch must read back
 // Within the 'run' launch, runtime 0 runs the smokes, arms in-flight work and reloads; runtime 1
 // checks what the reload left, then flushes the token with its handle left open for the
 // runner's SIGKILL. Reports are chunked console.error lines (os_log), as in
-// fixtures/consumer/ios/device.ts. Databases used: consumer-smoke (kv smoke), rnr-ios-lifecycle,
-// rnr-ios-persist; all are deleted by the end of the 'verify' launch.
+// fixtures/consumer/ios/device.ts. Databases used: consumer-smoke (kv smoke), rnrs-ios-lifecycle,
+// rnrs-ios-persist; all are deleted by the end of the 'verify' launch.
 import { Settings } from 'react-native';
 import { runtimeBindings } from '@rnrs/runtime/testing';
 import { httpModule } from '@rnrs/example-http';
@@ -27,9 +27,9 @@ const setting = (key: string) => {
   const v = Settings.get(key);
   return typeof v === 'string' ? v : '';
 };
-const BASE = setting('rnrHttpBase');
-const LIFECYCLE = 'rnr-ios-lifecycle';
-const PERSIST = 'rnr-ios-persist';
+const BASE = setting('rnrsHttpBase');
+const LIFECYCLE = 'rnrs-ios-lifecycle';
+const PERSIST = 'rnrs-ios-persist';
 const WRITES = 24;
 const VALUE_BYTES = 4096;
 const value = (i: number) => new Uint8Array(VALUE_BYTES).fill(i % 251).buffer;
@@ -45,7 +45,7 @@ function report(record: object) {
   const id = `${Date.now()}-${sequence++}`;
   const parts = Math.ceil(text.length / 700) || 1;
   for (let i = 0; i < parts; i++)
-    console.error(`RNR_IOS ${id} ${i + 1}/${parts} ${text.slice(i * 700, (i + 1) * 700)}`);
+    console.error(`RNRS_IOS ${id} ${i + 1}/${parts} ${text.slice(i * 700, (i + 1) * 700)}`);
 }
 
 type Check = { name: string; ok: boolean; detail: string };
@@ -89,7 +89,7 @@ async function httpsChecks(): Promise<Check[]> {
       'https: a local certificate from an untrusted issuer is refused (UnknownIssuer; webpki roots only)',
       async () => {
         const e = await rejection(() =>
-          http.fetch({ url: setting('rnrHttpsLocal'), timeoutMs: 10000 }),
+          http.fetch({ url: setting('rnrsHttpsLocal'), timeoutMs: 10000 }),
         );
         if (
           !e.message.startsWith('connect:') ||
@@ -100,7 +100,7 @@ async function httpsChecks(): Promise<Check[]> {
       },
     ),
   ];
-  const pub = setting('rnrHttpsPublic');
+  const pub = setting('rnrsHttpsPublic');
   if (pub) {
     checks.push(
       await checked(
@@ -172,7 +172,7 @@ async function kvChecks(): Promise<Check[]> {
 /** Runtime 0 of the 'run' launch. */
 async function phaseRun(update: (s: string) => void) {
   update('HTTP smoke…');
-  global.__RNR_HTTP_BASE = BASE;
+  global.__RNRS_HTTP_BASE = BASE;
   const http = await runHttpSmoke();
   report({ type: 'http-smoke', ...http });
   const https = await httpsChecks();
@@ -198,7 +198,7 @@ async function phaseRun(update: (s: string) => void) {
   )
     await sleep(20);
   const store = await kvModule().open(LIFECYCLE);
-  global.__rnrLifecycle = store;
+  global.__rnrsLifecycle = store;
   await store.put('marker', asciiBytes('flushed'));
   await store.flush();
   for (let i = 0; i < WRITES; i++) store.put(`reload/${i}`, value(i)).catch(() => {});
@@ -253,20 +253,20 @@ async function phaseAfterReload(update: (s: string) => void) {
     torn,
     kv: kvModule().diagnostics(),
   });
-  // Released when the old runtime's handle is finalized (rnr-kv-closer); deleteDatabase waits.
+  // Released when the old runtime's handle is finalized (rnrs-kv-closer); deleteDatabase waits.
   const lifecycleDeleted = await deleteDatabase(LIFECYCLE);
 
   // Durability across a process kill: written and flushed, the handle left open (the runner
   // kills the process next).
   await deleteDatabase(PERSIST);
   const persist = await kvModule().open(PERSIST);
-  global.__rnrPersist = persist;
-  await persist.put('token', asciiBytes(setting('rnrNonce')));
+  global.__rnrsPersist = persist;
+  await persist.put('token', asciiBytes(setting('rnrsNonce')));
   const flushed = await persist.flush();
   report({
     type: 'run-done',
     lifecycleDeleted,
-    persist: { token: setting('rnrNonce'), flushed },
+    persist: { token: setting('rnrsNonce'), flushed },
     kv: kvModule().diagnostics(),
   });
   update('Run launch finished.');
@@ -289,7 +289,7 @@ async function phaseVerify(update: (s: string) => void) {
   report({
     type: 'verified',
     token,
-    expected: setting('rnrNonce'),
+    expected: setting('rnrsNonce'),
     cleanup,
     kv: kvModule().diagnostics(),
   });
@@ -298,10 +298,10 @@ async function phaseVerify(update: (s: string) => void) {
 
 export async function runIosModulesTest(update: (s: string) => void) {
   // One run per runtime; a remounted surface reuses it.
-  if (global.__rnrIosRun) return;
-  global.__rnrIosRun = true;
+  if (global.__rnrsIosRun) return;
+  global.__rnrsIosRun = true;
   const runtime = runtimeBindings().lifecycle().bindingsInstalled - 1;
-  const phase = setting('rnrPhase');
+  const phase = setting('rnrsPhase');
   report({
     type: 'runtime',
     phase,

@@ -2,7 +2,7 @@
 // task throws, RN clears the scheduler's queues (RuntimeScheduler_Modern::handleTaskError)
 // and reports the error to the JS global handler; an app whose handler does not crash keeps
 // running. A drain task queued at that moment is destroyed unrun. The framework detects the
-// drop (RnrDelivery.h) and the Rust host posts the wake again (rnrs-core
+// drop (RnrsDelivery.h) and the Rust host posts the wake again (rnrs-core
 // Host::monitor_delivery); a drain that is merely slow is never posted again.
 // Deterministic setup: one scheduler task busy-waits while a Rust `addLater` completes (its
 // drain is posted behind the busy task), then throws (or, in the controls, returns).
@@ -21,7 +21,7 @@ type Stats = {
 };
 const g = globalThis as any;
 const stats = (): Stats => {
-  const s = g.__rnrRuntime.lifecycle();
+  const s = g.__rnrsRuntime.lifecycle();
   return {
     drainsPosted: s.drainsPosted,
     drainsRun: s.drainsRun,
@@ -53,7 +53,7 @@ function blockThen(
     const end = Date.now() + busyMs;
     while (Date.now() < end) {}
     during();
-    if (shouldThrow) throw new Error('RNR_PROBE deliberate scheduler task error');
+    if (shouldThrow) throw new Error('RNRS_PROBE deliberate scheduler task error');
   });
   s.unstable_scheduleCallback(s.unstable_ImmediatePriority, () => {
     ran = true;
@@ -103,7 +103,7 @@ export async function runSmoke(): Promise<SmokeResult> {
         !block.witness() &&
         d.dropped >= 1 &&
         d.posted >= 2 &&
-        errors.filter((e) => e.includes('RNR_PROBE deliberate scheduler task error')).length === 1,
+        errors.filter((e) => e.includes('RNRS_PROBE deliberate scheduler task error')).length === 1,
       { r, witness: block.witness(), ...d, errors },
     );
     const later = await settles(c.addLater(1, 10, false), 3000);

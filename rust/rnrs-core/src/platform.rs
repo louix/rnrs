@@ -5,7 +5,7 @@ use std::sync::OnceLock;
 static APP_DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
 
 /// Sets the application's private data directory (backends only: on Android
-/// `Context.getFilesDir()/rnr`, set by the framework before any module is created). The first
+/// `Context.getFilesDir()/rnrs`, set by the framework before any module is created). The first
 /// value wins; setting the same path again is accepted, a different one is an error.
 pub fn set_app_data_dir(path: PathBuf) -> Result<(), String> {
     let stored = APP_DATA_DIR.get_or_init(|| path.clone());
@@ -35,9 +35,9 @@ mod tests {
     fn first_value_wins_and_conflicts_are_reported() {
         assert!(super::app_data_dir().is_err());
         // A path that cannot be created (below a regular file) is reported on use.
-        let file = std::env::temp_dir().join(format!("rnr-platform-test-{}", std::process::id()));
+        let file = std::env::temp_dir().join(format!("rnrs-platform-test-{}", std::process::id()));
         std::fs::write(&file, b"").unwrap();
-        let dir = file.join("rnr");
+        let dir = file.join("rnrs");
         super::set_app_data_dir(dir.clone()).unwrap();
         super::set_app_data_dir(dir.clone()).unwrap();
         assert!(super::set_app_data_dir("/elsewhere".into()).unwrap_err().contains("already set to"));

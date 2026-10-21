@@ -10,7 +10,7 @@ use rnrs_core::bind::{BindError, Env, Kind, NativeBox, UnwrapError, Val};
 pub mod harness;
 
 pub mod modules {
-    include!(concat!(env!("RNR_GEN_DIR"), "/bundle-android.rs"));
+    include!(concat!(env!("RNRS_GEN_DIR"), "/bundle-android.rs"));
 }
 
 pub type Getter = Rc<dyn Fn(&mut MockEnv) -> Result<V, String>>;

@@ -188,9 +188,9 @@ impl Drop for WindowCell {
             RETIRE_MAX_US.fetch_max(elapsed.as_micros() as u64, Ordering::SeqCst);
             if elapsed > RETIRE_WARN {
                 RETIRE_OVER.fetch_add(1, Ordering::SeqCst);
-                log::warn!("rnr-surface: window retired {elapsed:?} after its asynchronous revocation");
+                log::warn!("rnrs-surface: window retired {elapsed:?} after its asynchronous revocation");
             } else {
-                log::info!("rnr-surface: window retired {:.3} ms after its asynchronous revocation", elapsed.as_secs_f64() * 1e3);
+                log::info!("rnrs-surface: window retired {:.3} ms after its asynchronous revocation", elapsed.as_secs_f64() * 1e3);
             }
         }
     }
@@ -623,7 +623,7 @@ pub mod platform {
             s.counters.detach_timeouts += 1;
             s.counters.detach_timeouts_in_flight += (in_flight > 0) as u64;
             drop(s);
-            log::warn!("rnr-surface: surface {key}: leases still held {timeout:?} after detach ({in_flight} admitted operation(s) in flight); attachment revoked, window retained until released");
+            log::warn!("rnrs-surface: surface {key}: leases still held {timeout:?} after detach ({in_flight} admitted operation(s) in flight); attachment revoked, window retained until released");
         }
         drop(cell); // releases the window and its identity if this was the last reference
         outcome

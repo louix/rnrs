@@ -7,9 +7,9 @@ module.exports = mergeConfig(getDefaultConfig(__dirname), {
   resolver: {
     blockList: [
       new RegExp('^' + under('react-native') + '/.*'),
-      // Build caches live under .generated/; generated module wrappers (.generated/rnr/) are sources.
-      // Metro 0.87 also tests directory paths (no trailing slash), so `rnr` itself must not match.
-      new RegExp('^' + under('.generated') + '/(?!rnr(?:/|$)).*'),
+      // Build caches live under .generated/; generated module wrappers (.generated/rnrs/) are sources.
+      // Metro 0.87 also tests directory paths (no trailing slash), so `rnrs` itself must not match.
+      new RegExp('^' + under('.generated') + '/(?!rnrs(?:/|$)).*'),
       /\/rust\/target\/.*/,
     ],
   },

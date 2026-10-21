@@ -19,7 +19,7 @@ fn tracing_slot_occupied_installs_nothing_and_says_so() {
     assert_eq!(warning[0].level, tracing::Level::WARN);
     assert!(warning[0].text.starts_with("not installed: the tracing global default subscriber was already set"), "{}", warning[0].text);
 
-    // Their subscriber still receives events; rnr's filter does not apply to it.
+    // Their subscriber still receives events; rnrs's filter does not apply to it.
     tracing::trace!("theirs");
     assert_eq!(theirs.texts(), vec!["theirs"]);
     assert!(ours.take().is_empty());

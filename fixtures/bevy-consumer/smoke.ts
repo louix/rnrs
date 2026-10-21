@@ -1,4 +1,4 @@
-// In-app checks for the Bevy example (docs/bevy3d.md), using only public package APIs. Rust
+// In-app checks for the Bevy example (packages/bevy3d/README.md), using only public package APIs. Rust
 // renders continuously on its own thread; this sequence only sets controls, changes the
 // layout and reads stats.
 import type { Scene, SceneStats } from '@rnrs/example-bevy3d';

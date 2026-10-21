@@ -1,5 +1,5 @@
 // JSI backend for Android and iOS (framework, module-independent). Requiring the framework's
-// `RnrRuntime` module makes React Native call its JSI bindings installer on this runtime
+// `RnrsRuntime` module makes React Native call its JSI bindings installer on this runtime
 // (Android: BindingsInstallerHolder; iOS: RCTTurboModuleWithJSIBindings). React Native later
 // invalidates that module when the runtime is reloaded or destroyed, which tears down every
 // adapter installed here. Call installJsiBackend() once at startup (an explicit call rather
@@ -75,13 +75,13 @@ interface RawAdapter {
 
 interface RuntimeBindings {
   readonly scopeId: number;
-  /** Adapters and these bindings refuse calls from other JS runtimes (ERR_RNR_FOREIGN_RUNTIME). */
+  /** Adapters and these bindings refuse calls from other JS runtimes (ERR_RNRS_FOREIGN_RUNTIME). */
   readonly runtimeGuard?: boolean;
   readonly platform: JsiPlatform;
   install(name: string, hash: string, maxInFlight: number): RawAdapter;
   lifecycle(): LifecycleStats;
-  /** Whether the native test hooks below were compiled in (RNR_TEST_HOOKS: Android Gradle
-   *  property rnr.testHooks=true, iOS RNR_TEST_HOOKS=1 at pod install). Default: false. */
+  /** Whether the native test hooks below were compiled in (RNRS_TEST_HOOKS: Android Gradle
+   *  property rnrs.testHooks=true, iOS RNRS_TEST_HOOKS=1 at pod install). Default: false. */
   readonly testHooks: boolean;
   /** Test hook: invalidates this runtime's scope while JS is running. */
   invalidateForTesting?(): void;
@@ -97,10 +97,10 @@ interface RuntimeBindings {
 
 export function runtimeBindings(): RuntimeBindings {
   const global = globalThis as any;
-  if (!global.__rnrRuntime) TurboModuleRegistry.get('RnrRuntime');
-  if (!global.__rnrRuntime)
-    throw new Error('rnr: the RnrRuntime framework module is not linked into this app');
-  return global.__rnrRuntime;
+  if (!global.__rnrsRuntime) TurboModuleRegistry.get('RnrsRuntime');
+  if (!global.__rnrsRuntime)
+    throw new Error('rnrs: the RnrsRuntime framework module is not linked into this app');
+  return global.__rnrsRuntime;
 }
 
 // Native drains settle through one global entry point, routed by generation. Entries: the
@@ -119,7 +119,7 @@ export function checkNativeAdapter(raw: { callp?: unknown; call?: unknown }, nam
   for (const entry of ['call', 'callp'] as const) {
     if (typeof raw[entry] !== 'function')
       throw new Error(
-        `@rnrs/runtime: the app's native library does not match this JS runtime: module ${name} has no "${entry}" entry. Rebuild the native app (Android: librnr.so; iOS: pod install) so it comes from the installed @rnrs/runtime.`,
+        `@rnrs/runtime: the app's native library does not match this JS runtime: module ${name} has no "${entry}" entry. Rebuild the native app (Android: librnrs.so; iOS: pod install) so it comes from the installed @rnrs/runtime.`,
       );
   }
 }
@@ -143,7 +143,7 @@ function jsiBackend(platform: JsiPlatform): Backend {
       }
       settles.set(raw.generation, settle);
       const global = globalThis as any;
-      if (!global.__rnrSettle) {
+      if (!global.__rnrsSettle) {
         const entry = (
           generation: number,
           id: number,
@@ -155,7 +155,7 @@ function jsiBackend(platform: JsiPlatform): Backend {
         };
         // Drains convert results with these helpers (read by the JSI adapter).
         Object.defineProperty(entry, 'helpers', { value: conversionHelpers });
-        global.__rnrSettle = entry;
+        global.__rnrsSettle = entry;
       }
       const callp = bindThisAndFirst(raw.callp, raw, conversionHelpers);
       const adapter: NativeAdapter = {

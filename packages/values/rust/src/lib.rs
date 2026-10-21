@@ -5,8 +5,8 @@ use std::time::Duration;
 
 use rnrs_core::{CancelToken, Native};
 
-pub mod rnr_interface;
-use rnr_interface as spec;
+pub mod rnrs_interface;
+use rnrs_interface as spec;
 use spec::{Blob, Event, Labeled, Point, Shape, Size, Slot, Tagged};
 
 #[derive(Default)]

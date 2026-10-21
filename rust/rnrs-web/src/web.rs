@@ -101,7 +101,7 @@ fn slab_dispose(slot: u32, version: u32) {
 
 /// Called by the wrappers' FinalizationRegistry: frees the slot for reuse.
 #[wasm_bindgen]
-pub fn rnr_release_slot(slot: u32, version: u32) {
+pub fn rnrs_release_slot(slot: u32, version: u32) {
     let released = SLAB.with(|s| {
         let (entries, free) = &mut *s.borrow_mut();
         match entries.get_mut(slot as usize) {
@@ -128,7 +128,7 @@ fn diag(_event: usize) {
 /// [allocations, allocated bytes, events 0..8] (diagnostics builds only).
 #[cfg(feature = "diagnostics")]
 #[wasm_bindgen]
-pub fn rnr_diagnostics() -> Vec<f64> {
+pub fn rnrs_diagnostics() -> Vec<f64> {
     rnrs_core::diagnostics::snapshot().iter().map(|&x| x as f64).collect()
 }
 
@@ -389,13 +389,13 @@ fn js_error(error: BindError, thrown: Option<JsValue>) -> JsValue {
 // ---- Adapter -------------------------------------------------------------------------
 
 #[wasm_bindgen]
-pub struct RnrWebAdapter {
+pub struct RnrsWebAdapter {
     adapter: Adapter<JsNotify>,
     helpers: Helpers,
     torn_down: Cell<bool>,
 }
 
-impl RnrWebAdapter {
+impl RnrsWebAdapter {
     fn call_with<const N: usize>(&self, index: u32, receiver: JsValue, args: [JsValue; N]) -> Result<JsValue, JsValue> {
         diag(4);
         let mut env = self.env();
@@ -409,10 +409,10 @@ impl RnrWebAdapter {
 }
 
 #[wasm_bindgen]
-impl RnrWebAdapter {
+impl RnrsWebAdapter {
     /// `helpers`: `{wrap(slot, version) -> object, unwrap(object) -> [slot, version] | null}`.
     #[wasm_bindgen(constructor)]
-    pub fn new(name: &str, hash: &str, max_in_flight: f64, notify: Function, helpers: JsValue) -> Result<RnrWebAdapter, JsValue> {
+    pub fn new(name: &str, hash: &str, max_in_flight: f64, notify: Function, helpers: JsValue) -> Result<RnrsWebAdapter, JsValue> {
         if !(1.0..=1024.0).contains(&max_in_flight) || max_in_flight.fract() != 0.0 {
             return Err(js_sys::RangeError::new("maxInFlight must be an integer from 1 to 1024").into());
         }
@@ -429,7 +429,7 @@ impl RnrWebAdapter {
         let adapter = Adapter::new(def, max_in_flight as usize, Budget::unlimited(), spawner, JsNotify(notify))
             .map_err(|m| JsValue::from(js_sys::Error::new(&m)))?;
         HOSTS_CREATED.fetch_add(1, Ordering::SeqCst);
-        Ok(RnrWebAdapter { adapter, helpers: Helpers::new(helpers), torn_down: Cell::new(false) })
+        Ok(RnrsWebAdapter { adapter, helpers: Helpers::new(helpers), torn_down: Cell::new(false) })
     }
 
     #[wasm_bindgen(getter)]
@@ -517,7 +517,7 @@ impl RnrWebAdapter {
     }
 }
 
-impl Drop for RnrWebAdapter {
+impl Drop for RnrsWebAdapter {
     fn drop(&mut self) {
         self.teardown();
         HOSTS_FREED.fetch_add(1, Ordering::SeqCst);

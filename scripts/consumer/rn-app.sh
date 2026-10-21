@@ -37,7 +37,7 @@ for dir in "$APP" "$REF"; do
   done
 done
 
-# ANDROID_MIN_SDK (opt-in, e.g. 26 for fixtures/bevy-consumer, docs/bevy3d.md): the one app
+# ANDROID_MIN_SDK (opt-in, e.g. 26 for fixtures/bevy-consumer, packages/bevy3d/README.md): the one app
 # build-configuration edit this script makes. It replaces the template's single
 # `minSdkVersion = 24` (android/build.gradle ext, which the framework's Gradle also reads for
 # its NDK clang, Cargo linker and CMake API level). The build record then lists the android/
@@ -66,8 +66,8 @@ for m in $MODULES; do tarballs+=("$C/../pack/rnrs-$m-0.1.0.tgz"); done
 for p in ${PACKS:-}; do tarballs+=("$C/../pack/$p-0.1.0.tgz"); done
 while IFS= read -r t; do [ -n "$t" ] && tarballs+=("$t"); done <<< "${EXTRA_TARBALLS:-}"
 (cd "$APP" && npm install --no-audit --no-fund "${tarballs[@]}")
-# Optional Rust logging configuration (RNR_APP_LOGGING, JSON for rustNativeApp.logging).
-if [ -n "${RNR_APP_LOGGING:-}" ]; then node "$ROOT/scripts/consumer/app-logging.mjs" "$APP" "$RNR_APP_LOGGING"; fi
+# Optional Rust logging configuration (RNRS_APP_LOGGING, JSON for rustNativeApp.logging).
+if [ -n "${RNRS_APP_LOGGING:-}" ]; then node "$ROOT/scripts/consumer/app-logging.mjs" "$APP" "$RNRS_APP_LOGGING"; fi
 
 # Rust toolchain for the framework's Gradle task (cargo, the Android target).
 export RUSTUP_HOME="${RUSTUP_HOME:-$ROOT/.generated/rustup}"
@@ -84,35 +84,35 @@ for tree in android ios; do
   diff -r -q --exclude=build.gradle.template --exclude=build --exclude=.gradle --exclude=.cxx --exclude=.kotlin --exclude=local.properties "$REF/$tree" "$APP/$tree"
 done
 # android/ and ios/ were compared above; elsewhere the app must hold no Rust or native sources
-# (generated bundle crates live in the ignored .rnr/ build directory).
-extra=$(find "$APP" \( -path "$APP/node_modules" -o -path "$APP/.rnr" -o -path "$APP/android" -o -path "$APP/ios" \) -prune -o \
+# (generated bundle crates live in the ignored .rnrs/ build directory).
+extra=$(find "$APP" \( -path "$APP/node_modules" -o -path "$APP/.rnrs" -o -path "$APP/android" -o -path "$APP/ios" \) -prune -o \
   \( -name Cargo.toml -o -name '*.rs' -o -name '*.cpp' -o -name '*.kt' -o -name '*.java' \) -print)
 if [ -n "$extra" ]; then echo "unexpected native or Rust sources in the app: $extra" >&2; exit 1; fi
-[ -f "$APP/rnr-android.Cargo.lock" ] || { echo "the first build did not create rnr-android.Cargo.lock" >&2; exit 1; }
+[ -f "$APP/rnrs-android.Cargo.lock" ] || { echo "the first build did not create rnrs-android.Cargo.lock" >&2; exit 1; }
 
-# The Gradle CI path: a relocated copy of the app (another absolute path, no .rnr/ or build
-# outputs) builds with -Prnr.locked=true against the committed lock, unchanged. CMake
+# The Gradle CI path: a relocated copy of the app (another absolute path, no .rnrs/ or build
+# outputs) builds with -Prnrs.locked=true against the committed lock, unchanged. CMake
 # configure without the bundle (as an IDE sync would) only warns. Without the lock, the
 # locked build fails.
 MOVED="$C/$NAME-moved"
 rm -rf "$MOVED"
 mkdir -p "$MOVED"
-(cd "$APP" && tar --exclude=./.rnr --exclude=./android/app/build --exclude=./android/build --exclude=./android/.gradle \
+(cd "$APP" && tar --exclude=./.rnrs --exclude=./android/app/build --exclude=./android/build --exclude=./android/.gradle \
   --exclude=./node_modules/@rnrs/runtime/android/build --exclude=./node_modules/@rnrs/runtime/android/.cxx -cf - .) | (cd "$MOVED" && tar -xf -)
 (cd "$MOVED/android" && ./gradlew --no-daemon --init-script "$ROOT/scripts/consumer/nix-sdk.init.gradle" \
-  ":rnrs_runtime:configureCMakeRelWithDebInfo[arm64-v8a]" -x :rnrs_runtime:rnrBuildRustBundle -PreactNativeArchitectures=arm64-v8a) 2>&1 | tee "$C/$NAME-cmake-without-bundle.log" | grep -i "rnr:" || true
+  ":rnrs_runtime:configureCMakeRelWithDebInfo[arm64-v8a]" -x :rnrs_runtime:rnrsBuildRustBundle -PreactNativeArchitectures=arm64-v8a) 2>&1 | tee "$C/$NAME-cmake-without-bundle.log" | grep -i "rnrs:" || true
 grep -q "is not built yet" "$C/$NAME-cmake-without-bundle.log"
 grep -q "BUILD SUCCESSFUL" "$C/$NAME-cmake-without-bundle.log"
 (cd "$MOVED/android" && ./gradlew --no-daemon --init-script "$ROOT/scripts/consumer/nix-sdk.init.gradle" assembleRelease \
-  -PreactNativeArchitectures=arm64-v8a -Prnr.locked=true)
-cmp "$APP/rnr-android.Cargo.lock" "$MOVED/rnr-android.Cargo.lock"
-rm "$MOVED/rnr-android.Cargo.lock"
-if (cd "$MOVED/android" && ./gradlew --no-daemon -q --init-script "$ROOT/scripts/consumer/nix-sdk.init.gradle" :rnrs_runtime:rnrBuildRustBundle \
-  -PreactNativeArchitectures=arm64-v8a -Prnr.locked=true > "$C/$NAME-locked-missing.log" 2>&1); then
-  echo "-Prnr.locked=true accepted a missing lock" >&2; exit 1
+  -PreactNativeArchitectures=arm64-v8a -Prnrs.locked=true)
+cmp "$APP/rnrs-android.Cargo.lock" "$MOVED/rnrs-android.Cargo.lock"
+rm "$MOVED/rnrs-android.Cargo.lock"
+if (cd "$MOVED/android" && ./gradlew --no-daemon -q --init-script "$ROOT/scripts/consumer/nix-sdk.init.gradle" :rnrs_runtime:rnrsBuildRustBundle \
+  -PreactNativeArchitectures=arm64-v8a -Prnrs.locked=true > "$C/$NAME-locked-missing.log" 2>&1); then
+  echo "-Prnrs.locked=true accepted a missing lock" >&2; exit 1
 fi
-grep -q "rnr-android.Cargo.lock is missing" "$C/$NAME-locked-missing.log"
-echo "relocated consumer built with -Prnr.locked=true; a missing lock was refused"
+grep -q "rnrs-android.Cargo.lock is missing" "$C/$NAME-locked-missing.log"
+echo "relocated consumer built with -Prnrs.locked=true; a missing lock was refused"
 # Recorded for the smoke result (scripts/consumer/rn-smoke.mjs adds it to its JSON).
 cat > "$C/$NAME.build.json" <<JSON
 {"template": "@react-native-community/template@0.88.0", "templateSha256": "$(sha256sum "$TEMPLATE" | cut -d' ' -f1)",
@@ -129,12 +129,12 @@ ANDROID_DIFF="$ANDROID_DIFF" SOURCE_HEAD="$SOURCE_HEAD" SOURCE_STATUS="$SOURCE_S
       sourceStatusPorcelain: status, sourceClean: status.length === 0, apkSha256: process.env.APK_SHA256});
     if (process.env.ANDROID_DIFF) r.androidBuildConfigDiffFromTemplate = process.env.ANDROID_DIFF.split("\n");
     fs.writeFileSync(f, JSON.stringify(r, null, 1) + "\n");' "$C/$NAME.build.json"
-# The default package (no rnr.testHooks) ships without the native test hooks.
+# The default package (no rnrs.testHooks) ships without the native test hooks.
 # (Extracted to a file first: with pipefail, grep -q closing the pipe early would fail it.)
-unzip -p "$APP/android/app/build/outputs/apk/release/app-release.apk" lib/arm64-v8a/librnr.so > "$C/librnr-default.so"
-grep -a -q "__rnrRuntime" "$C/librnr-default.so" || { echo "librnr.so check: not the framework library" >&2; exit 1; }
-if grep -a -q -E "(invalidate|forceBytesCopyOut|collectGarbage|reload)ForTesting" "$C/librnr-default.so"; then
-  echo "the default librnr.so contains native test hooks" >&2; exit 1
+unzip -p "$APP/android/app/build/outputs/apk/release/app-release.apk" lib/arm64-v8a/librnrs.so > "$C/librnrs-default.so"
+grep -a -q "__rnrsRuntime" "$C/librnrs-default.so" || { echo "librnrs.so check: not the framework library" >&2; exit 1; }
+if grep -a -q -E "(invalidate|forceBytesCopyOut|collectGarbage|reload)ForTesting" "$C/librnrs-default.so"; then
+  echo "the default librnrs.so contains native test hooks" >&2; exit 1
 fi
 [ -n "$ANDROID_DIFF" ] && echo "android/build.gradle differs from the template (ANDROID_MIN_SDK=$ANDROID_MIN_SDK):" && echo "$ANDROID_DIFF"
 echo "native trees otherwise unchanged; APK: $APP/android/app/build/outputs/apk/release/app-release.apk"

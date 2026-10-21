@@ -8,7 +8,7 @@ export async function drive({ send }) {
   let handled = 0;
   const deadline = Date.now() + 110000;
   while (Date.now() < deadline) {
-    if (await evaluate('!!globalThis.__rnrResult')) return;
+    if (await evaluate('!!globalThis.__rnrsResult')) return;
     const action = await evaluate('globalThis.__w2Action ?? null');
     if (action && action.id !== handled) {
       try {

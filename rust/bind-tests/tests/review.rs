@@ -7,7 +7,7 @@ use bind_tests::modules::values;
 use bind_tests::{Obj, Prop, V};
 use rnrs_core::bind::NativeBox;
 use rnrs_core::Native;
-use ::values::rnr_interface::Bag as _;
+use ::values::rnrs_interface::Bag as _;
 
 const NONE: V = V::Undefined;
 

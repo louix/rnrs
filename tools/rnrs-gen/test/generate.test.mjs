@@ -12,12 +12,12 @@ test('generation is deterministic', () => {
   assert.deepEqual(a, b);
 });
 
-test('committed interfaces are up to date (rnr-gen check)', async () => {
+test('committed interfaces are up to date (rnrs-gen check)', async () => {
   assert.equal(await main(['check']), 0);
 });
 
 test('a stale committed interface fails check and build-outputs', async () => {
-  const file = path.join(ROOT, 'packages/meter/rust/src/rnr_interface.rs');
+  const file = path.join(ROOT, 'packages/meter/rust/src/rnrs_interface.rs');
   const original = readFileSync(file, 'utf8');
   try {
     writeFileSync(file, original + '// edited by hand\n');
@@ -79,7 +79,7 @@ test('bundle crates must depend on exactly the module crates of their target', a
   const { checkBundleManifest } = await import('../cli.mjs');
   const { mkdtempSync, writeFileSync: write } = await import('node:fs');
   const { tmpdir } = await import('node:os');
-  const dir = mkdtempSync(path.join(tmpdir(), 'rnr-manifest-'));
+  const dir = mkdtempSync(path.join(tmpdir(), 'rnrs-manifest-'));
   const manifest = (deps) => {
     const file = path.join(dir, `Cargo-${Math.abs(deps.length)}-${deps.join('_')}.toml`);
     write(
@@ -121,9 +121,9 @@ test('bundle crates must depend on exactly the module crates of their target', a
 test('build-outputs writes one target bundle into the given directory only', async () => {
   const { mkdtempSync, readdirSync } = await import('node:fs');
   const { tmpdir } = await import('node:os');
-  const out = mkdtempSync(path.join(tmpdir(), 'rnr-out-'));
+  const out = mkdtempSync(path.join(tmpdir(), 'rnrs-out-'));
   assert.equal(await main(['build-outputs', '--target', 'web', '--out', out]), 0);
-  assert.deepEqual(readdirSync(path.join(out, 'rnr')).sort(), [
+  assert.deepEqual(readdirSync(path.join(out, 'rnrs')).sort(), [
     'bundle-web.rs',
     'counter',
     'meter',
@@ -149,7 +149,7 @@ test('concurrent generators never leave partial files', async () => {
   for (const o of plan(appPackages()))
     assert.equal(readFileSync(o.file, 'utf8'), o.content, o.file);
   const { readdirSync } = await import('node:fs');
-  const leftovers = readdirSync(path.join(ROOT, '.generated/rnr'), { recursive: true }).filter(
+  const leftovers = readdirSync(path.join(ROOT, '.generated/rnrs'), { recursive: true }).filter(
     (f) => String(f).includes('.tmp-'),
   );
   assert.deepEqual(leftovers, []);

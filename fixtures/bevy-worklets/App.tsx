@@ -8,7 +8,7 @@ import {
 } from 'react-native-gesture-handler';
 import { useSharedValue } from 'react-native-reanimated';
 import * as Worklets from 'react-native-worklets';
-import { enableWorklets, isRnrClosedError, workletEndpoint } from '@rnrs/runtime/worklets';
+import { enableWorklets, isRnrsClosedError, workletEndpoint } from '@rnrs/runtime/worklets';
 import { SurfaceView } from '@rnrs/surface';
 import { bevy3DModule, type Scene } from '@rnrs/example-bevy3d';
 
@@ -21,7 +21,7 @@ function Button({ id, onPress }: { id: string; onPress: () => void }) {
     <Pressable
       ref={ref}
       onLayout={() =>
-        ref.current?.measureInWindow((x, y, w, h) => report('RNR_BUTTON', { id, x, y, w, h }))
+        ref.current?.measureInWindow((x, y, w, h) => report('RNRS_BUTTON', { id, x, y, w, h }))
       }
       onPress={onPress}
       style={{ padding: 14, backgroundColor: '#345', margin: 4 }}
@@ -65,7 +65,7 @@ export default function App() {
           refused: previous.refused + (accepted ? 0 : 1),
         };
       } catch (error) {
-        events.value = isRnrClosedError(error)
+        events.value = isRnrsClosedError(error)
           ? { ...previous, events: previous.events + 1, closed: previous.closed + 1 }
           : { ...previous, events: previous.events + 1, unexpected: String(error) };
       }
@@ -75,12 +75,12 @@ export default function App() {
     const timer = setInterval(() => {
       try {
         const stats = scene.stats();
-        report('RNR_INPUT', { stats, gesture: events.value });
+        report('RNRS_INPUT', { stats, gesture: events.value });
         setLine(
           stats.state + ' received ' + stats.inputReceived + ' applied ' + stats.inputApplied,
         );
       } catch (error) {
-        report('RNR_INPUT_ERROR', String(error));
+        report('RNRS_INPUT_ERROR', String(error));
       }
     }, 500);
     return () => {
@@ -91,7 +91,7 @@ export default function App() {
   const stall = () => {
     // A short lead-in lets the driver start a real swipe; the bracket samples themselves
     // are taken synchronously in this RN task. No SharedValue read occurs in the stall.
-    report('RNR_STALL_ARMED', {});
+    report('RNRS_STALL_ARMED', {});
     setTimeout(() => {
       const before = scene.stats();
       const start = performance.now();
@@ -99,7 +99,7 @@ export default function App() {
         /* controlled RN JS stall */
       }
       const after = scene.stats();
-      report('RNR_STALL', { before, after, elapsedMs: performance.now() - start });
+      report('RNRS_STALL', { before, after, elapsedMs: performance.now() - start });
     }, 750);
   };
   return (

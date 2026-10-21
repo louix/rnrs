@@ -41,19 +41,19 @@
     "android/src",
     "cpp",
     "ios",
-    "RnrRuntime.podspec",
+    "RnrsRuntime.podspec",
     "react-native.config.js"
   ],
   "codegenConfig": {
-    "name": "RnrRuntimeSpec",
+    "name": "RnrsRuntimeSpec",
     "type": "modules",
     "jsSrcsDir": "src/specs",
     "android": {
-      "javaPackageName": "dev.rustjsilab.rnr"
+      "javaPackageName": "dev.rustjsilab.rnrs"
     },
     "ios": {
       "modulesProvider": {
-        "RnrRuntime": "RnrRuntimeModule"
+        "RnrsRuntime": "RnrsRuntimeModule"
       }
     }
   },

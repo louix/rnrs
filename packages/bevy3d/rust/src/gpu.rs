@@ -50,17 +50,17 @@ impl Gpu {
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default())).map_err(|e| format!("no {backends:?} adapter: {e}"))?;
         // Bevy picks its pipelines (e.g. storage vs uniform buffers) from the device's limits,
         // so the device gets everything the adapter offers.
-        let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor { label: Some("rnr-bevy3d"), required_limits: adapter.limits(), ..Default::default() }))
+        let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor { label: Some("rnrs-bevy3d"), required_limits: adapter.limits(), ..Default::default() }))
             .map_err(|e| format!("request_device: {e}"))?;
-        device.on_uncaptured_error(Arc::new(|e| log::error!("rnr-bevy3d: wgpu error: {e}")));
+        device.on_uncaptured_error(Arc::new(|e| log::error!("rnrs-bevy3d: wgpu error: {e}")));
         let lost = Arc::new(AtomicBool::new(false));
         let flag = lost.clone();
         device.set_device_lost_callback(move |reason, message| {
-            log::error!("rnr-bevy3d: GPU device lost ({reason:?}): {message}");
+            log::error!("rnrs-bevy3d: GPU device lost ({reason:?}): {message}");
             flag.store(true, Ordering::SeqCst);
         });
         let info = adapter.get_info();
-        log::info!("rnr-bevy3d: {:?} {} ({})", info.backend, info.name, info.driver_info);
+        log::info!("rnrs-bevy3d: {:?} {} ({})", info.backend, info.name, info.driver_info);
         Ok(Self { instance, adapter, device, queue, lost })
     }
 
@@ -137,7 +137,7 @@ impl Target {
         let blitter = wgpu::util::TextureBlitterBuilder::new(&gpu.device, view_format).build();
         let mut target = Self { surface, lease: admission, config, view_format, blitter, acquire_allowed: false };
         target.configure(gpu)?;
-        log::info!("rnr-bevy3d: bound {}x{} {}", extent.width, extent.height, target.describe());
+        log::info!("rnrs-bevy3d: bound {}x{} {}", extent.width, extent.height, target.describe());
         Ok(target)
     }
 
@@ -203,7 +203,7 @@ impl Target {
             other => return Err(Fatal(format!("cannot acquire a swapchain image: {other:?}"))),
         };
         let view = frame.texture.create_view(&wgpu::TextureViewDescriptor { format: Some(self.view_format), ..Default::default() });
-        let mut encoder = gpu.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("rnr-bevy3d blit") });
+        let mut encoder = gpu.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("rnrs-bevy3d blit") });
         self.blitter.copy(&gpu.device, &mut encoder, source, &view);
         // Admitted separately: after a revocation the acquired image is dropped unpresented.
         admitted(&self.lease, || {

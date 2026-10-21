@@ -1,4 +1,4 @@
-//! Framework logging for rnr apps. Libraries (module crates and their dependencies) only emit
+//! Framework logging for rnrs apps. Libraries (module crates and their dependencies) only emit
 //! standard `tracing` events or `log` records; the app chooses where they go, once.
 //!
 //! - [`layer`]: a `tracing_subscriber::Layer` that formats events (with their span scope and
@@ -34,14 +34,14 @@ pub use sink::{apple_format, compose, CustomSink, Line, Privacy, Sink, MAX_MESSA
 use format::{Bounded, FieldsVisitor, MessageVisitor};
 
 /// The layer that writes formatted events to a [`Sink`].
-pub struct RnrLayer {
+pub struct RnrsLayer {
     sink: Sink,
 }
 
 /// Creates the layer. It formats every event it receives; filtering is the job of the filter
 /// it is composed with (`with_filter`) or of the subscriber that owns it.
-pub fn layer(sink: Sink) -> RnrLayer {
-    RnrLayer { sink }
+pub fn layer(sink: Sink) -> RnrsLayer {
+    RnrsLayer { sink }
 }
 
 /// A span's fields: those given at creation, then each `Span::record` update, bounded to
@@ -80,7 +80,7 @@ fn format_fields(record: impl FnOnce(&mut FieldsVisitor<'_>), skip_log_fields: b
     fields
 }
 
-impl<S> tracing_subscriber::Layer<S> for RnrLayer
+impl<S> tracing_subscriber::Layer<S> for RnrsLayer
 where
     S: Subscriber + for<'a> LookupSpan<'a>,
 {
@@ -162,11 +162,11 @@ where
 /// The state of one global slot after [`install`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Slot {
-    /// rnr installed it.
+    /// rnrs installed it.
     Installed,
-    /// Something else had already set it; rnr left it unchanged.
+    /// Something else had already set it; rnrs left it unchanged.
     Occupied,
-    /// Not attempted (the `log` bridge is only installed after rnr's tracing subscriber).
+    /// Not attempted (the `log` bridge is only installed after rnrs's tracing subscriber).
     Skipped,
 }
 
@@ -179,7 +179,7 @@ pub enum Outcome {
     /// Tracing subscriber installed, the `log` slot was occupied: `tracing` events are filtered
     /// and written; `log` records go to whatever owns the `log` slot.
     Partial,
-    /// The tracing global default was occupied: rnr installed nothing (the `log` bridge is
+    /// The tracing global default was occupied: rnrs installed nothing (the `log` bridge is
     /// skipped), and its filter and sink are not applied.
     NotInstalled,
 }
@@ -307,10 +307,10 @@ fn report(sink: &Sink, status: &InstallStatus) {
         Outcome::Partial | Outcome::NotInstalled => {
             let text = match status.outcome {
                 Outcome::Partial => format!(
-                    "partially installed: tracing events use filter {:?}, but the log facade already had a logger, so log records are not filtered or written by rnr",
+                    "partially installed: tracing events use filter {:?}, but the log facade already had a logger, so log records are not filtered or written by rnrs",
                     status.filter
                 ),
-                _ => "not installed: the tracing global default subscriber was already set, so rnr's filter and platform sink do not apply (the log bridge was skipped)".to_owned(),
+                _ => "not installed: the tracing global default subscriber was already set, so rnrs's filter and platform sink do not apply (the log bridge was skipped)".to_owned(),
             };
             sink.write(Line { level: tracing::Level::WARN, target: "rnrs_log", text: &text });
         }

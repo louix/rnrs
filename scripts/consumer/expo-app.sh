@@ -4,14 +4,14 @@
 # @rnrs/example-counter tarballs, and fixtures/expo-consumer/App.tsx. Then `expo prebuild` with
 # default autolinking: no config plugin, app.json entry or edit of the generated native trees.
 # The script checks that the generated ios/ and android/ equal those of the same template
-# without the packages (prebuilt as a reference), and that the RnrRuntime pod is autolinked.
+# without the packages (prebuilt as a reference), and that the RnrsRuntime pod is autolinked.
 # On a Mac (inside `nix develop .#ios`) it then runs `pod install` and an unsigned Release
 # simulator build; elsewhere it stops after the prebuild checks.
 #
-#   RNR_EXPO_OUT=<dir>         output directory (default .generated/consumer-expo; generated
+#   RNRS_EXPO_OUT=<dir>         output directory (default .generated/consumer-expo; generated
 #                              files there are fixture output, never committed)
-#   RNR_EXPO_SIM_ARCHS=arm64   simulator architectures (default arm64)
-#   RNR_EXPO_SKIP_IOS_BUILD=1  stop after prebuild and pod install
+#   RNRS_EXPO_SIM_ARCHS=arm64   simulator architectures (default arm64)
+#   RNRS_EXPO_SKIP_IOS_BUILD=1  stop after prebuild and pod install
 # There is no lockfile: the template's ranges resolve at install time. The script requires
 # react-native 0.88.0 and react 19.3.0 and records what resolved in <out>/build-record.json.
 # Android is prebuild-checked only (autolinking and the generated tree); this script does not
@@ -20,7 +20,7 @@
 # Run it with scripts/consumer/ios-smoke-sim-test.mjs.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-C="${RNR_EXPO_OUT:-$ROOT/.generated/consumer-expo}"
+C="${RNRS_EXPO_OUT:-$ROOT/.generated/consumer-expo}"
 APP="$C/expo-app"
 REF="$C/expo-template"
 TEMPLATE_VERSION=58.0.25
@@ -86,11 +86,11 @@ export CARGO_HOME="${CARGO_HOME:-$ROOT/.generated/cargo}"
 export RUSTUP_TOOLCHAIN="${RUSTUP_TOOLCHAIN:-1.90.0}"
 rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal --target aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios >/dev/null
 # The generated Podfile chooses React Native's prebuilt core itself; the environment adds nothing.
-unset RCT_USE_RN_DEP RCT_USE_PREBUILT_RNCORE RNR_TEST_HOOKS
+unset RCT_USE_RN_DEP RCT_USE_PREBUILT_RNCORE RNRS_TEST_HOOKS
 (cd "$APP/ios" && pod install > "$C/pod-install.log")
-grep -q "RnrRuntime (0.1.0)" "$APP/ios/Podfile.lock" || { echo "RnrRuntime pod not autolinked" >&2; exit 1; }
-grep -E "^  - (RnrRuntime|React-Core|ExpoModulesCore|hermes-engine) " "$APP/ios/Podfile.lock" | sort -u
-[ "${RNR_EXPO_SKIP_IOS_BUILD:-0}" = 1 ] && exit 0
+grep -q "RnrsRuntime (0.1.0)" "$APP/ios/Podfile.lock" || { echo "RnrsRuntime pod not autolinked" >&2; exit 1; }
+grep -E "^  - (RnrsRuntime|React-Core|ExpoModulesCore|hermes-engine) " "$APP/ios/Podfile.lock" | sort -u
+[ "${RNRS_EXPO_SKIP_IOS_BUILD:-0}" = 1 ] && exit 0
 
 # Metro without watchman (see ios-app.sh).
 PATH="$(printf %s "$PATH" | tr : '\n' | while read -r d; do [ -x "$d/watchman" ] || printf '%s:' "$d"; done)"
@@ -98,12 +98,12 @@ export PATH="${PATH%:}"
 ws=$(cd "$APP/ios" && ls -d *.xcworkspace); scheme="${ws%.xcworkspace}"
 (cd "$APP/ios" && xcodebuild -workspace "$ws" -scheme "$scheme" -configuration Release -sdk iphonesimulator \
   -destination 'generic/platform=iOS Simulator' -derivedDataPath "$C/build" CODE_SIGNING_ALLOWED=NO \
-  ARCHS="${RNR_EXPO_SIM_ARCHS:-arm64}" ONLY_ACTIVE_ARCH=NO build > "$C/xcodebuild-iphonesimulator.log" 2>&1) ||
+  ARCHS="${RNRS_EXPO_SIM_ARCHS:-arm64}" ONLY_ACTIVE_ARCH=NO build > "$C/xcodebuild-iphonesimulator.log" 2>&1) ||
   { grep -E "error:|BUILD FAILED" "$C/xcodebuild-iphonesimulator.log" | head -40; exit 1; }
 tail -n 3 "$C/xcodebuild-iphonesimulator.log"
 app=$(ls -d "$C"/build/Build/Products/Release-iphonesimulator/*.app)
 bin="$app/$(plutil -extract CFBundleExecutable raw "$app/Info.plist")"
-grep -a -q "__rnrRuntime" "$bin" || { echo "$bin: no framework bindings found" >&2; exit 1; }
+grep -a -q "__rnrsRuntime" "$bin" || { echo "$bin: no framework bindings found" >&2; exit 1; }
 sum=$(shasum -a 256 "$bin" | cut -d' ' -f1)
 node -e 'const fs=require("fs"),[f,app,id,sum]=process.argv.slice(1),r=JSON.parse(fs.readFileSync(f));
   r.iosSimulatorApp={app,bundleId:id,binarySha256:sum}; fs.writeFileSync(f, JSON.stringify(r,null,2)+"\n")' \

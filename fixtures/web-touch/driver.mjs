@@ -1,7 +1,7 @@
-// CDP input driver for fixtures/web-touch (scripts/web-test.mjs RNR_WEB_DRIVER). The page posts
+// CDP input driver for fixtures/web-touch (scripts/web-test.mjs RNRS_WEB_DRIVER). The page posts
 // batches of input actions in globalThis.__touchInput = {id, actions}; this dispatches them as
 // real browser input (Input.dispatchMouseEvent / dispatchTouchEvent, trusted PointerEvents)
-// and acknowledges with globalThis.__touchInputDone = id. Stops once the page sets __rnrResult.
+// and acknowledges with globalThis.__touchInputDone = id. Stops once the page sets __rnrsResult.
 export async function drive({ send }) {
   const evaluate = async (expression) =>
     (await send('Runtime.evaluate', { expression, returnByValue: true })).result.value;
@@ -10,7 +10,7 @@ export async function drive({ send }) {
     let request;
     try {
       request = await evaluate(
-        'JSON.stringify(globalThis.__rnrResult ? {done: true} : globalThis.__touchInput ?? null)',
+        'JSON.stringify(globalThis.__rnrsResult ? {done: true} : globalThis.__touchInput ?? null)',
       );
     } catch {
       continue;

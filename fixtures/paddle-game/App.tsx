@@ -8,11 +8,11 @@
 // every requestAnimationFrame tick, and in the AppState and poll handlers). It starts paused.
 //
 // Sessions: first a scripted one (seeded autopilot, 20 s of running time) whose checks are
-// logged as RNR_GAME*, then an interactive one driven by touch, logging RNR_GAME_STATS twice a
+// logged as RNRS_GAME*, then an interactive one driven by touch, logging RNRS_GAME_STATS twice a
 // second for the device driver (scripts/consumer/game-device-test.mjs).
 //
-// Contention runs (contention.ts, docs/research/js-contention-plan.md): only when launched with
-// an rnrgame://contention data URI; they replace both sessions. Without the URI nothing changes.
+// Contention runs (contention.ts): only when launched with
+// an rnrsgame://contention data URI; they replace both sessions. Without the URI nothing changes.
 import React, { useEffect, useRef, useState } from 'react';
 import {
   AppState,
@@ -105,7 +105,7 @@ export default function App() {
         if (cfg) {
           session.current = new Session(cfg);
           console.log(
-            'RNR_CONTENTION ' +
+            'RNRS_CONTENTION ' +
               JSON.stringify({
                 run: cfg.run,
                 event: 'config',
@@ -221,7 +221,7 @@ export default function App() {
         sizeAgrees(layout.current, st),
         sizes(layout.current, st, g),
       );
-      report('RNR_GAME', {
+      report('RNRS_GAME', {
         ok: checks.every((c) => c.ok),
         checks,
         metrics: s,
@@ -321,7 +321,7 @@ export default function App() {
       if (contention || mode !== 'interactive' || !game) return;
       const st = r.stats();
       console.log(
-        'RNR_GAME_STATS ' +
+        'RNRS_GAME_STATS ' +
           JSON.stringify({
             tick: game.tick,
             running: life.running,

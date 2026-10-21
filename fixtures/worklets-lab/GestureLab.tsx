@@ -1,4 +1,4 @@
-// W6 (docs/research/worklets-poc-plan.md): an RNGH Pan gesture on a plain view calls the
+// W6: an RNGH Pan gesture on a plain view calls the
 // scalar worklet endpoint on each update (UI thread), and a Reanimated useAnimatedReaction
 // forwards one SharedValue to Rust as a plain number. Rust never sees a SharedValue.
 // Per-event cost is measured in the worklet against an empty worklet doing the same
@@ -6,13 +6,13 @@
 //
 // Error containment: events and reactions can run after the RN runtime's scope is torn down,
 // and an uncaught error in these UI-thread worklets is fatal under Reanimated. Every path
-// therefore catches, classifies ERR_RNR_CLOSED (expected after teardown) and records any
+// therefore catches, classifies ERR_RNRS_CLOSED (expected after teardown) and records any
 // other error as unexpected (a test failure); nothing is rethrown or silently dropped.
 import React from 'react';
 import { View } from 'react-native';
 import { GestureDetector, usePanGesture } from 'react-native-gesture-handler';
 import { useAnimatedReaction, useSharedValue } from 'react-native-reanimated';
-import { isRnrClosedError } from '@rnrs/runtime/worklets';
+import { isRnrsClosedError } from '@rnrs/runtime/worklets';
 
 export interface GestureStats {
   events: number;
@@ -21,7 +21,7 @@ export interface GestureStats {
   probed: boolean;
   /** Events skipped because `endpoint.$open` was false. */
   skippedClosed: number;
-  /** ERR_RNR_CLOSED caught in the gesture handler / in the reaction. */
+  /** ERR_RNRS_CLOSED caught in the gesture handler / in the reaction. */
   caughtClosed: number;
   reactionCaughtClosed: number;
   /** Any other error (first 5): a test failure. */
@@ -84,7 +84,7 @@ export function GestureLab({ endpoint, reactions, probe, stats, control }: Gestu
         };
       } catch (error) {
         const t = stats.value;
-        stats.value = isRnrClosedError(error)
+        stats.value = isRnrsClosedError(error)
           ? { ...t, caughtClosed: t.caughtClosed + 1 }
           : {
               ...t,
@@ -105,7 +105,7 @@ export function GestureLab({ endpoint, reactions, probe, stats, control }: Gestu
         reactions.add(1);
       } catch (error) {
         const t = stats.value;
-        stats.value = isRnrClosedError(error)
+        stats.value = isRnrsClosedError(error)
           ? { ...t, reactionCaughtClosed: t.reactionCaughtClosed + 1 }
           : {
               ...t,

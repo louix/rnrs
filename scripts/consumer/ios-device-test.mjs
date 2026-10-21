@@ -14,7 +14,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-// The consumer directory of scripts/consumer/ios-app.sh (RNR_IOS_OUT there), --consumer here.
+// The consumer directory of scripts/consumer/ios-app.sh (RNRS_IOS_OUT there), --consumer here.
 const arg0 = (name) => {
   const i = process.argv.indexOf(name);
   return i > 0 ? process.argv[i + 1] : undefined;
@@ -25,7 +25,7 @@ const APP = path.join(
   CONSUMER,
   `build/Build/Products/Release-${simulator ? 'iphonesimulator' : 'iphoneos'}/HelloWorld.app`,
 );
-// --default: the default package (no RNR_TEST_HOOKS); the app then runs only the smoke.
+// --default: the default package (no RNRS_TEST_HOOKS); the app then runs only the smoke.
 const defaultMode = process.argv.includes('--default');
 // --expect-console <regex> (repeatable): a device console line (os_log is mirrored there)
 // must match, e.g. the Rust logging startup lines.
@@ -56,7 +56,7 @@ if (!device || !bundleId) {
 const TIMEOUT_MS = 240000;
 
 const devicectl = (...args) => {
-  const dir = mkdtempSync(path.join(tmpdir(), 'rnr-devicectl-'));
+  const dir = mkdtempSync(path.join(tmpdir(), 'rnrs-devicectl-'));
   const json = path.join(dir, 'out.json');
   execFileSync('xcrun', ['devicectl', ...args, '--json-output', json, '--quiet'], {
     encoding: 'utf8',
@@ -66,14 +66,14 @@ const devicectl = (...args) => {
   return JSON.parse(readFileSync(json, 'utf8'));
 };
 
-/** Reassembles `RNR_IOS <id> <i>/<n> <chunk>` lines into records, in order of completion. */
+/** Reassembles `RNRS_IOS <id> <i>/<n> <chunk>` lines into records, in order of completion. */
 function collector() {
   const parts = new Map();
   const records = [];
   return {
     records,
     line(text) {
-      const m = text.match(/RNR_IOS (\S+) (\d+)\/(\d+) (.*)$/);
+      const m = text.match(/RNRS_IOS (\S+) (\d+)\/(\d+) (.*)$/);
       if (!m) return null;
       const [, id, i, n, chunk] = m;
       const entry = parts.get(id) ?? { n: Number(n), chunks: new Map() };
@@ -155,7 +155,7 @@ try {
         const text = buffer.slice(0, nl).replace(/\r$/, ''); // devicectl writes CRLF
         buffer = buffer.slice(nl + 1);
         raw.push(text);
-        if (/\brnr\b|RNR_IOS|rror|rash|xception/.test(text)) log.push(text.slice(0, 400));
+        if (/\brnrs\b|RNRS_IOS|rror|rash|xception/.test(text)) log.push(text.slice(0, 400));
         const record = reports.line(text);
         if (record)
           console.log(
@@ -376,7 +376,7 @@ for (const re of expectConsole) {
   const line = raw.find((l) => re.test(l));
   check(`device console has a line matching ${re}`, line, line ?? 'none');
 }
-/** Build/toolchain provenance, from the Mac this runs on (commit: --commit, or RNR_COMMIT). */
+/** Build/toolchain provenance, from the Mac this runs on (commit: --commit, or RNRS_COMMIT). */
 function provenance() {
   const sh = (cmd, args) => {
     try {
@@ -386,7 +386,7 @@ function provenance() {
     }
   };
   return {
-    commit: arg('--commit') ?? process.env.RNR_COMMIT ?? null,
+    commit: arg('--commit') ?? process.env.RNRS_COMMIT ?? null,
     macos: sh('sw_vers', ['-productVersion']),
     xcode: sh('xcodebuild', ['-version'])?.split('\n').join(' '),
     node: process.version,

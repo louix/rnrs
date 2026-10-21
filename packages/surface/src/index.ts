@@ -12,7 +12,7 @@
 // its content, and two overlapping surfaces have an undefined order. See docs/surface.md.
 import React from 'react';
 import { Platform, type ViewProps } from 'react-native';
-import NativeRnrSurfaceView from './specs/RnrSurfaceViewNativeComponent';
+import NativeRnrsSurfaceView from './specs/RnrsSurfaceViewNativeComponent';
 
 export type SurfaceTouchInput = 'none' | 'rust';
 
@@ -49,7 +49,7 @@ export function SurfaceView({
     );
   }
   const nativeTouchInput = supported ? touchInput : 'none';
-  return React.createElement(NativeRnrSurfaceView, {
+  return React.createElement(NativeRnrsSurfaceView, {
     ...rest,
     surfaceKey: surfaceKey ?? 0,
     touchInput: nativeTouchInput,

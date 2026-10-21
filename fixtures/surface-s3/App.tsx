@@ -1,4 +1,4 @@
-// C1 stage S3 harness app (docs/research/ios-surface-c1-design.md): the paddle game on
+// C1 stage S3 harness app: the paddle game on
 // @rnrs/surface + @rnrs/example-vello2d, presenting continuously (seeded autopilot), driven by the
 // simulator driver (scripts/consumer/ios-s3-sim-test.mjs) through a local HTTP server on the
 // host (the simulator shares the host's network; the template allows local networking). It

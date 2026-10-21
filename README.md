@@ -11,7 +11,7 @@ export interface XorModule extends NativeModule {
 
 ```rust
 // rust/src/lib.rs, implementing the generated trait
-impl rnr_interface::XorModule for Module {
+impl rnrs_interface::XorModule for Module {
     fn xor(&self, mut data: Vec<u8>, key: f64) -> Result<Vec<u8>, String> { /* … */ }
 }
 ```
@@ -21,9 +21,8 @@ impl rnr_interface::XorModule for Module {
 xorModule().xor(bytes.buffer, 7);
 ```
 
-**Experimental:** APIs may change; see [platform support and limits](docs/status.md).
+**Experimental:** APIs may change, and platform coverage is limited; see [platform support](docs/support.md).
 
 - [Quickstart](docs/quickstart.md)
-- [Status and limits](docs/status.md)
+- [Headless module tutorial](docs/headless.md) and [triangle tutorial](docs/triangle.md)
 - [All docs](docs/README.md)
-- [Maintainers / lab](docs/lab.md)

@@ -13,7 +13,7 @@ const SCRIPT = path.resolve('packages/runtime/ios/build-rust-bundle.sh');
 const BASH = spawnSync('bash', ['-c', 'command -v bash'], { encoding: 'utf8' }).stdout.trim();
 
 function run({ xcodeEnv, xcodeEnvLocal, env = {} }) {
-  const app = mkdtempSync(path.join(tmpdir(), 'rnr-ios-env-'));
+  const app = mkdtempSync(path.join(tmpdir(), 'rnrs-ios-env-'));
   try {
     mkdirSync(path.join(app, 'ios/Pods'), { recursive: true });
     const stub = path.join(app, 'stub-node');
@@ -83,6 +83,6 @@ test('no usable node is an actionable error', () => {
   assert.equal(r.status, 1);
   assert.match(
     r.stderr,
-    /rnr: node not found \(NODE_BINARY='\/node'\); set NODE_BINARY in ios\/\.xcode\.env\.local/,
+    /rnrs: node not found \(NODE_BINARY='\/node'\); set NODE_BINARY in ios\/\.xcode\.env\.local/,
   );
 });

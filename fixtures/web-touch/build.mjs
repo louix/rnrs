@@ -24,9 +24,9 @@ for (const out of plan([loadPackage(path.join(root, 'packages/fixtures/touch-pro
   if (!out.committed && out.file.endsWith('/index.ts')) writeAtomic(out.file, out.content);
 }
 buildBundle(fixture, 'web', {
-  out: path.join(fixture, 'rnr'),
+  out: path.join(fixture, 'rnrs'),
   locked: existsSync(lockFile(fixture, 'web')),
-  offline: process.env.RNR_OFFLINE !== '0',
+  offline: process.env.RNRS_OFFLINE !== '0',
 });
 const run = (cmd, args, env = process.env) => {
   const result = spawnSync(cmd, args, { stdio: 'inherit', env });
@@ -43,6 +43,6 @@ run('esbuild', [
 if (process.argv.includes('--test'))
   run('node', ['scripts/web-test.mjs', path.join(fixture, 'result.json')], {
     ...process.env,
-    RNR_WEB_ROOT: fixture,
-    RNR_WEB_DRIVER: path.join(fixture, 'driver.mjs'),
+    RNRS_WEB_ROOT: fixture,
+    RNRS_WEB_DRIVER: path.join(fixture, 'driver.mjs'),
   });

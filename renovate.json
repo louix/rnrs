@@ -8,7 +8,7 @@
   "ignorePaths": [
     "**/node_modules/**",
     "**/.generated/**",
-    "**/.rnr/**",
+    "**/.rnrs/**",
     "results/**",
     "docs/research/**",
     ".project-notes/**",

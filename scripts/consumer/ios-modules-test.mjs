@@ -1,10 +1,10 @@
-// Runs the clean iOS http/kv consumer (scripts/consumer/ios-app.sh with RNR_IOS_FIXTURE=modules,
+// Runs the clean iOS http/kv consumer (scripts/consumer/ios-app.sh with RNRS_IOS_FIXTURE=modules,
 // signed device build) on a connected iPhone and checks its reports
 // (fixtures/ios-modules-consumer/modules.ts).
 //
 // - Serves scripts/http-test-server.mjs on a Mac address the phone can reach (there is no
 //   `adb reverse`): by default the USB network link's link-local address. The app must be
-//   built with RNR_IOS_LOCAL_NETWORK_USAGE and be granted iOS's Local Network permission
+//   built with RNRS_IOS_LOCAL_NETWORK_USAGE and be granted iOS's Local Network permission
 //   once on the phone (refused connections fail with "No route to host" until then). Plus an
 //   HTTPS server with a throwaway self-signed leaf certificate generated for the run.
 // - Launch 1 ('run'): smokes, a reload with work in flight, then a flushed write left open.
@@ -67,7 +67,7 @@ const NONCE = `n${process.pid}-${Date.now()}`;
 const PHASE_TIMEOUT_MS = 180000;
 
 const devicectl = (...args) => {
-  const dir = mkdtempSync(path.join(tmpdir(), 'rnr-devicectl-'));
+  const dir = mkdtempSync(path.join(tmpdir(), 'rnrs-devicectl-'));
   const json = path.join(dir, 'out.json');
   execFileSync('xcrun', ['devicectl', ...args, '--json-output', json, '--quiet'], {
     encoding: 'utf8',
@@ -77,14 +77,14 @@ const devicectl = (...args) => {
   return JSON.parse(readFileSync(json, 'utf8'));
 };
 
-/** Reassembles `RNR_IOS <id> <i>/<n> <chunk>` lines into records. */
+/** Reassembles `RNRS_IOS <id> <i>/<n> <chunk>` lines into records. */
 function collector() {
   const parts = new Map();
   const records = [];
   return {
     records,
     line(text) {
-      const m = text.match(/RNR_IOS (\S+) (\d+)\/(\d+) (.*)$/);
+      const m = text.match(/RNRS_IOS (\S+) (\d+)\/(\d+) (.*)$/);
       if (!m) return null;
       const [, id, i, n, chunk] = m;
       const entry = parts.get(id) ?? { n: Number(n), chunks: new Map() };
@@ -106,11 +106,11 @@ const raw = [];
 /** Launches the app with the console attached until a record of type `until` (or an error). */
 function launch(phase, until, onRecord = () => {}) {
   const defaults = {
-    rnrPhase: phase,
-    rnrNonce: NONCE,
-    rnrHttpBase: `http://${HOST}:8787`,
-    rnrHttpsLocal: `https://${HOST}:8788/`,
-    rnrHttpsPublic: PUBLIC_HTTPS,
+    rnrsPhase: phase,
+    rnrsNonce: NONCE,
+    rnrsHttpBase: `http://${HOST}:8787`,
+    rnrsHttpsLocal: `https://${HOST}:8788/`,
+    rnrsHttpsPublic: PUBLIC_HTTPS,
   };
   const launchArgs = Object.entries(defaults).flatMap(([k, v]) => [`-${k}`, v]);
   return new Promise((resolve, reject) => {
@@ -201,7 +201,7 @@ function appPid() {
 }
 
 // ---- servers -----------------------------------------------------------------------------
-const certDir = mkdtempSync(path.join(tmpdir(), 'rnr-https-'));
+const certDir = mkdtempSync(path.join(tmpdir(), 'rnrs-https-'));
 execFileSync(
   'openssl',
   [
@@ -217,7 +217,7 @@ execFileSync(
     '-days',
     '1',
     '-subj',
-    '/CN=rnr-ios-test',
+    '/CN=rnrs-ios-test',
     // A well-formed leaf for the address the app connects to: only its issuer is untrusted.
     '-addext',
     'basicConstraints=critical,CA:FALSE',
@@ -371,11 +371,11 @@ check(
   runDone,
 );
 check(
-  'data container after the run: only <Application Support>/rnr/kv/rnr-ios-persist',
+  'data container after the run: only <Application Support>/rnrs/kv/rnrs-ios-persist',
   files.afterRun &&
-    files.afterRun.some((f) => f.startsWith('rnr/kv/rnr-ios-persist/')) &&
+    files.afterRun.some((f) => f.startsWith('rnrs/kv/rnrs-ios-persist/')) &&
     files.afterRun.every(
-      (f) => f === 'rnr' || f === 'rnr/kv' || f.startsWith('rnr/kv/rnr-ios-persist'),
+      (f) => f === 'rnrs' || f === 'rnrs/kv' || f.startsWith('rnrs/kv/rnrs-ios-persist'),
     ),
   files.afterRun ?? 'not listed',
 );
@@ -385,12 +385,12 @@ check(
   verified &&
     verified.token === NONCE &&
     Object.values(verified.cleanup).every((v) => typeof v === 'boolean') &&
-    verified.cleanup['rnr-ios-persist'] === true,
+    verified.cleanup['rnrs-ios-persist'] === true,
   verified ?? 'no report',
 );
 check(
-  'data container after verify: no database left under <Application Support>/rnr/kv',
-  files.afterVerify && files.afterVerify.every((f) => f === 'rnr' || f === 'rnr/kv'),
+  'data container after verify: no database left under <Application Support>/rnrs/kv',
+  files.afterVerify && files.afterVerify.every((f) => f === 'rnrs' || f === 'rnrs/kv'),
   files.afterVerify ?? 'not listed',
 );
 check(
@@ -411,7 +411,7 @@ const result = {
   files,
   httpsLog,
   provenance: {
-    commit: arg('--commit') ?? process.env.RNR_COMMIT ?? null,
+    commit: arg('--commit') ?? process.env.RNRS_COMMIT ?? null,
     macos: sh('sw_vers', ['-productVersion']),
     xcode: sh('xcodebuild', ['-version'])?.split('\n').join(' '),
     node: process.version,
@@ -432,7 +432,7 @@ const result = {
     lockSha256: sh('shasum', [
       '-a',
       '256',
-      path.join(CONSUMER, 'rn-app/rnr-ios.Cargo.lock'),
+      path.join(CONSUMER, 'rn-app/rnrs-ios.Cargo.lock'),
     ])?.split(' ')[0],
   },
   checks,
@@ -443,7 +443,7 @@ if (out) writeFileSync(out, JSON.stringify(result, null, 2));
 if (out)
   writeFileSync(
     `${out}.console.txt`,
-    raw.filter((l) => /RNR_IOS|rnr|rror|rash|xception/.test(l)).join('\n'),
+    raw.filter((l) => /RNRS_IOS|rnrs|rror|rash|xception/.test(l)).join('\n'),
   );
 console.log(result.ok ? 'OK: iOS http/kv consumer device test passed' : 'FAILED');
 process.exit(result.ok ? 0 : 1);

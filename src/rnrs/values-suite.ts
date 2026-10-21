@@ -10,7 +10,7 @@ import {
   type Labeled,
   type Shape,
   type Tagged,
-} from '../../.generated/rnr/values';
+} from '../../.generated/rnrs/values';
 import type { CheckResult } from './conformance';
 
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());

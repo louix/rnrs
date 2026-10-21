@@ -1,10 +1,10 @@
 // Simulator run of the Bevy example consumer on iOS (fixtures/bevy-consumer), built by
-// `RNR_IOS_FIXTURE=bevy RUSTUP_TOOLCHAIN=1.97.1 RNR_IOS_SDKS=iphonesimulator scripts/consumer/ios-app.sh`
-// (docs/bevy3d.md). Runs on the Mac:
+// `RNRS_IOS_FIXTURE=bevy RUSTUP_TOOLCHAIN=1.97.1 RNRS_IOS_SDKS=iphonesimulator scripts/consumer/ios-app.sh`
+// (packages/bevy3d/README.md). Runs on the Mac:
 //   node scripts/consumer/ios-bevy-sim-test.mjs --app <HelloWorld.app> --device <simulator udid>
 //     --bundle-id <id> --commit <sha> --out <run dir>
 //
-// 1. Installs and launches the app, waits for `RNR_SMOKE` (the in-app sequence: mount, simulate,
+// 1. Installs and launches the app, waits for `RNRS_SMOKE` (the in-app sequence: mount, simulate,
 //    pause, colour, resize, unmount, remount) and screenshots the cube with the TSX overlay.
 // 2. Background (Settings to the foreground) and foreground: the window detaches, re-attaches
 //    and presents again.
@@ -99,7 +99,7 @@ logStream.stdout.on('data', (chunk) => {
     } catch {
       continue;
     }
-    const m = /(RNR_[A-Z_]+) (\d+)\/(\d+) (.*)$/s.exec(e.eventMessage ?? '');
+    const m = /(RNRS_[A-Z_]+) (\d+)\/(\d+) (.*)$/s.exec(e.eventMessage ?? '');
     if (!m) continue;
     const [, tag, i, n, part] = m;
     const key = `${e.processID} ${tag}`;
@@ -119,7 +119,7 @@ logStream.stdout.on('data', (chunk) => {
   }
 });
 const all = (tag) => reports.filter((r) => r.tag === tag).map((r) => r.value);
-const latestStats = () => all('RNR_BEVY_STATS').at(-1);
+const latestStats = () => all('RNRS_BEVY_STATS').at(-1);
 async function waitFor(pred, timeoutMs, what) {
   const end = Date.now() + timeoutMs;
   for (;;) {
@@ -154,8 +154,8 @@ try {
   simctl('install', DEVICE, APP);
   await sleep(1500); // the log stream is up before the launch
   simctl('launch', DEVICE, BUNDLE);
-  const smoke = await waitFor(() => all('RNR_SMOKE')[0], 300000, 'RNR_SMOKE');
-  result.smoke = { ...smoke, details: all('RNR_SMOKE_CHECK') };
+  const smoke = await waitFor(() => all('RNRS_SMOKE')[0], 300000, 'RNRS_SMOKE');
+  result.smoke = { ...smoke, details: all('RNRS_SMOKE_CHECK') };
   check(
     'in-app sequence (mount, simulate, pause, color, resize, unmount, remount)',
     smoke.ok,

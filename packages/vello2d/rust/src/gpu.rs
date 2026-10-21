@@ -158,7 +158,7 @@ impl WgpuPresenter {
         self.raster = None;
         let (w16, h16) = (u16::try_from(w).map_err(|_| "raster too wide")?, u16::try_from(h).map_err(|_| "raster too tall")?);
         let texture = gpu.device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("rnr-vello2d raster"),
+            label: Some("rnrs-vello2d raster"),
             size: wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
             mip_level_count: 1,
             sample_count: 1,
@@ -193,21 +193,21 @@ impl Presenter for WgpuPresenter {
         let supported = adapter.limits();
         let adapter_info = adapter.get_info();
         log::info!(
-            "rnr-vello2d: requesting a device on {:?} {}: max_inter_stage_shader_variables {} (adapter {}), max_texture_dimension_2d {} (adapter {})",
+            "rnrs-vello2d: requesting a device on {:?} {}: max_inter_stage_shader_variables {} (adapter {}), max_texture_dimension_2d {} (adapter {})",
             adapter_info.backend, adapter_info.name, requested.max_inter_stage_shader_variables, supported.max_inter_stage_shader_variables,
             requested.max_texture_dimension_2d, supported.max_texture_dimension_2d
         );
-        let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor { label: Some("rnr-vello2d"), required_limits: requested, ..Default::default() }))
+        let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor { label: Some("rnrs-vello2d"), required_limits: requested, ..Default::default() }))
             .map_err(|e| format!("request_device: {e}"))?;
-        device.on_uncaptured_error(Arc::new(|e| log::error!("rnr-vello2d: wgpu error: {e}")));
+        device.on_uncaptured_error(Arc::new(|e| log::error!("rnrs-vello2d: wgpu error: {e}")));
         let lost = Arc::new(AtomicBool::new(false));
         let flag = lost.clone();
         device.set_device_lost_callback(move |reason, message| {
-            log::error!("rnr-vello2d: GPU device lost ({reason:?}): {message}");
+            log::error!("rnrs-vello2d: GPU device lost ({reason:?}): {message}");
             flag.store(true, Ordering::SeqCst);
         });
         let info = adapter.get_info();
-        log::info!("rnr-vello2d: {:?} {} ({})", info.backend, info.name, info.driver_info);
+        log::info!("rnrs-vello2d: {:?} {} ({})", info.backend, info.name, info.driver_info);
         self.device_init_ms = started.elapsed().as_secs_f64() * 1e3;
         self.gpu = Some(Gpu { instance, adapter, device, queue, lost });
         Ok(())
@@ -256,7 +256,7 @@ impl Presenter for WgpuPresenter {
         let blitter = wgpu::util::TextureBlitterBuilder::new(&gpu.device, view_format).sample_type(wgpu::FilterMode::Linear).build();
         let mut target = Target { bound: SurfaceLease { surface, lease: admission }, acquire_allowed: false, config, view_format, blitter };
         Self::configure(gpu, &mut target)?;
-        log::info!("rnr-vello2d: bound {}x{} format {format:?} (view {view_format:?}) alpha {alpha_mode:?}", extent.width, extent.height);
+        log::info!("rnrs-vello2d: bound {}x{} format {format:?} (view {view_format:?}) alpha {alpha_mode:?}", extent.width, extent.height);
         self.target = Some(target);
         Ok(())
     }
@@ -323,7 +323,7 @@ impl Presenter for WgpuPresenter {
             |frame| {
                 t3 = Instant::now();
                 let view = frame.texture.create_view(&wgpu::TextureViewDescriptor { format: Some(target.view_format), ..Default::default() });
-                let mut encoder = gpu.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("rnr-vello2d blit") });
+                let mut encoder = gpu.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("rnrs-vello2d blit") });
                 target.blitter.copy(&gpu.device, &mut encoder, &raster.view, &view);
                 (frame, encoder)
             },

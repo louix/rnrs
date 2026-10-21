@@ -1,9 +1,9 @@
 // iOS simulator run of the rnrs::gpu triangle (fixtures/triangle-consumer), built on the Mac by
-// `RNR_IOS_FIXTURE=triangle RNR_IOS_SDKS=iphonesimulator scripts/consumer/ios-app.sh`:
+// `RNRS_IOS_FIXTURE=triangle RNRS_IOS_SDKS=iphonesimulator scripts/consumer/ios-app.sh`:
 //   node scripts/consumer/ios-triangle-sim-test.mjs --app <HelloWorld.app> --device <simulator udid>
 //     --bundle-id <id> --out <run dir>
 //
-// Checks, from `RNR_TRIANGLE_STATS` (console.error lines in the simulator's unified log) and
+// Checks, from `RNRS_TRIANGLE_STATS` (console.error lines in the simulator's unified log) and
 // simulator screenshots: ready and presenting on Metal; orange triangle pixels on screen;
 // redraws follow the one-per-second background change (Next::Wait); background (Settings to the
 // front) then foreground re-attaches with a new setup and presents; terminate and relaunch
@@ -64,7 +64,7 @@ logStream.stdout.on('data', (chunk) => {
     }
     const message = e.eventMessage ?? '';
     lines.push(message);
-    const m = /RNR_TRIANGLE_STATS (\{.*\})/s.exec(message);
+    const m = /RNRS_TRIANGLE_STATS (\{.*\})/s.exec(message);
     if (m)
       try {
         stats.push(JSON.parse(m[1]));

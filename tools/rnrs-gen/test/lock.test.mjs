@@ -24,7 +24,7 @@ if (!process.env.CARGO_HOME && existsSync(path.join(local, 'cargo'))) {
   process.env.RUSTUP_HOME ??= path.join(local, 'rustup');
   process.env.RUSTUP_TOOLCHAIN ??= '1.90.0';
 }
-const cargo = spawnSync(process.env.RNR_CARGO ?? 'cargo', ['--version']);
+const cargo = spawnSync(process.env.RNRS_CARGO ?? 'cargo', ['--version']);
 const skip = cargo.status === 0 ? false : 'cargo is not available';
 
 const json = (file, value) => {
@@ -33,7 +33,7 @@ const json = (file, value) => {
 };
 const NAMES = { counter: '@rnrs/example-counter', values: '@rnrs/labs-values' };
 function app(deps) {
-  const dir = mkdtempSync(path.join(tmpdir(), 'rnr-lock-'));
+  const dir = mkdtempSync(path.join(tmpdir(), 'rnrs-lock-'));
   json(path.join(dir, 'package.json'), {
     name: 'app',
     dependencies: Object.fromEntries(deps.map((d) => [NAMES[d], '1'])),
@@ -51,23 +51,23 @@ const packages = (lock) =>
       m[2],
     ]),
   );
-const opts = (dir) => ({ out: path.join(dir, '.rnr/web'), offline: true });
+const opts = (dir) => ({ out: path.join(dir, '.rnrs/web'), offline: true });
 
 test(
   'the app lock is created, regenerated bundles keep it, and it holds no machine paths',
   { skip },
   () => {
     const dir = app(['counter']);
-    const moved = mkdtempSync(path.join(tmpdir(), 'rnr-lock-moved-'));
+    const moved = mkdtempSync(path.join(tmpdir(), 'rnrs-lock-moved-'));
     try {
       // --locked without a committed lock fails before any cargo work.
       assert.throws(
         () => buildBundle(dir, 'web', { ...opts(dir), locked: true }),
-        /rnr-web.Cargo.lock is missing, and --locked \(or RNR_LOCKED=1\) requires/,
+        /rnrs-web.Cargo.lock is missing, and --locked \(or RNRS_LOCKED=1\) requires/,
       );
       assert.throws(
         () => lockBundle(dir, 'web', { ...opts(dir), check: true }),
-        /rnr-web.Cargo.lock is missing; run `npx rnrs lock --target web`/,
+        /rnrs-web.Cargo.lock is missing; run `npx rnrs lock --target web`/,
       );
       assert.equal(lockBundle(dir, 'web', opts(dir)).changed, true);
       const lock = readFileSync(lockFile(dir, 'web'), 'utf8');
@@ -75,16 +75,19 @@ test(
       assert.match(lock, /name = "rnrs-bundle"/);
       for (const p of [dir, ROOT, tmpdir(), process.env.HOME].filter(Boolean))
         assert.ok(!lock.includes(p), `lock mentions ${p}`);
-      assert.equal(readFileSync(path.join(dir, '.rnr/.gitignore'), 'utf8').split('\n').at(-2), '*');
+      assert.equal(
+        readFileSync(path.join(dir, '.rnrs/.gitignore'), 'utf8').split('\n').at(-2),
+        '*',
+      );
       // Deleting the generated directory keeps the app's lock; the check regenerates and passes.
-      rmSync(path.join(dir, '.rnr'), { recursive: true, force: true });
+      rmSync(path.join(dir, '.rnrs'), { recursive: true, force: true });
       assert.doesNotThrow(() => lockBundle(dir, 'web', { ...opts(dir), check: true }));
       assert.equal(lockBundle(dir, 'web', opts(dir)).changed, false);
       // A relocated copy of the app (another absolute path) uses the same lock unchanged.
       cpSync(dir, moved, {
         recursive: true,
         verbatimSymlinks: true,
-        filter: (src) => !src.includes(`${path.sep}.rnr`),
+        filter: (src) => !src.includes(`${path.sep}.rnrs`),
       });
       assert.doesNotThrow(() => lockBundle(moved, 'web', { ...opts(moved), check: true }));
       assert.equal(readFileSync(lockFile(moved, 'web'), 'utf8'), lock);
@@ -109,10 +112,10 @@ test(
       });
       assert.throws(
         () => lockBundle(dir, 'web', { ...opts(dir), check: true }),
-        /rnr-web.Cargo.lock does not match the app's Rust dependencies for web\. Run `npx rnrs lock --target web`/,
+        /rnrs-web.Cargo.lock does not match the app's Rust dependencies for web\. Run `npx rnrs lock --target web`/,
       );
       assert.throws(
-        () => buildBundle(dir, 'web', { ...opts(dir), cargo: process.env.RNR_CARGO ?? 'cargo' }),
+        () => buildBundle(dir, 'web', { ...opts(dir), cargo: process.env.RNRS_CARGO ?? 'cargo' }),
         /does not match the app's Rust dependencies/,
       );
       assert.equal(lockBundle(dir, 'web', opts(dir)).changed, true);
@@ -138,7 +141,7 @@ test(
       const pkg = path.join(dir, 'node_modules/bad-core');
       cpSync(path.join(ROOT, 'packages/counter'), pkg, {
         recursive: true,
-        filter: (src) => !/[/\\]rnr([/\\]|$)/.test(src.slice(ROOT.length)),
+        filter: (src) => !/[/\\]rnrs([/\\]|$)/.test(src.slice(ROOT.length)),
       });
       const manifest = JSON.parse(readFileSync(path.join(pkg, 'package.json'), 'utf8'));
       manifest.name = 'bad-core';

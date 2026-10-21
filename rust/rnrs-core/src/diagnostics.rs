@@ -33,7 +33,7 @@ unsafe impl GlobalAlloc for Counting {
 #[global_allocator]
 static GLOBAL: Counting = Counting;
 
-/// Backend event counters (meaning defined by each backend; see docs/optimization.md).
+/// Backend event counters (meaning defined by each backend).
 pub static EVENTS: [AtomicU64; 8] = [const { AtomicU64::new(0) }; 8];
 
 pub fn count(event: usize) {

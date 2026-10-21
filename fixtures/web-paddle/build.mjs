@@ -93,18 +93,18 @@ if (
   !runtimeResolution.both.endsWith('/src/web.ts')
 )
   throw new Error('Runtime package conditions selected unexpected files');
-if (!existsSync(path.join(fixture, 'rnr-web.Cargo.lock')))
+if (!existsSync(path.join(fixture, 'rnrs-web.Cargo.lock')))
   copyFileSync(
-    path.join(root, 'fixtures/web-surface/rnr-web.Cargo.lock'),
-    path.join(fixture, 'rnr-web.Cargo.lock'),
+    path.join(root, 'fixtures/web-surface/rnrs-web.Cargo.lock'),
+    path.join(fixture, 'rnrs-web.Cargo.lock'),
   );
 const { buildBundle } = await import(
   pathToFileURL(path.join(fixture, 'node_modules/@rnrs/cli/generator/bundle.mjs'))
 );
 buildBundle(fixture, 'web', {
-  out: path.join(fixture, '.rnr/web'),
+  out: path.join(fixture, '.rnrs/web'),
   locked: true,
-  offline: process.env.RNR_OFFLINE !== '0',
+  offline: process.env.RNRS_OFFLINE !== '0',
 });
 run('node', [path.join(fixture, 'node_modules/typescript/bin/tsc'), '--noEmit']);
 for (const conditions of ['browser', 'browser,react-native']) {
@@ -125,7 +125,7 @@ for (const conditions of ['browser', 'browser,react-native']) {
       throw new Error('Browser bundle escaped packaged consumer: ' + input);
   if (
     !Object.keys(meta.inputs).some((p) => p.endsWith('@rnrs/surface/src/index.web.tsx')) ||
-    Object.keys(meta.inputs).some((p) => p.includes('RnrSurfaceViewNativeComponent'))
+    Object.keys(meta.inputs).some((p) => p.includes('RnrsSurfaceViewNativeComponent'))
   )
     throw new Error('Wrong SurfaceView entry in browser bundle: ' + conditions);
 }
@@ -138,7 +138,7 @@ writeFileSync(
       runtimeResolution,
       tarballs: Object.fromEntries(archives.map((a) => [a, hash(path.join(fixture, 'vendor', a))])),
       packageLock: hash(path.join(fixture, 'package-lock.json')),
-      cargoLock: hash(path.join(fixture, 'rnr-web.Cargo.lock')),
+      cargoLock: hash(path.join(fixture, 'rnrs-web.Cargo.lock')),
       packagedOnly: true,
       pins: { react: '19.3.0', reactDOM: '19.3.0', reactNativeWeb: '0.21.4' },
     },
@@ -149,7 +149,7 @@ writeFileSync(
 if (process.argv.includes('--test'))
   run('node', [path.join(root, 'scripts/web-test.mjs'), path.join(fixture, 'result.json')], root, {
     ...process.env,
-    RNR_WEB_ROOT: fixture,
-    RNR_WEB_DRIVER: path.join(fixture, 'driver.mjs'),
-    RNR_WEB_TIMEOUT_MS: '120000',
+    RNRS_WEB_ROOT: fixture,
+    RNRS_WEB_DRIVER: path.join(fixture, 'driver.mjs'),
+    RNRS_WEB_TIMEOUT_MS: '120000',
   });

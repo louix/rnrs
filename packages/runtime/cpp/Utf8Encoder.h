@@ -10,11 +10,11 @@
 #include <cstdint>
 #include <cstring>
 
-namespace rnr {
-// Internal linkage, as when this lived inside RnrJsi.cpp's anonymous namespace: include it
+namespace rnrs {
+// Internal linkage, as when this lived inside RnrsJsi.cpp's anonymous namespace: include it
 // only from .cpp files (each gets its own copy). The refactor that moved it here (d9857c1) made
 // non-ASCII conversion ~11% slower on the device as a whole; restoring internal linkage was
-// not measured in isolation (results/rnr-opt/bisect-attribution.md).
+// not measured in isolation (results/rnrs-opt/bisect-attribution.md).
 namespace {
 
 struct Utf8Encoder {
@@ -85,4 +85,4 @@ struct Utf8Encoder {
 };
 
 }  // namespace
-}  // namespace rnr
+}  // namespace rnrs

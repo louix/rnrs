@@ -1,7 +1,7 @@
 //! Where formatted lines go. The platform sink writes synchronously on the calling thread and
 //! never touches JSI or the JS runtime:
 //! - Android: `__android_log_write` (liblog), tag = the target's crate (at most 23 bytes).
-//! - Apple (iOS, macOS): unified logging, subsystem `rnr`, one fixed category `rust`; the
+//! - Apple (iOS, macOS): unified logging, subsystem `rnrs`, one fixed category `rust`; the
 //!   target is part of the message. `%{private}s` unless `Privacy::Public`.
 //! - Browser Wasm: `console.error|warn|info|debug` (main-thread instance only).
 //! - Other hosts: standard error.
@@ -84,7 +84,7 @@ pub fn apple_format(privacy: Privacy) -> &'static str {
 
 /// Bytes of the whole message handed to the platform (target prefix, text and truncation
 /// marker). Android's logcat payload limit is a little above this; Apple unified logging and
-/// browsers may keep less, so this bounds what rnr produces, not what a platform retains.
+/// browsers may keep less, so this bounds what rnrs produces, not what a platform retains.
 pub const MAX_MESSAGE: usize = 4000;
 
 /// A raw target (from a `log` record it can be any string) escaped like message text and cut
@@ -162,7 +162,7 @@ mod platform {
 
     extern "C" {
         // src/apple_log.c
-        fn rnr_log_apple(level: u8, text: *const c_char, public: bool);
+        fn rnrs_log_apple(level: u8, text: *const c_char, public: bool);
     }
 
     pub fn write(line: Line<'_>, privacy: Privacy) {
@@ -174,7 +174,7 @@ mod platform {
             Level::ERROR => 4,
         };
         let text = CString::new(with_target(line).replace('\0', "\\0")).unwrap_or_default();
-        unsafe { rnr_log_apple(level, text.as_ptr(), privacy == Privacy::Public) };
+        unsafe { rnrs_log_apple(level, text.as_ptr(), privacy == Privacy::Public) };
     }
 }
 

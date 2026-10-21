@@ -1,6 +1,6 @@
 // Clean consumer app for the rnrs wgpu adapter: one Rust triangle (@rnrs/labs-webgpu-triangle)
 // in an @rnrs/surface view, the only source change to the RN template. Logs
-// `RNR_TRIANGLE_STATS <json>` every second (with the number of background changes requested) so
+// `RNRS_TRIANGLE_STATS <json>` every second (with the number of background changes requested) so
 // a device script can drive background, rotation and restart (Android: logcat; iOS: release
 // builds forward only console.error to os_log, so the line is an error there).
 import React, { useEffect, useMemo } from 'react';
@@ -19,9 +19,9 @@ export default function App() {
     const counter = setInterval(() => changes++, 1000);
     const log = setInterval(() => {
       try {
-        report('RNR_TRIANGLE_STATS ' + JSON.stringify({ changes, ...triangle.stats() }));
+        report('RNRS_TRIANGLE_STATS ' + JSON.stringify({ changes, ...triangle.stats() }));
       } catch (error) {
-        report('RNR_TRIANGLE_STATS ' + JSON.stringify({ error: String(error) }));
+        report('RNRS_TRIANGLE_STATS ' + JSON.stringify({ error: String(error) }));
       }
     }, 1000);
     return () => {

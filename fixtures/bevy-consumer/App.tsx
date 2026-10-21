@@ -1,7 +1,7 @@
 // Clean consumer app for the Bevy example: the only source change to the RN template. A
 // Rust-owned Bevy scene (one rotating cube) renders on its own thread into the surface; the TSX
 // overlay above it only sets controls through the module's TypeScript API. Runs the in-app
-// sequence (smoke.ts), logs `RNR_SMOKE <json>`, then logs `RNR_BEVY_STATS <json>` every second.
+// sequence (smoke.ts), logs `RNRS_SMOKE <json>`, then logs `RNRS_BEVY_STATS <json>` every second.
 // Android: console.log lines (logcat). iOS: release builds forward only console.error to os_log,
 // which truncates long lines, so there each report is console.error lines `<TAG> <i>/<n> <part>`
 // of at most 700 characters (scripts/consumer/ios-bevy-sim-test.mjs joins them).
@@ -9,8 +9,8 @@
 // Touch (Android): the surface opts in with touchInput="rust", so a drag on it reaches the Rust
 // scene on the UI thread and rotates the cube, without JS. The overlay's buttons stay ordinary
 // React Native views above it. **Stall JS** blocks the JS thread for 1.5 s between two
-// synchronous stats() calls and logs `RNR_STALL {ms, before, after}` (scripts/consumer/
-// bevy-touch-device.mjs drags during it). The surface's window rect is logged as `RNR_SURFACE`.
+// synchronous stats() calls and logs `RNRS_STALL {ms, before, after}` (scripts/consumer/
+// bevy-touch-device.mjs drags during it). The surface's window rect is logged as `RNRS_SURFACE`.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, Pressable, SafeAreaView, Text, View, type HostInstance } from 'react-native';
 import { SurfaceView } from '@rnrs/surface';
@@ -37,12 +37,12 @@ const COLORS: [number, number, number][] = [
   [0.85, 0.2, 0.6],
 ];
 
-// Logs `RNR_BUTTON {id, x, y, w, h}` (layout units, relative to the root view) so the device
+// Logs `RNRS_BUTTON {id, x, y, w, h}` (layout units, relative to the root view) so the device
 // driver can tap the overlay: uiautomator cannot dump a continuously animating window.
 function Button({ id, label, onPress }: { id: string; label: string; onPress: () => void }) {
   const ref = useRef<HostInstance>(null);
   const reportLayout = () =>
-    ref.current?.measureInWindow((x, y, w, h) => report('RNR_BUTTON', { id, x, y, w, h }));
+    ref.current?.measureInWindow((x, y, w, h) => report('RNRS_BUTTON', { id, x, y, w, h }));
   return (
     <Pressable
       ref={ref}
@@ -71,7 +71,7 @@ export default function App() {
   const [line, setLine] = useState('');
   const surfaceRef = useRef<HostInstance>(null);
   const reportSurface = () =>
-    surfaceRef.current?.measureInWindow((x, y, w, h) => report('RNR_SURFACE', { x, y, w, h }));
+    surfaceRef.current?.measureInWindow((x, y, w, h) => report('RNRS_SURFACE', { x, y, w, h }));
   const stall = () => {
     const before = scene.stats();
     const started = Date.now();
@@ -79,33 +79,33 @@ export default function App() {
       /* deliberately block the JS thread */
     }
     const ms = Date.now() - started;
-    report('RNR_STALL', { ms, before, after: scene.stats() });
+    report('RNRS_STALL', { ms, before, after: scene.stats() });
   };
   useEffect(() => {
     let timer: ReturnType<typeof setInterval> | undefined;
     runSmoke(scene, setLayout)
       .then((result) => {
-        result.checks.forEach((c, i) => report('RNR_SMOKE_CHECK', { i, ...c }));
-        report('RNR_SMOKE', {
+        result.checks.forEach((c, i) => report('RNRS_SMOKE_CHECK', { i, ...c }));
+        report('RNRS_SMOKE', {
           ok: result.ok,
           checks: result.checks.map((c) => ({ name: c.name, ok: c.ok })),
         });
         setStatus(result.checks.map((c) => `${c.ok ? 'ok  ' : 'FAIL'} ${c.name}`).join('\n'));
       })
       .catch((error) => {
-        report('RNR_SMOKE', { ok: false, checks: [], error: String(error) });
+        report('RNRS_SMOKE', { ok: false, checks: [], error: String(error) });
         setStatus(String(error));
       })
       .finally(() => {
         timer = setInterval(() => {
           try {
             const s = scene.stats();
-            report('RNR_BEVY_STATS', s);
+            report('RNRS_BEVY_STATS', s);
             setLine(
               `${s.state} ${s.surfaceWidth}x${s.surfaceHeight} · presented ${s.framesPresented} · ${s.paused ? 'paused' : 'running'} · touches ${s.touchesStarted}/${s.touchesEnded}/${s.touchesCanceled}`,
             );
           } catch (error) {
-            report('RNR_BEVY_STATS', { error: String(error) });
+            report('RNRS_BEVY_STATS', { error: String(error) });
           }
         }, 1000);
       });

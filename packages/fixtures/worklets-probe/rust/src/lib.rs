@@ -1,4 +1,4 @@
-//! Lab-only fixture for the Worklets proof of concept (docs/research/worklets-poc-plan.md).
+//! Lab-only fixture for the Worklets proof of concept.
 //! Ordinary author Rust: every method is short and bounded, and all state is `Send + Sync`
 //! (atomics, or a mutex held for one addition), so the same calls may arrive from the React
 //! Native runtime and from worklet runtimes concurrently. Nothing here knows about worklets.
@@ -7,8 +7,8 @@ use std::sync::Mutex;
 
 use rnrs_core::{CancelToken, Native};
 
-pub mod rnr_interface;
-use rnr_interface as spec;
+pub mod rnrs_interface;
+use rnrs_interface as spec;
 
 /// The module instance (one per React Native runtime). The pointer slot is last-write-wins:
 /// each coordinate is one atomic, so a reader may see `x` and `y` from different writes.

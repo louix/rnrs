@@ -14,7 +14,7 @@
 //    - the first running tick after the resume runs no steps; presenting resumes;
 //    - sizes after the resume: the surface equals its size before the background, or a resize
 //      followed the re-attach; and the game's layout size × scale matches the surface (±2 px).
-//    The surface attach/resize/detach dimensions (RnrSurface log) are recorded; no cause is
+//    The surface attach/resize/detach dimensions (RnrsSurface log) are recorded; no cause is
 //    inferred for a transient size.
 // Consistency values (simulated vs active time, dropped time, steps per tick) are recorded but
 // are not lifecycle evidence; the clock's cap is covered by unit tests.
@@ -77,7 +77,7 @@ const tagged = (tag) =>
         return { truncated: true };
       }
     });
-const latest = () => tagged('RNR_GAME_STATS').at(-1);
+const latest = () => tagged('RNRS_GAME_STATS').at(-1);
 async function waitFor(pred, timeoutMs, what) {
   const end = Date.now() + timeoutMs;
   for (;;) {
@@ -146,8 +146,8 @@ try {
   );
   result.pid = pid;
   // 1. Scripted session.
-  const summary = await waitFor(() => tagged('RNR_GAME')[0], 120000, 'RNR_GAME');
-  result.scripted = { summary, checks: tagged('RNR_GAME_CHECK'), data: tagged('RNR_GAME_DATA') };
+  const summary = await waitFor(() => tagged('RNRS_GAME')[0], 120000, 'RNRS_GAME');
+  result.scripted = { summary, checks: tagged('RNRS_GAME_CHECK'), data: tagged('RNRS_GAME_DATA') };
   check(
     'scripted session (seeded autopilot): app checks',
     summary.ok,
@@ -243,7 +243,7 @@ try {
     await sleep(1500); // let any re-layout after the resume settle
     const settled = latest();
     result.background.settled = settled;
-    result.sizeEvents = appLog('-s', 'RnrSurface:*')
+    result.sizeEvents = appLog('-s', 'RnrsSurface:*')
       .split('\n')
       .filter((l) => / (attached|resized|detached) #/.test(l))
       .map((l) => l.slice(l.indexOf('surface ')));

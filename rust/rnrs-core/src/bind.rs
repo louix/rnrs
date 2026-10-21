@@ -235,7 +235,7 @@ pub enum UnwrapError {
 /// Scope of that protection: it resists inherited data properties and inherited setters
 /// (prototype pollution) on records, arrays and outputs. It is not a sandbox: functions the
 /// backends look up when called (wasm-bindgen's `Array.of`, `Function.prototype.call`,
-/// `Reflect.get` imports on the web, or the writable `__rnrSettle` global on Android) can
+/// `Reflect.get` imports on the web, or the writable `__rnrsSettle` global on Android) can
 /// still be monkey-patched by code running in the same JS realm.
 ///
 /// Readers that can run JS return `BindError::Thrown` when that JS throws. Value readers

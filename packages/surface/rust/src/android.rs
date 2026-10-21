@@ -1,8 +1,8 @@
 //! Android: `ANativeWindow` ownership and the JNI entry points of
-//! `dev.rustjsilab.rnr.surface.RnrSurfaceNative` (packages/surface/android). All of them run
+//! `dev.rustjsilab.rnrs.surface.RnrsSurfaceNative` (packages/surface/android). All of them run
 //! on the platform UI thread (SurfaceHolder callbacks); none touches JS.
 //!
-//! They are exported from the app's `librnr.so`, which contains this crate through the Rust
+//! They are exported from the app's `librnrs.so`, which contains this crate through the Rust
 //! bundle. A static library member is only linked if something references it, so
 //! [`keep_entry_points`] (called by `Surface::new`) references every entry point.
 use std::ffi::c_void;
@@ -69,7 +69,7 @@ pub const BUSY: i64 = -1;
 /// `nativeAttach(key, surface, width, height, density)`: the attachment number (positive),
 /// [`BUSY`], or [`REFUSED`] (unknown or closed key, no window for the Surface).
 #[no_mangle]
-pub extern "system" fn Java_dev_rustjsilab_rnr_surface_RnrSurfaceNative_nativeAttach(
+pub extern "system" fn Java_dev_rustjsilab_rnrs_surface_RnrsSurfaceNative_nativeAttach(
     env: *mut JniEnv,
     _class: JObject,
     key_value: i64,
@@ -81,14 +81,14 @@ pub extern "system" fn Java_dev_rustjsilab_rnr_surface_RnrSurfaceNative_nativeAt
     let Some(key) = key(key_value) else { return REFUSED };
     // SAFETY: env and surface are the JNI arguments of this call.
     let Some(window) = NonNull::new(unsafe { ANativeWindow_fromSurface(env, surface) }) else {
-        log::warn!("rnr-surface: surface {key}: ANativeWindow_fromSurface returned null");
+        log::warn!("rnrs-surface: surface {key}: ANativeWindow_fromSurface returned null");
         return 0;
     };
     match platform::attach(key, Box::new(AndroidWindow(window)), extent(width, height, density)) {
         Ok(attachment) => i64::try_from(attachment).unwrap_or(REFUSED),
         Err(AttachError::SurfaceBusy | AttachError::WindowBusy) => BUSY,
         Err(AttachError::UnknownKey) => {
-            log::debug!("rnr-surface: no live surface {key} (disposed, or from an earlier JS runtime); not attached");
+            log::debug!("rnrs-surface: no live surface {key} (disposed, or from an earlier JS runtime); not attached");
             REFUSED
         }
         Err(AttachError::Closed) => REFUSED,
@@ -97,7 +97,7 @@ pub extern "system" fn Java_dev_rustjsilab_rnr_surface_RnrSurfaceNative_nativeAt
 
 /// `nativeResize(key, attachment, width, height, density)`: false if not current.
 #[no_mangle]
-pub extern "system" fn Java_dev_rustjsilab_rnr_surface_RnrSurfaceNative_nativeResize(
+pub extern "system" fn Java_dev_rustjsilab_rnrs_surface_RnrsSurfaceNative_nativeResize(
     _env: *mut JniEnv,
     _class: JObject,
     key_value: i64,
@@ -113,7 +113,7 @@ pub extern "system" fn Java_dev_rustjsilab_rnr_surface_RnrSurfaceNative_nativeRe
 /// `nativeDetach(key, attachment, timeoutMs)`: waits (bounded) for the renderer to drop the
 /// window. Returns false only if the timeout passed with the window still leased.
 #[no_mangle]
-pub extern "system" fn Java_dev_rustjsilab_rnr_surface_RnrSurfaceNative_nativeDetach(
+pub extern "system" fn Java_dev_rustjsilab_rnrs_surface_RnrsSurfaceNative_nativeDetach(
     _env: *mut JniEnv,
     _class: JObject,
     key_value: i64,
@@ -130,7 +130,7 @@ pub extern "system" fn Java_dev_rustjsilab_rnr_surface_RnrSurfaceNative_nativeDe
 /// 4 cancel all); positions are view-local physical pixels; the time is the MotionEvent's
 /// `SystemClock.uptimeMillis` time. True if accepted.
 #[no_mangle]
-pub extern "system" fn Java_dev_rustjsilab_rnr_surface_RnrSurfaceNative_nativeTouch(
+pub extern "system" fn Java_dev_rustjsilab_rnrs_surface_RnrsSurfaceNative_nativeTouch(
     _env: *mut JniEnv,
     _class: JObject,
     key_value: i64,
@@ -148,18 +148,18 @@ pub extern "system" fn Java_dev_rustjsilab_rnr_surface_RnrSurfaceNative_nativeTo
 
 /// `nativeLiveSurfaces()`: diagnostics.
 #[no_mangle]
-pub extern "system" fn Java_dev_rustjsilab_rnr_surface_RnrSurfaceNative_nativeLiveSurfaces(_env: *mut JniEnv, _class: JObject) -> i32 {
+pub extern "system" fn Java_dev_rustjsilab_rnrs_surface_RnrsSurfaceNative_nativeLiveSurfaces(_env: *mut JniEnv, _class: JObject) -> i32 {
     i32::try_from(platform::live_surfaces()).unwrap_or(i32::MAX)
 }
 
 /// Makes the linker keep the entry points above (see the module comment).
 pub(crate) fn keep_entry_points() {
     let entry_points: [*const (); 5] = [
-        Java_dev_rustjsilab_rnr_surface_RnrSurfaceNative_nativeAttach as *const (),
-        Java_dev_rustjsilab_rnr_surface_RnrSurfaceNative_nativeResize as *const (),
-        Java_dev_rustjsilab_rnr_surface_RnrSurfaceNative_nativeDetach as *const (),
-        Java_dev_rustjsilab_rnr_surface_RnrSurfaceNative_nativeLiveSurfaces as *const (),
-        Java_dev_rustjsilab_rnr_surface_RnrSurfaceNative_nativeTouch as *const (),
+        Java_dev_rustjsilab_rnrs_surface_RnrsSurfaceNative_nativeAttach as *const (),
+        Java_dev_rustjsilab_rnrs_surface_RnrsSurfaceNative_nativeResize as *const (),
+        Java_dev_rustjsilab_rnrs_surface_RnrsSurfaceNative_nativeDetach as *const (),
+        Java_dev_rustjsilab_rnrs_surface_RnrsSurfaceNative_nativeLiveSurfaces as *const (),
+        Java_dev_rustjsilab_rnrs_surface_RnrsSurfaceNative_nativeTouch as *const (),
     ];
     std::hint::black_box(entry_points);
 }

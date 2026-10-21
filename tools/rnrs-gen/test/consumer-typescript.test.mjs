@@ -83,7 +83,7 @@ test(
       const packed = spawnSync('node', [path.join(ROOT, 'scripts/pack.mjs')], {
         cwd: ROOT,
         encoding: 'utf8',
-        env: { ...process.env, RNR_PACK_OUT: packDir },
+        env: { ...process.env, RNRS_PACK_OUT: packDir },
       });
       assert.equal(packed.status, 0, packed.stderr);
       const tarballs = ['rnrs-cli-0.1.0.tgz', 'rnrs-runtime-0.1.0.tgz'].map((t) =>
@@ -101,7 +101,7 @@ test(
         api.file.startsWith(path.join(existing, 'node_modules/@rnrs/cli/node_modules/typescript')),
         `the CLI's typescript is nested under it: ${api.file}`,
       );
-      assert.match(generateModule(existing), /rnr_interface\.rs/);
+      assert.match(generateModule(existing), /rnrs_interface\.rs/);
       // A clean install from the app's lock keeps the same layout.
       rmSync(path.join(existing, 'node_modules'), { recursive: true });
       npm(existing, 'ci');
@@ -113,13 +113,13 @@ test(
       npm(grouped, 'install', '--save-exact', `typescript@${TS7}`, ...tarballs);
       assert.equal(tscVersion(grouped), TS7);
       assertGeneratorApi(grouped);
-      assert.match(generateModule(grouped), /rnr_interface\.rs/);
+      assert.match(generateModule(grouped), /rnrs_interface\.rs/);
 
       // An app without typescript: the CLI's own typescript@6.0.3 serves the generator.
       const plain = newApp(work, 'no-typescript');
       npm(plain, 'install', ...tarballs);
       assertGeneratorApi(plain);
-      assert.match(generateModule(plain), /rnr_interface\.rs/);
+      assert.match(generateModule(plain), /rnrs_interface\.rs/);
 
       // An app with its own typescript6 at another 6.x: the generator keeps the CLI's pin. The app's
       // typescript6 is a local stand-in (version 6.0.2 with a createProgram), so this stays offline.
@@ -138,7 +138,7 @@ test(
       npm(aliased, 'install', ...tarballs);
       assert.equal(tscVersion(aliased), TS7);
       assertGeneratorApi(aliased);
-      assert.match(generateModule(aliased), /rnr_interface\.rs/);
+      assert.match(generateModule(aliased), /rnrs_interface\.rs/);
     } finally {
       rmSync(work, { recursive: true, force: true });
     }

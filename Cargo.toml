@@ -19,7 +19,6 @@ members = [
   "packages/bench/rust",
   "packages/fixtures/log-probe/rust",
   "packages/fixtures/worklets-probe/rust",
-  "packages/fixtures/teardown-probe/rust",
   "packages/surface/rust",
   "packages/vello2d/rust",
   "packages/fixtures/touch-probe/rust",

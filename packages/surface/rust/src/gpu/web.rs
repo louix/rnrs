@@ -234,7 +234,7 @@ async fn setup<R: Renderer>(weak: Weak<Core<R>>, generation: u64, instance: wgpu
         return;
     }
     drop(core);
-    // Lab only (feature lab-hooks, rnr_surface_hold_gpu_setups_for_testing): a deterministic point for setups to interleave.
+    // Lab only (feature lab-hooks, rnrs_surface_hold_gpu_setups_for_testing): a deterministic point for setups to interleave.
     super::super::web_exports::setup_gate().await;
     let validation = validation.await;
     let Some(core) = Core::current(&weak, generation) else {

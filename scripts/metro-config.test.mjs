@@ -1,4 +1,4 @@
-// metro.config.js blockList: generated module wrappers (.generated/rnr/) stay visible to Metro,
+// metro.config.js blockList: generated module wrappers (.generated/rnrs/) stay visible to Metro,
 // including the bare directory (Metro 0.87's crawler tests directory paths without a trailing
 // slash), while the other build caches under .generated/ are blocked.
 import { test } from 'node:test';
@@ -12,7 +12,11 @@ const config = createRequire(import.meta.url)(path.join(ROOT, 'metro.config.js')
 const blocked = (rel) => config.resolver.blockList.some((re) => re.test(path.join(ROOT, rel)));
 
 test('generated wrappers and their directories are not blocked', () => {
-  for (const rel of ['.generated/rnr', '.generated/rnr/values', '.generated/rnr/values/index.ts'])
+  for (const rel of [
+    '.generated/rnrs',
+    '.generated/rnrs/values',
+    '.generated/rnrs/values/index.ts',
+  ])
     assert.equal(blocked(rel), false, rel);
 });
 
@@ -20,8 +24,8 @@ test('other generated caches are blocked', () => {
   for (const rel of [
     '.generated/gradle',
     '.generated/cargo/registry/x.rs',
-    '.generated/rnrx',
-    '.generated/rnr-old/index.ts',
+    '.generated/rnrsx',
+    '.generated/rnrs-old/index.ts',
   ])
     assert.equal(blocked(rel), true, rel);
 });

@@ -5,11 +5,11 @@
 // One process spans several JS runtimes. Each runtime finds its phase from the process-wide
 // count of runtimes that installed the framework bindings (it survives reloads; the count of
 // invalidations would not do: on iOS the next runtime starts before the old one is
-// invalidated), runs it, reports, and reloads through React Native's own reload path (`__rnrRuntime.reloadForTesting()`, iOS test hook:
+// invalidated), runs it, reports, and reloads through React Native's own reload path (`__rnrsRuntime.reloadForTesting()`, iOS test hook:
 // release builds have no JS-reachable reload). Reports go to console.error, which a release
 // build forwards to os_log; the runner launches the app with OS_ACTIVITY_DT_MODE so os_log is
 // mirrored to the console it captures.
-import { RnrError } from '@rnrs/runtime';
+import { RnrsError } from '@rnrs/runtime';
 import { registeredModuleCount, runtimeBindings } from '@rnrs/runtime/testing';
 import {
   CounterModule,
@@ -48,7 +48,7 @@ function report(record: object) {
   const id = `${Date.now()}-${sequence++}`;
   const parts = Math.ceil(text.length / 700) || 1;
   for (let i = 0; i < parts; i++)
-    console.error(`RNR_IOS ${id} ${i + 1}/${parts} ${text.slice(i * 700, (i + 1) * 700)}`);
+    console.error(`RNRS_IOS ${id} ${i + 1}/${parts} ${text.slice(i * 700, (i + 1) * 700)}`);
 }
 
 async function collectGarbage() {
@@ -234,7 +234,7 @@ async function phaseFinal(main: CounterModule) {
     main.create(0);
     mainAfter = 'usable';
   } catch (e) {
-    mainAfter = e instanceof RnrError ? `${e.code}: ${e.message}` : String(e);
+    mainAfter = e instanceof RnrsError ? `${e.code}: ${e.message}` : String(e);
   }
   report({
     type: 'refused',
@@ -248,8 +248,8 @@ async function phaseFinal(main: CounterModule) {
 
 export async function runIosDeviceTest(update: (s: string) => void) {
   // One run per runtime; a remounted surface reuses it.
-  if (global.__rnrIosRun) return;
-  global.__rnrIosRun = true;
+  if (global.__rnrsIosRun) return;
+  global.__rnrsIosRun = true;
   const main = counterModule();
   const phase = runtimeBindings().lifecycle().bindingsInstalled - 1;
   report({
@@ -264,7 +264,7 @@ export async function runIosDeviceTest(update: (s: string) => void) {
   });
   try {
     if (!runtimeBindings().testHooks) {
-      // The default package (no RNR_TEST_HOOKS): only the public-API smoke, no lifecycle phases.
+      // The default package (no RNRS_TEST_HOOKS): only the public-API smoke, no lifecycle phases.
       update('Default build (no test hooks): smoke only…');
       report({ type: 'smoke', ...(await runSmoke()) });
       report({

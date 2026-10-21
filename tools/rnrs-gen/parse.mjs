@@ -651,7 +651,7 @@ export function parseSpec(specPath, { frameworkSpec, root }) {
       const { fields, literals } = fieldsFrom(name, members, { allowLiterals: true });
       variants.push({ node: v, fields, literals });
     }
-    // Discriminator inference (docs/design.md): present and required in every variant,
+    // Discriminator inference (docs/generator.md, "Discriminated unions"): present and required in every variant,
     // one string literal in each, distinct across variants.
     const candidates = variants[0].literals
       .map((l) => l.name)

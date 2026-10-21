@@ -61,7 +61,7 @@ fn full_install_filters_tracing_and_log_by_original_target_and_defends_its_slots
         (Level::WARN, "sled::pagecache".into(), "log sled warn kept".into()),
     ]);
 
-    // Conflict order "rnr first": later global installers are refused, rnr's stay in place.
+    // Conflict order "rnrs first": later global installers are refused, rnrs's stay in place.
     assert!(tracing::subscriber::set_global_default(tracing_subscriber::registry()).is_err());
     struct Other;
     impl log::Log for Other {

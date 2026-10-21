@@ -19,7 +19,7 @@ fn release_threads(database: &str) -> Vec<String> {
 fn setup() -> Kv {
     static DIR: OnceLock<PathBuf> = OnceLock::new();
     let dir = DIR.get_or_init(|| {
-        let dir = std::env::temp_dir().join(format!("rnr-kv-test-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("rnrs-kv-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         rnrs_core::platform::set_app_data_dir(dir.clone()).unwrap();
         dir
@@ -128,7 +128,7 @@ async fn handles_share_one_database_and_the_last_release_is_off_the_caller_threa
     drop(a);
     drop(b);
     assert!(wait_until(|| not_open("shared")).await);
-    assert_eq!(release_threads("shared"), vec!["rnr-kv-closer"]);
+    assert_eq!(release_threads("shared"), vec!["rnrs-kv-closer"]);
     let c = kv.open("shared".into(), token()).await.unwrap();
     assert_eq!(c.get("k".into(), token()).await.unwrap(), Some(b"from a".to_vec()), "persisted across the reopen");
     c.close(token()).await.unwrap();

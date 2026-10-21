@@ -4,8 +4,8 @@
 //! `log_probe` and suppress the rest (lower levels, and target `log_probe::noisy`).
 use rnrs_core::CancelToken;
 
-pub mod rnr_interface;
-use rnr_interface as spec;
+pub mod rnrs_interface;
+use rnrs_interface as spec;
 
 #[derive(Default)]
 pub struct Module;

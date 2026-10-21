@@ -11,7 +11,7 @@ export interface SmokeResult {
 }
 
 const web = typeof (globalThis as any).document !== 'undefined';
-const BASE: string = (globalThis as any).__RNR_HTTP_BASE ?? 'http://127.0.0.1:8787';
+const BASE: string = (globalThis as any).__RNRS_HTTP_BASE ?? 'http://127.0.0.1:8787';
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 const now = () => Date.now();
 const fail = (message: string): never => {

@@ -21,17 +21,17 @@
     "log-probe.spec.ts",
     "rust/Cargo.toml",
     "rust/src",
-    "rnr"
+    "rnrs"
   ],
-  "main": "rnr/index.ts",
-  "types": "rnr/index.ts",
-  "react-native": "rnr/index.ts",
-  "browser": "rnr/web.ts",
+  "main": "rnrs/index.ts",
+  "types": "rnrs/index.ts",
+  "react-native": "rnrs/index.ts",
+  "browser": "rnrs/web.ts",
   "exports": {
     ".": {
-      "types": "./rnr/index.ts",
-      "browser": "./rnr/web.ts",
-      "default": "./rnr/index.ts"
+      "types": "./rnrs/index.ts",
+      "browser": "./rnrs/web.ts",
+      "default": "./rnrs/index.ts"
     },
     "./package.json": "./package.json"
   },

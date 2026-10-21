@@ -1,14 +1,14 @@
 #!/bin/bash
-# Xcode script phase of the RnrRuntime pod: generates the app's Rust bundle crate from its npm
+# Xcode script phase of the RnrsRuntime pod: generates the app's Rust bundle crate from its npm
 # dependencies and builds it for the SDK and architectures being built, into
-# <app>/.rnr/ios/lib/$PLATFORM_NAME/librnr_bundle.a (linked by the app target).
+# <app>/.rnrs/ios/lib/$PLATFORM_NAME/librnrs_bundle.a (linked by the app target).
 #
 # Needs node and cargo (with the Rust iOS targets: rustup target add aarch64-apple-ios
 # aarch64-apple-ios-sim, plus x86_64-apple-ios for simulator builds that include Intel). Like
 # React Native's own script phases, it reads NODE_BINARY and any environment from
-# <app>/ios/.xcode.env and .xcode.env.local; set RNR_CARGO there (or PATH)
-# when Xcode does not inherit a shell with cargo. Uses the app's rnr-ios.Cargo.lock (created
-# by the first build if absent); RNR_LOCKED=1 fails if it is missing or stale (CI).
+# <app>/ios/.xcode.env and .xcode.env.local; set RNRS_CARGO there (or PATH)
+# when Xcode does not inherit a shell with cargo. Uses the app's rnrs-ios.Cargo.lock (created
+# by the first build if absent); RNRS_LOCKED=1 fails if it is missing or stale (CI).
 set -euo pipefail
 
 : "${PODS_ROOT:?must run as an Xcode build phase}"
@@ -30,7 +30,7 @@ if [ -f "$IOS_DIR/.xcode.env" ]; then source_env "$IOS_DIR/.xcode.env"; fi
 if [ -f "$IOS_DIR/.xcode.env.local" ]; then source_env "$IOS_DIR/.xcode.env.local"; fi
 NODE="$(command -v "${NODE_BINARY:-node}" || true)"
 if [ -z "$NODE" ]; then
-  echo "error: rnr: node not found (NODE_BINARY='${NODE_BINARY:-}'); set NODE_BINARY in ios/.xcode.env.local" >&2
+  echo "error: rnrs: node not found (NODE_BINARY='${NODE_BINARY:-}'); set NODE_BINARY in ios/.xcode.env.local" >&2
   exit 1
 fi
 

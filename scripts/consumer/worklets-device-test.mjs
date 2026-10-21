@@ -1,9 +1,9 @@
 // Runs the worklets lab APK (scripts/consumer/worklets-app.sh) on one explicitly named
-// device and reads its RNR_WORKLETS result from logcat. Every adb call passes `-s SERIAL`;
+// device and reads its RNRS_WORKLETS result from logcat. Every adb call passes `-s SERIAL`;
 // the adb server is never restarted or killed. The Pixel 8a (42261JEKB07916) belongs to the
 // surface work and is refused. The app (com.helloworld) is uninstalled afterwards.
 // Usage (inside `nix develop`): ANDROID_SERIAL=711KPTM0646609 node scripts/consumer/worklets-device-test.mjs [out.json]
-// RNR_COMMIT is recorded with the result.
+// RNRS_COMMIT is recorded with the result.
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -29,11 +29,11 @@ const adb = (...args) =>
   execFileSync('adb', ['-s', SERIAL, ...args], { encoding: 'utf8', timeout: 120000 }).trim();
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// Reassembles the chunked "RNR_WORKLETS <run> <i>/<n> <text>" lines of the latest complete run.
+// Reassembles the chunked "RNRS_WORKLETS <run> <i>/<n> <text>" lines of the latest complete run.
 function readResult(log) {
   const runs = new Map();
   for (const line of log.split(/\r?\n/)) {
-    const m = /RNR_WORKLETS (\w+) (\d+)\/(\d+) (.*)$/.exec(line);
+    const m = /RNRS_WORKLETS (\w+) (\d+)\/(\d+) (.*)$/.exec(line);
     if (!m) continue;
     const run = runs.get(m[1]) ?? { n: Number(m[3]), parts: [] };
     run.parts[Number(m[2]) - 1] = m[4];
@@ -63,9 +63,9 @@ try {
   const swiped = new Set();
   for (let i = 0; i < 300 && !result; i++) {
     await sleep(1000);
-    // W6/W5a: the app asks for one round of swipes per "RNR_WORKLETS_SWIPE <tag>" line.
+    // W6/W5a: the app asks for one round of swipes per "RNRS_WORKLETS_SWIPE <tag>" line.
     const requests = [
-      ...adb('logcat', '-d', '-s', 'ReactNativeJS:*').matchAll(/RNR_WORKLETS_SWIPE (\S+)/g),
+      ...adb('logcat', '-d', '-s', 'ReactNativeJS:*').matchAll(/RNRS_WORKLETS_SWIPE (\S+)/g),
     ]
       .map((m) => m[1])
       .filter((tag) => !swiped.has(tag));
@@ -107,7 +107,7 @@ try {
     '-d',
     '-s',
     'ReactNativeJS:*',
-    'rnr:*',
+    'rnrs:*',
     'AndroidRuntime:E',
     'libc:F',
     'DEBUG:F',
@@ -122,7 +122,7 @@ try {
     /* best effort */
   }
 }
-if (!result) result = { ok: false, error: 'no final RNR_WORKLETS result within 300 s' };
+if (!result) result = { ok: false, error: 'no final RNRS_WORKLETS result within 300 s' };
 const buildRecord = path.join(ROOT, '.generated/consumer', `${NAME}.build.json`);
 if (existsSync(buildRecord)) result.build = JSON.parse(readFileSync(buildRecord, 'utf8'));
 result.device = {
@@ -131,12 +131,12 @@ result.device = {
   sdk: adb('shell', 'getprop', 'ro.build.version.sdk'),
 };
 result.provenance = {
-  commit: process.env.RNR_COMMIT ?? null,
+  commit: process.env.RNRS_COMMIT ?? null,
   apkSha256: execFileSync('sha256sum', [APK], { encoding: 'utf8' }).split(' ')[0],
 };
 result.logcatTail = logcat
   .split('\n')
-  .filter((l) => !l.includes('RNR_WORKLETS '))
+  .filter((l) => !l.includes('RNRS_WORKLETS '))
   .slice(-60);
 for (const c of result.checks ?? []) console.log(`${c.ok ? 'PASS' : 'FAIL'} ${c.name} ${c.detail}`);
 if (process.argv[2]) writeFileSync(process.argv[2], JSON.stringify(result, null, 2));

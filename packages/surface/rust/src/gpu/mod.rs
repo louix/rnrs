@@ -188,7 +188,7 @@ pub struct Options {
 
 impl Default for Options {
     fn default() -> Self {
-        Self { label: "rnr-gpu", touch: false, max_frame_rate: 60 }
+        Self { label: "rnrs-gpu", touch: false, max_frame_rate: 60 }
     }
 }
 

@@ -8,11 +8,13 @@ export default function App() {
   useEffect(() => {
     runSmoke()
       .then((result) => {
-        console.log('RNR_SMOKE ' + JSON.stringify(result));
+        console.log('RNRS_SMOKE ' + JSON.stringify(result));
         setStatus(JSON.stringify(result, null, 2));
       })
       .catch((error) => {
-        console.log('RNR_SMOKE ' + JSON.stringify({ ok: false, checks: [], error: String(error) }));
+        console.log(
+          'RNRS_SMOKE ' + JSON.stringify({ ok: false, checks: [], error: String(error) }),
+        );
         setStatus(String(error));
       });
   }, []);

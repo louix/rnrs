@@ -1,9 +1,9 @@
-//! Measurement-only module for the conversion pilot (docs/pilot.md). Each method's work
+//! Measurement-only module for the conversion pilot. Each method's work
 //! depends on its input, so results are verifiable and the call cannot be skipped.
 use rnrs_core::{CancelToken, Native};
 
-pub mod rnr_interface;
-use rnr_interface as spec;
+pub mod rnrs_interface;
+use rnrs_interface as spec;
 
 #[derive(Default)]
 pub struct Bench;

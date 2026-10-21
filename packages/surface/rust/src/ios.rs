@@ -1,12 +1,12 @@
-//! iOS: the `CAMetalLayer`-backed window of `RnrSurfaceViewComponentView`
+//! iOS: the `CAMetalLayer`-backed window of `RnrsSurfaceViewComponentView`
 //! (packages/surface/ios), its C entry points, and the explicit Core Animation transaction
-//! for configures (docs/research/ios-surface-c1-design.md).
+//! for configures.
 //!
 //! Threads: every entry point is called on the main thread (UIKit). The render thread reaches
 //! the layer only through a lease (wgpu, under admission) and [`configure_in_transaction`].
 //!
 //! Layer: the window is a standalone `CAMetalLayer` (delegate nil, implicit actions disabled)
-//! that `RnrMetalView` creates on the main thread and adds as a sublayer of its own (default)
+//! that `RnrsMetalView` creates on the main thread and adds as a sublayer of its own (default)
 //! backing layer. It is not view-backed: UIKit forbids off-main writes to a view's backing
 //! layer (C1 S3 run 2), and the render thread must write the Metal properties. The main thread
 //! owns the layer tree and the sublayer's geometry; the render thread writes only the Metal
@@ -19,7 +19,7 @@
 //! released elsewhere; that is not claimed to happen on the main thread.
 //!
 //! Only libobjc and libdispatch are used, through `extern "C"` declarations (no crate). The
-//! app links both (and QuartzCore, declared by the RnrSurface pod).
+//! app links both (and QuartzCore, declared by the RnrsSurface pod).
 //!
 //! Autorelease pools: the render thread is a plain thread with no pool, so Objective-C objects
 //! autoreleased there would accumulate until the thread exits. [`configure_in_transaction`]
@@ -115,7 +115,7 @@ fn disable_actions() {
     unsafe { send_set_bool(objc_getClass(c"CATransaction".as_ptr()), c"setDisableActions:", true) }
 }
 
-/// One retain of an `RnrMetalView` and one of its standalone `CAMetalLayer` sublayer.
+/// One retain of an `RnrsMetalView` and one of its standalone `CAMetalLayer` sublayer.
 pub struct IosWindow {
     view: NonNull<c_void>,
     layer: NonNull<c_void>,
@@ -214,7 +214,7 @@ pub fn configure_in_transaction<R, E>(lease: &WindowLease, configure: impl FnOnc
     }
 }
 
-/// Result codes of `rnr_surface_attach` when refused (an attachment number is always positive).
+/// Result codes of `rnrs_surface_attach` when refused (an attachment number is always positive).
 pub const REFUSED: i64 = 0;
 /// Refused for now: the surface has another window, or this window is still owned by another
 /// attachment. The view retries with backoff.
@@ -228,7 +228,7 @@ fn key(value: u64) -> Option<u64> {
     (value > 0).then_some(value)
 }
 
-/// Attaches `layer` (the standalone `CAMetalLayer` sublayer of `view`, an `RnrMetalView`) to
+/// Attaches `layer` (the standalone `CAMetalLayer` sublayer of `view`, an `RnrsMetalView`) to
 /// the surface `key`: the attachment number (positive), [`BUSY`], or [`REFUSED`]. Main thread
 /// only (refused elsewhere). Both are retained before this returns; a refused attach releases
 /// those retains on the main queue.
@@ -236,9 +236,9 @@ fn key(value: u64) -> Option<u64> {
 /// # Safety
 /// `view` is null or a live `UIView`; `layer` is null or a live `CAMetalLayer`.
 #[no_mangle]
-pub unsafe extern "C" fn rnr_surface_attach(key_value: u64, view: *mut c_void, layer: *mut c_void, width: u32, height: u32, scale: f32) -> i64 {
+pub unsafe extern "C" fn rnrs_surface_attach(key_value: u64, view: *mut c_void, layer: *mut c_void, width: u32, height: u32, scale: f32) -> i64 {
     if !on_main_thread() {
-        log::error!("rnr-surface: rnr_surface_attach called off the main thread; refused");
+        log::error!("rnrs-surface: rnrs_surface_attach called off the main thread; refused");
         return REFUSED;
     }
     let Some(key) = key(key_value) else { return REFUSED };
@@ -249,7 +249,7 @@ pub unsafe extern "C" fn rnr_surface_attach(key_value: u64, view: *mut c_void, l
         Ok(attachment) => i64::try_from(attachment).unwrap_or(REFUSED),
         Err(AttachError::SurfaceBusy | AttachError::WindowBusy) => BUSY,
         Err(AttachError::UnknownKey) => {
-            log::debug!("rnr-surface: no live surface {key} (disposed, or from an earlier JS runtime); not attached");
+            log::debug!("rnrs-surface: no live surface {key} (disposed, or from an earlier JS runtime); not attached");
             REFUSED
         }
         Err(AttachError::Closed) => REFUSED,
@@ -259,9 +259,9 @@ pub unsafe extern "C" fn rnr_surface_attach(key_value: u64, view: *mut c_void, l
 /// Updates the size or scale of the current attachment; false if it is not current. Main
 /// thread only, like every entry point (refused elsewhere, so callers keep one thread order).
 #[no_mangle]
-pub extern "C" fn rnr_surface_resize(key_value: u64, attachment: u64, width: u32, height: u32, scale: f32) -> bool {
+pub extern "C" fn rnrs_surface_resize(key_value: u64, attachment: u64, width: u32, height: u32, scale: f32) -> bool {
     if !on_main_thread() {
-        log::error!("rnr-surface: rnr_surface_resize called off the main thread; refused");
+        log::error!("rnrs-surface: rnrs_surface_resize called off the main thread; refused");
         return false;
     }
     let Some(key) = key(key_value) else { return false };
@@ -272,30 +272,30 @@ pub extern "C" fn rnr_surface_resize(key_value: u64, attachment: u64, width: u32
 /// (the renderer releases the window later), -1 stale. Main thread only (refused elsewhere,
 /// returning -1; the attachment then stays current).
 #[no_mangle]
-pub extern "C" fn rnr_surface_revoke(key_value: u64, attachment: u64) -> i32 {
+pub extern "C" fn rnrs_surface_revoke(key_value: u64, attachment: u64) -> i32 {
     if !on_main_thread() {
-        log::error!("rnr-surface: rnr_surface_revoke called off the main thread; refused");
+        log::error!("rnrs-surface: rnrs_surface_revoke called off the main thread; refused");
         return -1;
     }
     let Some(key) = key(key_value) else { return -1 };
     match platform::revoke_async(key, attachment) {
         Revoked::Released => 0,
         Revoked::Retiring { in_flight } => {
-            log::debug!("rnr-surface: surface {key}: revoked #{attachment}, retiring ({in_flight} operation(s) in flight)");
+            log::debug!("rnrs-surface: surface {key}: revoked #{attachment}, retiring ({in_flight} operation(s) in flight)");
             1
         }
         Revoked::Stale => -1,
     }
 }
 
-/// One touch transition from `RnrSurfaceViewComponentView` (crate::touch): `phase` 0 down,
+/// One touch transition from `RnrsSurfaceViewComponentView` (crate::touch): `phase` 0 down,
 /// 1 move, 2 up, 3 cancel, 4 cancel all; `slot` the view's per-attachment slot of the `UITouch`
 /// (0..10, reused only after its touch ended); view-local physical pixels; `UITouch.timestamp`
 /// in milliseconds. True if accepted. Main thread only (refused elsewhere).
 #[no_mangle]
-pub extern "C" fn rnr_surface_touch(key_value: u64, attachment: u64, phase: i32, slot: i32, x_px: f32, y_px: f32, time_ms: i64) -> bool {
+pub extern "C" fn rnrs_surface_touch(key_value: u64, attachment: u64, phase: i32, slot: i32, x_px: f32, y_px: f32, time_ms: i64) -> bool {
     if !on_main_thread() {
-        log::error!("rnr-surface: rnr_surface_touch called off the main thread; refused");
+        log::error!("rnrs-surface: rnrs_surface_touch called off the main thread; refused");
         return false;
     }
     let (Some(key), Some(phase)) = (key(key_value), crate::touch::Phase::from_code(phase)) else { return false };
@@ -304,7 +304,7 @@ pub extern "C" fn rnr_surface_touch(key_value: u64, attachment: u64, phase: i32,
 
 /// Diagnostics: live surfaces in the registry.
 #[no_mangle]
-pub extern "C" fn rnr_surface_live_surfaces() -> i32 {
+pub extern "C" fn rnrs_surface_live_surfaces() -> i32 {
     i32::try_from(platform::live_surfaces()).unwrap_or(i32::MAX)
 }
 
@@ -312,11 +312,11 @@ pub extern "C" fn rnr_surface_live_surfaces() -> i32 {
 /// bundle is a static library member only linked when referenced).
 pub(crate) fn keep_entry_points() {
     let entry_points: [*const (); 5] = [
-        rnr_surface_attach as *const (),
-        rnr_surface_resize as *const (),
-        rnr_surface_revoke as *const (),
-        rnr_surface_touch as *const (),
-        rnr_surface_live_surfaces as *const (),
+        rnrs_surface_attach as *const (),
+        rnrs_surface_resize as *const (),
+        rnrs_surface_revoke as *const (),
+        rnrs_surface_touch as *const (),
+        rnrs_surface_live_surfaces as *const (),
     ];
     std::hint::black_box(entry_points);
 }

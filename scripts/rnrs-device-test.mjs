@@ -110,7 +110,7 @@ try {
   adb('reverse', 'tcp:8787', 'tcp:8787');
   adb('logcat', '-c');
   adb('shell', 'am', 'force-stop', PACKAGE);
-  adb('shell', 'am', 'start', '-n', ACTIVITY, '--es', 'mode', 'rnr');
+  adb('shell', 'am', 'start', '-n', ACTIVITY, '--es', 'mode', 'rnrs');
   const processId = await (async () => {
     await sleep(1000);
     return pid();
@@ -256,7 +256,7 @@ try {
     const activities = adb('shell', 'dumpsys', 'activity', 'activities');
     const activityGone = !activities.includes('com.helloworld.MainActivity');
     const samePid = pid() === processId;
-    adb('shell', 'am', 'start', '-n', ACTIVITY, '--es', 'mode', 'rnr');
+    adb('shell', 'am', 'start', '-n', ACTIVITY, '--es', 'mode', 'rnrs');
     const after = await run(
       { step: 'snapshot', tag: 'activity-after' },
       runtime.scopeId,
@@ -544,9 +544,9 @@ try {
     for (let i = 0; i < 60 && !line; i++) {
       await sleep(500);
       line =
-        adb('logcat', '-d', '-s', 'rnr:*')
+        adb('logcat', '-d', '-s', 'rnrs:*')
           .split('\n')
-          .find((l) => l.includes('rnr scope stress:')) ?? '';
+          .find((l) => l.includes('rnrs scope stress:')) ?? '';
     }
     const stress = line ? JSON.parse(line.slice(line.indexOf('{'))) : null;
     log(`scope stress: ${JSON.stringify(stress)}`);
@@ -577,13 +577,13 @@ try {
     );
     from = records.length;
     adb('shell', 'am', 'force-stop', PACKAGE);
-    adb('shell', 'am', 'start', '-n', ACTIVITY, '--es', 'mode', 'rnr');
+    adb('shell', 'am', 'start', '-n', ACTIVITY, '--es', 'mode', 'rnrs');
     runtime = await next('runtime', from);
     const read = await run({ step: 'kv-persist-read' }, runtime.scopeId, 'kv-persist-read');
     expect(read.token === token, `kv restart: read ${read.token}, wrote ${token}`);
     expect(
-      read.cleanup['rnr-lab-persist'] === true &&
-        typeof read.cleanup['rnr-lab-lifecycle'] === 'boolean',
+      read.cleanup['rnrs-lab-persist'] === true &&
+        typeof read.cleanup['rnrs-lab-lifecycle'] === 'boolean',
       `kv restart: cleanup ${JSON.stringify(read.cleanup)}`,
     );
     result.kvRestart = { flushed: written.flushed, token, read };
@@ -596,7 +596,7 @@ try {
   await sleep(1000);
   const crashes = adb('logcat', '-d', '-b', 'crash');
   expect(!crashes.includes(PACKAGE), 'crash buffer mentions the app');
-  result.rnrLog = adb('logcat', '-d', '-s', 'rnr:*', 'ReactNativeJS:*');
+  result.rnrsLog = adb('logcat', '-d', '-s', 'rnrs:*', 'ReactNativeJS:*');
   // React Native drops runnables posted to a JS queue thread that has quit.
   result.droppedRunnableWarnings = adb('logcat', '-d')
     .split('\n')
@@ -608,7 +608,7 @@ try {
   failures.push(String(error?.stack ?? error));
   // Keep the evidence of a failed run (the success path records these above).
   for (const [key, args] of [
-    ['rnrLog', ['logcat', '-d', '-s', 'rnr:*', 'ReactNativeJS:*', 'AndroidRuntime:*']],
+    ['rnrsLog', ['logcat', '-d', '-s', 'rnrs:*', 'ReactNativeJS:*', 'AndroidRuntime:*']],
     ['crashLog', ['logcat', '-d', '-b', 'crash']],
     // The app reports through these ports; a run that lost them cannot deliver records.
     ['adbReverse', ['reverse', '--list']],

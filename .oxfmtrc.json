@@ -8,7 +8,7 @@
   "ignorePatterns": [
     "**/node_modules/**",
     "**/.generated/**",
-    "**/.rnr/**",
+    "**/.rnrs/**",
     "**/generator/**",
     "**/build/**",
     "**/dist/**",
@@ -22,10 +22,10 @@
     "docs/research/**",
     "react-native/**",
     "**/*.min.js",
-    "packages/*/rnr/**",
-    "packages/fixtures/*/rnr/**",
-    "web/rnr/**",
-    "fixtures/*/rnr/**",
+    "packages/*/rnrs/**",
+    "packages/fixtures/*/rnrs/**",
+    "web/rnrs/**",
+    "fixtures/*/rnrs/**",
     "**/package-lock.json",
     "**/Cargo.lock",
     "**/*.Cargo.lock"

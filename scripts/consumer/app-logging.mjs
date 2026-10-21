@@ -1,6 +1,6 @@
 // Sets rustNativeApp.logging in a consumer app's package.json (app configuration, not native
 // code): node scripts/consumer/app-logging.mjs <app-dir> '<json>'. Used by the consumer scripts
-// when RNR_APP_LOGGING is set, e.g. RNR_APP_LOGGING='{"filter":"info","iosPrivacy":"public"}'.
+// when RNRS_APP_LOGGING is set, e.g. RNRS_APP_LOGGING='{"filter":"info","iosPrivacy":"public"}'.
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 

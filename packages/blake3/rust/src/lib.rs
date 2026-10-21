@@ -7,8 +7,8 @@ use std::task::{Context, Poll};
 
 use rnrs_core::{CancelToken, Native};
 
-pub mod rnr_interface;
-use rnr_interface as spec;
+pub mod rnrs_interface;
+use rnrs_interface as spec;
 
 const CHUNK: usize = 64 * 1024;
 const MAX_XOF: f64 = 1_048_576.0;

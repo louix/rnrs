@@ -277,7 +277,7 @@ pub(crate) fn run<B: Backend, C: Client<B>>(
                 // A device lost while unbound (backgrounded) is replaced before any lease.
                 if let Some((error, loss)) = device.as_ref().and_then(|d| backend.fault(d)) {
                     shared.update(|s| s.device_losses += loss as u64);
-                    log::warn!("rnr-surface gpu: replacing the device: {error}");
+                    log::warn!("rnrs-surface gpu: replacing the device: {error}");
                     device = None;
                 }
                 shared.update(|s| {
@@ -320,7 +320,7 @@ pub(crate) fn run<B: Backend, C: Client<B>>(
             Ok(())
         });
         let fail = |resources: &mut Option<C::Resources>, target: &mut Option<B::Target>, error: String| {
-            log::error!("rnr-surface gpu: attachment {attachment}: {error}");
+            log::error!("rnrs-surface gpu: attachment {attachment}: {error}");
             B::pool(|| {
                 *resources = None;
                 *target = None;
@@ -355,7 +355,7 @@ pub(crate) fn run<B: Backend, C: Client<B>>(
             }
             // Retried at the frame cap (redraw stays set).
             Presented::Skipped(why) => {
-                log::debug!("rnr-surface gpu: present skipped: {why}");
+                log::debug!("rnrs-surface gpu: present skipped: {why}");
                 shared.update(|s| s.presents_skipped += 1);
             }
             Presented::Revoked => {}

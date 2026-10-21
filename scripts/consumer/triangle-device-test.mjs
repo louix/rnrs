@@ -3,7 +3,7 @@
 //
 // Usage (inside `nix develop`): node scripts/consumer/triangle-device-test.mjs <adb-serial>
 //
-// Checks, from `RNR_TRIANGLE_STATS` and raw screenshots: ready and presenting; orange triangle
+// Checks, from `RNRS_TRIANGLE_STATS` and raw screenshots: ready and presenting; orange triangle
 // pixels on screen (the device's own GPU, not a readback); redraws follow the one-per-second
 // background change rather than running continuously (Next::Wait); background then foreground
 // re-attaches with a new setup and presents again; rotation resizes; a process restart presents
@@ -46,8 +46,8 @@ mkdirSync(run, { recursive: true });
 const stats = () =>
   adb('logcat', '-d', '-s', 'ReactNativeJS:*')
     .split('\n')
-    .filter((l) => l.includes('RNR_TRIANGLE_STATS '))
-    .map((l) => JSON.parse(l.slice(l.indexOf('RNR_TRIANGLE_STATS ') + 19)));
+    .filter((l) => l.includes('RNRS_TRIANGLE_STATS '))
+    .map((l) => JSON.parse(l.slice(l.indexOf('RNRS_TRIANGLE_STATS ') + 19)));
 const latest = () => stats().at(-1);
 async function waitFor(pred, ms, what) {
   const end = Date.now() + ms;

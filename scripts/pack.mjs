@@ -5,7 +5,7 @@
 //   modules:      `rnrs pack-js` writes each package's JS wrapper, then `npm pack` (its
 //                 package.json `files` list) takes manifest, spec, Rust crate and wrapper.
 //   @rnrs/surface: framework rendering surface (Rust library package + Android view), `npm pack`.
-// Each tarball's file list is checked. Output: .generated/pack/*.tgz (or $RNR_PACK_OUT)
+// Each tarball's file list is checked. Output: .generated/pack/*.tgz (or $RNRS_PACK_OUT)
 // Usage (inside `nix develop`): node scripts/pack.mjs
 import { cpSync, existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
@@ -13,9 +13,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-// RNR_PACK_OUT: another output directory (tests pack into a scratch directory).
-const OUT = process.env.RNR_PACK_OUT
-  ? path.resolve(process.env.RNR_PACK_OUT)
+// RNRS_PACK_OUT: another output directory (tests pack into a scratch directory).
+const OUT = process.env.RNRS_PACK_OUT
+  ? path.resolve(process.env.RNRS_PACK_OUT)
   : path.join(ROOT, '.generated/pack');
 const STAGE = path.join(OUT, 'stage');
 const MODULES = [
@@ -28,7 +28,6 @@ const MODULES = [
   'bench',
   'fixtures/log-probe',
   'fixtures/worklets-probe',
-  'fixtures/teardown-probe',
   'fixtures/touch-probe',
   'fixtures/webgpu-triangle',
   'vello2d',
@@ -52,7 +51,7 @@ copy('packages/runtime/android/CMakeLists.txt', 'android/CMakeLists.txt');
 copy('packages/runtime/android/src', 'android/src');
 copy('packages/runtime/cpp', 'cpp');
 copy('packages/runtime/ios', 'ios');
-copy('packages/runtime/RnrRuntime.podspec', 'RnrRuntime.podspec');
+copy('packages/runtime/RnrsRuntime.podspec', 'RnrsRuntime.podspec');
 for (const crate of ['rnrs-core', 'rnrs-android', 'rnrs-web', 'rnrs-log', 'rnrs']) {
   copy(`rust/${crate}/Cargo.toml`, `rust/${crate}/Cargo.toml`);
   copy(`rust/${crate}/src`, `rust/${crate}/src`);
@@ -82,15 +81,15 @@ expectFiles(
     /^package\.json$/,
     /^react-native\.config\.js$/,
     /^src\/[\w-]+\.ts$/,
-    /^src\/specs\/NativeRnrRuntime\.ts$/,
+    /^src\/specs\/NativeRnrsRuntime\.ts$/,
     /^cli\/run\.mjs$/,
     /^rust\/(rnrs-(core|android|web|log)|rnrs)\/(Cargo\.toml|src\/[\w/-]+\.rs)$/,
     /^rust\/rnrs-log\/(build\.rs|src\/apple_log\.c)$/,
     /^android\/(build\.gradle|CMakeLists\.txt)$/,
-    /^android\/src\/main\/(java\/dev\/rustjsilab\/rnr\/\w+\.kt|jni\/\w+\.(cpp|h))$/,
+    /^android\/src\/main\/(java\/dev\/rustjsilab\/rnrs\/\w+\.kt|jni\/\w+\.(cpp|h))$/,
     /^cpp\/\w+\.(cpp|h)$/,
     /^ios\/(\w+\.(h|mm)|build-rust-bundle\.sh)$/,
-    /^RnrRuntime\.podspec$/,
+    /^RnrsRuntime\.podspec$/,
   ],
 );
 results.push(runtime);
@@ -123,13 +122,13 @@ expectFiles(
     /^react-native\.config\.js$/,
     /^src\/index(?:\.web)?\.tsx?$/,
     /^src\/browser\/[\w-]+\.ts$/,
-    /^src\/specs\/RnrSurfaceViewNativeComponent\.ts$/,
+    /^src\/specs\/RnrsSurfaceViewNativeComponent\.ts$/,
     /^rust\/Cargo\.toml$/,
     /^rust\/src\/(\w+\/)*\w+\.rs$/,
     /^android\/(build\.gradle|consumer-rules\.pro)$/,
-    /^android\/src\/main\/java\/dev\/rustjsilab\/rnr\/surface\/\w+\.kt$/,
+    /^android\/src\/main\/java\/dev\/rustjsilab\/rnrs\/surface\/\w+\.kt$/,
     /^ios\/\w+\.(h|mm)$/,
-    /^RnrSurface\.podspec$/,
+    /^RnrsSurface\.podspec$/,
   ],
 );
 results.push(surface);
@@ -150,10 +149,10 @@ for (const m of MODULES) {
       /^frame\.ts$/,
       /^rust\/Cargo\.toml$/,
       /^rust\/src\/[\w/-]+\.rs$/,
-      /^rnr\/(index|web)\.ts$/,
+      /^rnrs\/(index|web)\.ts$/,
     ],
   );
-  if (!info.files.some((f) => f.path === 'rust/src/rnr_interface.rs'))
+  if (!info.files.some((f) => f.path === 'rust/src/rnrs_interface.rs'))
     throw new Error(`${info.name}: committed interface missing`);
   if (info.files.some((f) => /glue|bundle/.test(f.path)))
     throw new Error(`${info.name}: generated glue must not be packaged`);
@@ -165,7 +164,7 @@ for (const r of results)
     `${r.filename}  ${r.files.length} files, ${r.size} bytes  (${r.files
       .map((f) => f.path)
       .filter(
-        (p) => !p.startsWith('src/') && !p.startsWith('generator/') && !p.startsWith('rust/rnr'),
+        (p) => !p.startsWith('src/') && !p.startsWith('generator/') && !p.startsWith('rust/rnrs'),
       )
       .join(', ')})`,
   );

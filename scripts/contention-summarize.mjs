@@ -1,4 +1,4 @@
-// Summaries of the paddle-game contention pilot (docs/research/js-contention-plan.md) from the
+// Summaries of the paddle-game contention pilot from the
 // per-run JSON written by scripts/consumer/contention-device-test.mjs. Pure functions; the CLI
 // re-summarizes a run directory: node scripts/contention-summarize.mjs <run-dir>
 //
@@ -634,7 +634,7 @@ export const EXPECTED_HERMES = {
   libhermesvmSha256: '904a21ebd278d67ac8203cdb075828261e868fd190b18256fdb65a01dc3f2df7',
 };
 
-/** Trial-level evaluation, exactly as written in docs/research/js-contention-trial2-plan.md. */
+/** Trial-level evaluation of the A/B trials. */
 export function evaluateTrial(trial, runs, summaries, identity) {
   const byId = new Map(summaries.map((s) => [s.id, s]));
   const arm = (a) =>

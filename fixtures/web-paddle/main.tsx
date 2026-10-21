@@ -2,12 +2,12 @@ import React, { StrictMode, useLayoutEffect } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { flushSync } from 'react-dom';
 import { AppState, Linking } from 'react-native';
-import { installWebBackend, setBackend, type RnrWasm } from '@rnrs/runtime/web';
+import { installWebBackend, setBackend, type RnrsWasm } from '@rnrs/runtime/web';
 import { SurfaceView } from '@rnrs/surface';
 import { createSurfaceBootstrap } from '@rnrs/surface/browser';
 import { createVello2DModuleForTesting, vello2DModule, type Renderer } from '@rnrs/example-vello2d';
 import { FrameWriter } from '@rnrs/example-vello2d/frame';
-import init, * as wasm from './.rnr/web/pkg/rnr_bundle.js';
+import init, * as wasm from './.rnrs/web/pkg/rnrs_bundle.js';
 import App from './.generated/game/App';
 
 const checks: { name: string; ok: boolean; detail: string }[] = [];
@@ -16,8 +16,8 @@ const snapshots: any[] = [];
 const log = console.log;
 console.log = (...args: unknown[]) => {
   const text = String(args[0]);
-  if (text.startsWith('RNR_GAME ')) reports.push(JSON.parse(text.slice(9)));
-  if (text.startsWith('RNR_GAME_STATS ')) snapshots.push(JSON.parse(text.slice(15)));
+  if (text.startsWith('RNRS_GAME ')) reports.push(JSON.parse(text.slice(9)));
+  if (text.startsWith('RNRS_GAME_STATS ')) snapshots.push(JSON.parse(text.slice(15)));
   log(...args);
 };
 const assert = (ok: unknown, message: string) => {
@@ -42,7 +42,7 @@ async function action(type: string, args: Record<string, number>) {
   );
   if ((globalThis as any).__w2ActionError) throw new Error((globalThis as any).__w2ActionError);
 }
-const diagnostics = () => Array.from(wasm.rnr_surface_diagnostics()) as number[];
+const diagnostics = () => Array.from(wasm.rnrs_surface_diagnostics()) as number[];
 const latest = () => snapshots.at(-1);
 const container = document.getElementById('root')!;
 let root: Root | undefined;
@@ -79,8 +79,8 @@ function mountApp() {
   return { module, created };
 }
 async function main() {
-  await init({ module_or_path: new URL('../.rnr/web/pkg/rnr_bundle_bg.wasm', import.meta.url) });
-  backend = installWebBackend(wasm as unknown as RnrWasm, createSurfaceBootstrap);
+  await init({ module_or_path: new URL('../.rnrs/web/pkg/rnrs_bundle_bg.wasm', import.meta.url) });
+  backend = installWebBackend(wasm as unknown as RnrsWasm, createSurfaceBootstrap);
   assert(
     (await Linking.getInitialURL()) === window.location.href,
     'RNWeb Linking preserves initial HTTP URL',
@@ -169,10 +169,10 @@ async function main() {
     root!.render(<SurfaceView surfaceKey={retainedKey} style={{ width: 80, height: 60 }} />),
   );
   await until(() => retained.stats().framesPresented > 0, 'mounted replacement initial draw');
-  backend = installWebBackend(wasm as unknown as RnrWasm, createSurfaceBootstrap);
+  backend = installWebBackend(wasm as unknown as RnrsWasm, createSurfaceBootstrap);
   await until(() => container.querySelector('canvas')!.width === 0, 'mounted old key cleared');
   assert(
-    wasm.rnr_surface_attach(retainedKey, 8, 8, 1) === 'closed',
+    wasm.rnrs_surface_attach(retainedKey, 8, 8, 1) === 'closed',
     'mounted old renderer key closed',
   );
   assert(
@@ -219,7 +219,7 @@ async function main() {
   };
   function ReplaceBeforeMount() {
     useLayoutEffect(() => {
-      backend = installWebBackend(wasm as unknown as RnrWasm, createSurfaceBootstrap);
+      backend = installWebBackend(wasm as unknown as RnrsWasm, createSurfaceBootstrap);
     }, []);
     return null;
   }
@@ -237,7 +237,7 @@ async function main() {
     assert(errors.length === 0, 'stale captured host must not mount or report a genuine error');
     assert(
       container.querySelector('canvas')!.width === 0 &&
-        wasm.rnr_surface_attach(raceKey, 8, 8, 1) === 'closed',
+        wasm.rnrs_surface_attach(raceKey, 8, 8, 1) === 'closed',
       'race leaves old key closed and canvas blank',
     );
     unmount();
@@ -401,8 +401,8 @@ async function main() {
   assert(snapshots.length === logs, 'App timers stopped on unmount');
   passed('game unmount closes renderer, releases pixels and removes timers');
 
-  backend = installWebBackend(wasm as unknown as RnrWasm, createSurfaceBootstrap);
-  assert(wasm.rnr_surface_attach(oldKey, 8, 8, 1) === 'closed', 'old key remains closed');
+  backend = installWebBackend(wasm as unknown as RnrsWasm, createSurfaceBootstrap);
+  assert(wasm.rnrs_surface_attach(oldKey, 8, 8, 1) === 'closed', 'old key remains closed');
   let refused = false;
   try {
     gameRenderer.submit(new FrameWriter().clear([0, 0, 0, 1]).finish());
@@ -429,7 +429,7 @@ async function main() {
   backend = undefined;
   for (const key of [simpleKey, retainedKey, retainedNewKey, raceKey, oldKey, finalKey])
     assert(
-      wasm.rnr_surface_attach(key, 8, 8, 1) === 'closed',
+      wasm.rnrs_surface_attach(key, 8, 8, 1) === 'closed',
       'retained wrapper key must be closed',
     );
   // diagnostics[0] counts still-referenced Inner objects, including closed wrappers.
@@ -458,6 +458,6 @@ main()
       limitation:
         'Packaged RNWeb consumer, unchanged game sources, CDP mouse/DPR. Visibility and page events are synthetic. Scalar Canvas2D main-thread work has no duration bound.',
     };
-    (globalThis as any).__rnrResult = result;
+    (globalThis as any).__rnrsResult = result;
     document.getElementById('result')!.textContent = JSON.stringify(result, null, 2);
   });

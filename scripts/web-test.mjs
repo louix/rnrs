@@ -1,13 +1,13 @@
 // Runs the browser harness (web/) in headless Chromium and prints the conformance result.
 // Usage (inside `nix develop .#web`, after scripts/build-web.sh):
 //   node scripts/web-test.mjs [results/web-run.json]
-// RNR_WEB_ROOT selects another static directory to serve (the Vite consumer's dist/).
-// RNR_WEB_PAGE selects the page (default index.html), RNR_WEB_QUERY appends a query string,
-// RNR_WEB_TIMEOUT_MS sets the result timeout (default 60 s), RNR_WEB_PRECISE_MEMORY=1 adds
+// RNRS_WEB_ROOT selects another static directory to serve (the Vite consumer's dist/).
+// RNRS_WEB_PAGE selects the page (default index.html), RNRS_WEB_QUERY appends a query string,
+// RNRS_WEB_TIMEOUT_MS sets the result timeout (default 60 s), RNRS_WEB_PRECISE_MEMORY=1 adds
 // Chromium's --enable-precise-memory-info (performance.memory without quantization).
-// RNR_HTTP_TEST_SERVER=1 also starts scripts/http-test-server.mjs on another port (so
+// RNRS_HTTP_TEST_SERVER=1 also starts scripts/http-test-server.mjs on another port (so
 // requests are cross-origin) and passes its URL to the page as ?http=.
-// RNR_WEB_UNSAFE_WEBGPU=1 (test only) drops --disable-gpu and adds --enable-unsafe-webgpu, which
+// RNRS_WEB_UNSAFE_WEBGPU=1 (test only) drops --disable-gpu and adds --enable-unsafe-webgpu, which
 // in this headless Chromium exposes only SwiftShader's software WebGPU adapter: correctness
 // evidence, never GPU performance. Default runs keep WebGPU unavailable.
 import http from 'node:http';
@@ -17,7 +17,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const root = path.resolve(process.env.RNR_WEB_ROOT ?? 'web');
+const root = path.resolve(process.env.RNRS_WEB_ROOT ?? 'web');
 const types = {
   '.html': 'text/html',
   '.js': 'text/javascript',
@@ -44,26 +44,28 @@ const server = http.createServer(async (req, res) => {
 await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
 let httpServer;
 let query = '';
-if (process.env.RNR_HTTP_TEST_SERVER) {
+if (process.env.RNRS_HTTP_TEST_SERVER) {
   const { startServer } = await import('./http-test-server.mjs');
   httpServer = await startServer(0);
   query = `?http=${encodeURIComponent(`http://127.0.0.1:${httpServer.address().port}`)}`;
 }
-const extra = process.env.RNR_WEB_QUERY ?? '';
-const pageUrl = `http://127.0.0.1:${server.address().port}/${process.env.RNR_WEB_PAGE ?? 'index.html'}${query}${extra ? (query ? '&' : '?') + extra : ''}`;
+const extra = process.env.RNRS_WEB_QUERY ?? '';
+const pageUrl = `http://127.0.0.1:${server.address().port}/${process.env.RNRS_WEB_PAGE ?? 'index.html'}${query}${extra ? (query ? '&' : '?') + extra : ''}`;
 
-const profile = await mkdtemp(path.join(tmpdir(), 'rnr-chromium-'));
+const profile = await mkdtemp(path.join(tmpdir(), 'rnrs-chromium-'));
 const browser = spawn(
   process.env.CHROMIUM ?? 'chromium',
   [
     '--headless=new',
     '--no-first-run',
     '--no-default-browser-check',
-    ...(process.env.RNR_WEB_UNSAFE_WEBGPU === '1' ? ['--enable-unsafe-webgpu'] : ['--disable-gpu']),
+    ...(process.env.RNRS_WEB_UNSAFE_WEBGPU === '1'
+      ? ['--enable-unsafe-webgpu']
+      : ['--disable-gpu']),
     '--js-flags=--expose-gc',
     `--user-data-dir=${profile}`,
     '--remote-debugging-port=0',
-    ...(process.env.RNR_WEB_PRECISE_MEMORY ? ['--enable-precise-memory-info'] : []),
+    ...(process.env.RNRS_WEB_PRECISE_MEMORY ? ['--enable-precise-memory-info'] : []),
     'about:blank',
   ],
   { stdio: ['ignore', 'ignore', 'pipe'] },
@@ -113,18 +115,18 @@ try {
   await send('Runtime.enable', {}, sessionId);
   const version = await send('Browser.getVersion');
   await send('Page.navigate', { url: pageUrl }, sessionId);
-  if (process.env.RNR_WEB_DRIVER) {
-    const { drive } = await import(pathToFileURL(path.resolve(process.env.RNR_WEB_DRIVER)));
+  if (process.env.RNRS_WEB_DRIVER) {
+    const { drive } = await import(pathToFileURL(path.resolve(process.env.RNRS_WEB_DRIVER)));
     await drive({ send: (method, params) => send(method, params, sessionId) });
   }
-  const deadline = Date.now() + Number(process.env.RNR_WEB_TIMEOUT_MS ?? 60_000);
+  const deadline = Date.now() + Number(process.env.RNRS_WEB_TIMEOUT_MS ?? 60_000);
   let result;
   while (!result) {
-    if (Date.now() > deadline) throw new Error('timed out waiting for __rnrResult');
+    if (Date.now() > deadline) throw new Error('timed out waiting for __rnrsResult');
     await new Promise((resolve) => setTimeout(resolve, 200));
     const evaluated = await send(
       'Runtime.evaluate',
-      { expression: 'JSON.stringify(globalThis.__rnrResult ?? null)', returnByValue: true },
+      { expression: 'JSON.stringify(globalThis.__rnrsResult ?? null)', returnByValue: true },
       sessionId,
     );
     result = JSON.parse(evaluated.result.value ?? 'null');

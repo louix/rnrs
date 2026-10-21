@@ -1,13 +1,13 @@
 // Device run of the Bevy example consumer (fixtures/bevy-consumer), built by
 // `FIXTURE=bevy-consumer MODULES=example-bevy3d PACKS=rnrs-surface NAME=bevy-app scripts/consumer/rn-app.sh`
-// with RUSTUP_TOOLCHAIN=1.97.1 (docs/bevy3d.md).
+// with RUSTUP_TOOLCHAIN=1.97.1 (packages/bevy3d/README.md).
 //
 // Usage (inside `nix develop`): node scripts/consumer/bevy-device-test.mjs <adb-serial>
 //
-// 1. Installs the APK, starts it, waits for `RNR_SMOKE` (the in-app sequence) and screenshots.
-// 2. Taps the TSX overlay's Color and Pause buttons and checks the pause in `RNR_BEVY_STATS`;
+// 1. Installs the APK, starts it, waits for `RNRS_SMOKE` (the in-app sequence) and screenshots.
+// 2. Taps the TSX overlay's Color and Pause buttons and checks the pause in `RNRS_BEVY_STATS`;
 //    then Resume. uiautomator cannot dump a continuously animating window ("could not get idle
-//    state"), so the app logs each button's layout (`RNR_BUTTON`, layout units relative to its
+//    state"), so the app logs each button's layout (`RNRS_BUTTON`, layout units relative to its
 //    root view); screen pixels = layout × (wm density / 160), plus the status bar height for y
 //    (the template is not edge-to-edge). Whether a tap landed is checked through the stats.
 // 3. Background (HOME) and foreground: the window detaches and re-attaches, presenting resumes.
@@ -66,7 +66,7 @@ const logLines = (tag) =>
         return { truncated: true, length: text.length };
       }
     });
-const latestStats = () => logLines('RNR_BEVY_STATS').at(-1);
+const latestStats = () => logLines('RNRS_BEVY_STATS').at(-1);
 async function waitFor(pred, timeoutMs, what) {
   const end = Date.now() + timeoutMs;
   for (;;) {
@@ -102,12 +102,12 @@ function screenGeometry() {
   );
   return { scale: dpi / 160, statusBarPx, edgeToEdge, topPx: edgeToEdge ? 0 : statusBarPx };
 }
-/** Taps the centre of the button `id` from its latest RNR_BUTTON layout line. */
+/** Taps the centre of the button `id` from its latest RNRS_BUTTON layout line. */
 function tap(id) {
-  const b = logLines('RNR_BUTTON')
+  const b = logLines('RNRS_BUTTON')
     .filter((l) => l.id === id)
     .at(-1);
-  if (!b) throw new Error(`no RNR_BUTTON for ${id}`);
+  if (!b) throw new Error(`no RNRS_BUTTON for ${id}`);
   const g = (result.screen ??= screenGeometry());
   const [x, y] = [
     Math.round((b.x + b.w / 2) * g.scale),
@@ -156,8 +156,8 @@ try {
   start();
   await sleep(1000);
   notePid();
-  const smoke = await waitFor(() => logLines('RNR_SMOKE')[0], 120000, 'RNR_SMOKE');
-  result.smoke = { ...smoke, details: logLines('RNR_SMOKE_CHECK') };
+  const smoke = await waitFor(() => logLines('RNRS_SMOKE')[0], 120000, 'RNRS_SMOKE');
+  result.smoke = { ...smoke, details: logLines('RNRS_SMOKE_CHECK') };
   check(
     'in-app sequence (mount, simulate, pause, color, resize, unmount, remount)',
     smoke.ok,

@@ -1,5 +1,4 @@
-//! The configure sequence for layer-backed windows (iOS `CAMetalLayer`; docs/research/
-//! ios-surface-c1-design.md, "Bounded acquire"). wgpu's Metal `configure` writes the layer's
+//! The configure sequence for layer-backed windows (iOS `CAMetalLayer`). wgpu's Metal `configure` writes the layer's
 //! properties on the calling render thread, which has no run loop, and turns the layer's
 //! drawable timeout off (`allowsNextDrawableTimeout = NO`: `nextDrawable` may then block
 //! forever). The sequence encloses the configure in an explicit Core Animation transaction,
@@ -55,9 +54,9 @@ pub fn configure_in_transaction<T: LayerTransaction + ?Sized, R, E>(tx: &mut T, 
     };
     let acquire_allowed = tx.drawable_timeout_allowed();
     if acquire_allowed {
-        log::info!("rnr-surface: configure read-back allowsNextDrawableTimeout=YES (configure {})", if result.is_ok() { "ok" } else { "failed" });
+        log::info!("rnrs-surface: configure read-back allowsNextDrawableTimeout=YES (configure {})", if result.is_ok() { "ok" } else { "failed" });
     } else {
-        log::error!("rnr-surface: allowsNextDrawableTimeout read back NO after configure; acquires are refused for this window");
+        log::error!("rnrs-surface: allowsNextDrawableTimeout read back NO after configure; acquires are refused for this window");
     }
     Configured { result, acquire_allowed }
 }

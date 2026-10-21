@@ -7,7 +7,7 @@ import path from 'node:path';
 import { parseSpec } from '../parse.mjs';
 import { FRAMEWORK_SPEC, ROOT } from '../cli.mjs';
 
-const dir = path.join(ROOT, '.generated/rnr-test-specs');
+const dir = path.join(ROOT, '.generated/rnrs-test-specs');
 mkdirSync(dir, { recursive: true });
 let n = 0;
 
@@ -284,7 +284,7 @@ for (const [name, body, line, pattern] of cases) {
     const hit = diagnostics.find((d) => pattern.test(d.message));
     assert.ok(hit, `no diagnostic matching ${pattern}: ${JSON.stringify(diagnostics)}`);
     assert.equal(hit.line, line + 1, `line of ${JSON.stringify(hit)}`); // +1: the import line
-    assert.match(hit.file, /\.generated\/rnr-test-specs\/case\d+\/(case\d+\.spec|[a-z]+)\.ts$/);
+    assert.match(hit.file, /\.generated\/rnrs-test-specs\/case\d+\/(case\d+\.spec|[a-z]+)\.ts$/);
   });
 }
 

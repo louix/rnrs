@@ -14,8 +14,7 @@ rnrs-surface = "0.1"
 vello_cpu = { version = "=0.3.0", default-features = false, features = ["std", "u8_pipeline"] }
 log = "0.4"
 
-# The same pinned wgpu with one backend per native target: Metal on iOS (docs/research/
-# ios-surface-c1-design.md), Vulkan on the other native targets (Android; host tests). macOS is
+# The same pinned wgpu with one backend per native target: Metal on iOS, Vulkan on the other native targets (Android; host tests). macOS is
 # not a supported surface target. wasm32 (web) gets no native wgpu backend here; its renderer
 # path is the web plan's.
 [target.'cfg(target_os = "ios")'.dependencies]

@@ -1,17 +1,17 @@
 //! Framework Android backend (handwritten, module-independent).
 //!
-//! The C++ JSI adapter (`android/app/src/main/jni/RnrJsi.cpp`) installs one adapter per
+//! The C++ JSI adapter (`android/app/src/main/jni/RnrsJsi.cpp`) installs one adapter per
 //! `(module, runtime generation)` and calls into it through this C ABI. Generated module
 //! glue never sees JSI: it converts values through [`JsiEnv`], which forwards each
 //! operation to the C++ call context through a function table. Values cross as indices
 //! into that context's per-call arena; strings as UTF-8 byte ranges; native objects as
 //! owned `NativeBox` pointers that the C++ side stores in `jsi::NativeState`.
 //!
-//! Two C++ call contexts implement the function table: the module adapter's (RnrJsi.cpp),
+//! Two C++ call contexts implement the function table: the module adapter's (RnrsJsi.cpp),
 //! used on its React Native runtime's JS thread, and the optional worklet endpoint's
-//! (RnrWorklets.cpp), used on the thread of whichever runtime calls it (the UI thread, a
+//! (RnrsWorklets.cpp), used on the thread of whichever runtime calls it (the UI thread, a
 //! worklet runtime's thread, or the JS thread inside `runOnUISync`), serialized by that
-//! runtime. Either way a context belongs to one call on one thread, and `rnr_adapter_call`
+//! runtime. Either way a context belongs to one call on one thread, and `rnrs_adapter_call`
 //! may run concurrently for one adapter from different runtimes: module state is Send + Sync.
 //!
 //! No function here unwinds: release builds abort on panic and `extern "C"` functions
@@ -25,20 +25,20 @@ use rnrs_core::exec::TokioSpawner;
 use rnrs_core::{Budget, Delivery, Notify};
 
 /// Why an adapter was torn down (diagnostics only; teardown itself is the same).
-pub const RNR_TEARDOWN_EXPLICIT: u32 = 0;
+pub const RNRS_TEARDOWN_EXPLICIT: u32 = 0;
 /// The framework's runtime-lifecycle hook (React Native module invalidation).
-pub const RNR_TEARDOWN_LIFECYCLE: u32 = 1;
+pub const RNRS_TEARDOWN_LIFECYCLE: u32 = 1;
 /// Fallback: the adapter was destroyed (runtime finalization) without an earlier teardown.
-pub const RNR_TEARDOWN_DESTRUCTOR: u32 = 2;
+pub const RNRS_TEARDOWN_DESTRUCTOR: u32 = 2;
 /// Created while its runtime scope was being invalidated; refused registration.
-pub const RNR_TEARDOWN_REFUSED: u32 = 3;
+pub const RNRS_TEARDOWN_REFUSED: u32 = 3;
 
 /// Running operations allowed at once across every module and runtime generation in the
 /// process, including non-cooperative work left behind by closed generations.
-pub const RNR_EXECUTOR_BUDGET: usize = 32;
+pub const RNRS_EXECUTOR_BUDGET: usize = 32;
 
 pub type Callback = extern "C" fn(*mut c_void);
-/// Reports the latest posted wake's state (RnrDelivery.h: 0 queued, 1 running, 2 done,
+/// Reports the latest posted wake's state (RnrsDelivery.h: 0 queued, 1 running, 2 done,
 /// 3 dropped). Called under the host lock; only reads an atomic.
 pub type DeliveryCallback = extern "C" fn(*mut c_void) -> u8;
 
@@ -91,7 +91,7 @@ fn spawner() -> Option<&'static Spawner> {
 /// Shared by every adapter on that runtime, so it has the same (process) scope.
 pub fn budget() -> &'static Budget {
     static BUDGET: OnceLock<Budget> = OnceLock::new();
-    BUDGET.get_or_init(|| Budget::new(RNR_EXECUTOR_BUDGET))
+    BUDGET.get_or_init(|| Budget::new(RNRS_EXECUTOR_BUDGET))
 }
 
 static MODULES: OnceLock<&'static [&'static ModuleDef]> = OnceLock::new();
@@ -114,12 +114,12 @@ static TEARDOWN_DISCARDED_QUEUED: AtomicU64 = AtomicU64::new(0);
 static TEARDOWN_STILL_RUNNING: AtomicU64 = AtomicU64::new(0);
 
 /// One module's adapter generation.
-pub struct RnrAdapter {
+pub struct RnrsAdapter {
     adapter: Adapter<Notifier>,
     torn_down: AtomicBool,
 }
 
-impl RnrAdapter {
+impl RnrsAdapter {
     pub fn new(def: &'static ModuleDef, max_in_flight: usize, budget: Budget, notifier: Notifier) -> Result<Self, String> {
         let spawner = spawner().ok_or("failed to start the Tokio runtime")?;
         let adapter = Adapter::new(def, max_in_flight, budget, spawner, notifier)?;
@@ -180,9 +180,9 @@ impl RnrAdapter {
     }
 }
 
-impl Drop for RnrAdapter {
+impl Drop for RnrsAdapter {
     fn drop(&mut self) {
-        self.teardown(RNR_TEARDOWN_DESTRUCTOR);
+        self.teardown(RNRS_TEARDOWN_DESTRUCTOR);
         HOSTS_FREED.fetch_add(1, Ordering::SeqCst);
     }
 }
@@ -211,7 +211,7 @@ pub struct JsiVTable {
     pub set_property: extern "C" fn(*mut c_void, u32, *const u8, usize, u32) -> bool,
     pub array: extern "C" fn(*mut c_void, u32) -> u32,
     pub set_index: extern "C" fn(*mut c_void, u32, u32, u32) -> bool,
-    /// Takes ownership of `native` (released through `rnr_native_release`).
+    /// Takes ownership of `native` (released through `rnrs_native_release`).
     pub wrap_native: extern "C" fn(*mut c_void, *mut c_void, *mut u32) -> bool,
     /// 0 ok (writes the `NativeBox` pointer), 1 not native, 2 closed generation, 3 disposed.
     pub unwrap_native: extern "C" fn(*mut c_void, u32, *mut *const c_void) -> u32,
@@ -220,7 +220,7 @@ pub struct JsiVTable {
     /// 0 ok, 1-5 as `BytesError`, 6 if JS threw, 7 if allocation failed.
     pub to_bytes: extern "C" fn(*mut c_void, u32, extern "C" fn(*mut c_void, usize) -> *mut u8, *mut c_void) -> u32,
     /// Takes ownership of a Rust `Vec<u8>` (ptr, len, cap), released through
-    /// `rnr_bytes_free`, and writes the new ArrayBuffer's index.
+    /// `rnrs_bytes_free`, and writes the new ArrayBuffer's index.
     pub new_bytes: extern "C" fn(*mut c_void, *mut u8, usize, usize, *mut u32),
     /// UTF-8 copy of a string straight into storage from `alloc(alloc_ctx, len)`; returns
     /// the bytes written (at most `len`).
@@ -258,7 +258,7 @@ extern "C" fn alloc_bytes(ctx: *mut c_void, len: usize) -> *mut u8 {
 /// # Safety
 /// `(ptr, len, cap)` come from one `Vec<u8>` passed to `new_bytes`, released once.
 #[no_mangle]
-pub unsafe extern "C" fn rnr_bytes_free(ptr: *mut u8, len: usize, cap: usize) {
+pub unsafe extern "C" fn rnrs_bytes_free(ptr: *mut u8, len: usize, cap: usize) {
     drop(unsafe { Vec::from_raw_parts(ptr, len, cap) });
     BYTES_RELEASED.fetch_add(1, Ordering::SeqCst);
 }
@@ -369,7 +369,7 @@ impl Env for JsiEnv<'_> {
         let mut out = 0u32;
         BYTES_ADOPTED.fetch_add(1, Ordering::SeqCst);
         // Ownership passes to the C++ side, which always adopts it (or copies and then
-        // releases it) and frees it through rnr_bytes_free exactly once.
+        // releases it) and frees it through rnrs_bytes_free exactly once.
         (self.vt.new_bytes)(self.ctx, data.as_mut_ptr(), data.len(), data.capacity(), &mut out);
         Ok(self.val(out))
     }
@@ -380,7 +380,7 @@ impl Env for JsiEnv<'_> {
             Ok(self.val(out))
         } else {
             // Not adopted: release here.
-            rnr_native_release(raw);
+            rnrs_native_release(raw);
             Err(BindError::error("runtime adapter is closed"))
         }
     }
@@ -401,13 +401,13 @@ impl Env for JsiEnv<'_> {
 
 // ---- C ABI -------------------------------------------------------------------------------
 
-pub const RNR_FIND_OK: u32 = 0;
-pub const RNR_FIND_UNKNOWN: u32 = 1;
-pub const RNR_FIND_STALE: u32 = 2;
+pub const RNRS_FIND_OK: u32 = 0;
+pub const RNRS_FIND_UNKNOWN: u32 = 1;
+pub const RNRS_FIND_STALE: u32 = 2;
 
-pub const RNR_CALL_OK: u32 = 0;
-pub const RNR_CALL_ERROR: u32 = 1;
-pub const RNR_CALL_THROWN: u32 = 2;
+pub const RNRS_CALL_OK: u32 = 0;
+pub const RNRS_CALL_ERROR: u32 = 1;
+pub const RNRS_CALL_THROWN: u32 = 2;
 
 pub type SettleFn = extern "C" fn(*mut c_void, u64, u32, u32, *const u8, usize);
 
@@ -451,39 +451,39 @@ unsafe fn str_arg<'a>(ptr: *const u8, len: usize) -> &'a str {
 /// Pointers are valid for the given lengths; `out_index` is writable; `error` points to
 /// `error_cap` writable bytes.
 #[no_mangle]
-pub unsafe extern "C" fn rnr_module_find(
+pub unsafe extern "C" fn rnrs_module_find(
     name: *const u8, name_len: usize, hash: *const u8, hash_len: usize, out_index: *mut u32, error: *mut u8, error_cap: usize,
 ) -> u32 {
     let (name, hash) = unsafe { (str_arg(name, name_len), str_arg(hash, hash_len)) };
     let Some((index, def)) = modules().iter().enumerate().find(|(_, d)| d.name == name) else {
         let known: Vec<_> = modules().iter().map(|d| d.name).collect();
         write_message(error, error_cap, &format!("module {name} is not in this app's native bundle (bundled: {})", known.join(", ")));
-        return RNR_FIND_UNKNOWN;
+        return RNRS_FIND_UNKNOWN;
     };
     if def.hash != hash {
         write_message(error, error_cap, &format!(
             "module {name}: JS wrapper (IR {hash}) and native glue (IR {}) were generated from different specs; rebuild both", def.hash));
-        return RNR_FIND_STALE;
+        return RNRS_FIND_STALE;
     }
     unsafe { out_index.write(index as u32) };
-    RNR_FIND_OK
+    RNRS_FIND_OK
 }
 
 /// Creates an adapter generation; null on failure (message in `error`).
 ///
 /// # Safety
-/// As for `rnr_module_find`; `ctx` stays valid until `release` is called once.
+/// As for `rnrs_module_find`; `ctx` stays valid until `release` is called once.
 #[no_mangle]
-pub unsafe extern "C" fn rnr_adapter_new(
+pub unsafe extern "C" fn rnrs_adapter_new(
     module: u32, max_in_flight: u32, notify: Callback, delivery: DeliveryCallback, release: Callback, ctx: *mut c_void,
     error: *mut u8, error_cap: usize,
-) -> *mut RnrAdapter {
+) -> *mut RnrsAdapter {
     let notifier = Notifier { notify, delivery, release, ctx };
     let Some(def) = modules().get(module as usize) else {
         write_message(error, error_cap, "unknown module index");
         return std::ptr::null_mut();
     };
-    match RnrAdapter::new(def, max_in_flight as usize, budget().clone(), notifier) {
+    match RnrsAdapter::new(def, max_in_flight as usize, budget().clone(), notifier) {
         Ok(adapter) => Box::into_raw(Box::new(adapter)),
         Err(message) => {
             write_message(error, error_cap, &message);
@@ -493,21 +493,21 @@ pub unsafe extern "C" fn rnr_adapter_new(
 }
 
 /// # Safety
-/// `adapter` comes from `rnr_adapter_new` and has not been freed.
+/// `adapter` comes from `rnrs_adapter_new` and has not been freed.
 #[no_mangle]
-pub unsafe extern "C" fn rnr_adapter_generation(adapter: *const RnrAdapter) -> u64 {
+pub unsafe extern "C" fn rnrs_adapter_generation(adapter: *const RnrsAdapter) -> u64 {
     unsafe { &*adapter }.adapter.generation()
 }
 
-/// Calls method `method` (IR order). On `RNR_CALL_ERROR` writes the error kind (0 TypeError,
-/// 1 RangeError, 2 Error) and message; on `RNR_CALL_THROWN` the context holds a JS exception.
+/// Calls method `method` (IR order). On `RNRS_CALL_ERROR` writes the error kind (0 TypeError,
+/// 1 RangeError, 2 Error) and message; on `RNRS_CALL_THROWN` the context holds a JS exception.
 ///
 /// # Safety
 /// `adapter` is live; `vt`/`ctx` form a live call context on the calling runtime's thread
 /// (see the module docs); `args` points to `nargs` value indices of that context; `out`, `error_kind` are writable; `error` has `error_cap` bytes.
 #[no_mangle]
-pub unsafe extern "C" fn rnr_adapter_call(
-    adapter: *const RnrAdapter, vt: *const JsiVTable, ctx: *mut c_void, epoch: u32, method: u32, this: u32, args: *const u32,
+pub unsafe extern "C" fn rnrs_adapter_call(
+    adapter: *const RnrsAdapter, vt: *const JsiVTable, ctx: *mut c_void, epoch: u32, method: u32, this: u32, args: *const u32,
     nargs: usize, out: *mut u32, error_kind: *mut u32, error: *mut u8, error_cap: usize,
 ) -> u32 {
     let adapter = unsafe { &*adapter };
@@ -531,13 +531,13 @@ pub unsafe extern "C" fn rnr_adapter_call(
     match adapter.adapter.call(&mut env, method, Val::new(this, epoch), args) {
         Ok(v) => {
             unsafe { out.write(v.index()) };
-            RNR_CALL_OK
+            RNRS_CALL_OK
         }
-        Err(BindError::Thrown) => RNR_CALL_THROWN,
+        Err(BindError::Thrown) => RNRS_CALL_THROWN,
         Err(BindError::Js { kind, message }) => {
             unsafe { error_kind.write(match kind { ErrorKind::TypeError => 0, ErrorKind::RangeError => 1, ErrorKind::Error => 2 }) };
             write_message(error, error_cap, &message);
-            RNR_CALL_ERROR
+            RNRS_CALL_ERROR
         }
     }
 }
@@ -546,10 +546,10 @@ pub unsafe extern "C" fn rnr_adapter_call(
 /// called for each on the JS thread. Returns how many were drained.
 ///
 /// # Safety
-/// As for `rnr_adapter_call`.
+/// As for `rnrs_adapter_call`.
 #[no_mangle]
-pub unsafe extern "C" fn rnr_adapter_drain(
-    adapter: *const RnrAdapter, vt: *const JsiVTable, ctx: *mut c_void, epoch: u32, max: usize, settle: SettleFn,
+pub unsafe extern "C" fn rnrs_adapter_drain(
+    adapter: *const RnrsAdapter, vt: *const JsiVTable, ctx: *mut c_void, epoch: u32, max: usize, settle: SettleFn,
 ) -> usize {
     let adapter = unsafe { &*adapter };
     let mut env = unsafe { JsiEnv::new(&*vt, ctx, epoch) };
@@ -561,9 +561,9 @@ pub unsafe extern "C" fn rnr_adapter_drain(
 /// Builds the diagnostics object; returns its arena index.
 ///
 /// # Safety
-/// As for `rnr_adapter_call`.
+/// As for `rnrs_adapter_call`.
 #[no_mangle]
-pub unsafe extern "C" fn rnr_adapter_stats(adapter: *const RnrAdapter, vt: *const JsiVTable, ctx: *mut c_void, epoch: u32) -> u32 {
+pub unsafe extern "C" fn rnrs_adapter_stats(adapter: *const RnrsAdapter, vt: *const JsiVTable, ctx: *mut c_void, epoch: u32) -> u32 {
     let adapter = unsafe { &*adapter };
     let mut env = unsafe { JsiEnv::new(&*vt, ctx, epoch) };
     match adapter.stats_js(&mut env) {
@@ -579,7 +579,7 @@ fn vt_ref<'a>(vt: *const JsiVTable) -> &'a JsiVTable {
 /// # Safety
 /// `adapter` is live.
 #[no_mangle]
-pub unsafe extern "C" fn rnr_adapter_cancel(adapter: *const RnrAdapter, id: u64) -> bool {
+pub unsafe extern "C" fn rnrs_adapter_cancel(adapter: *const RnrsAdapter, id: u64) -> bool {
     unsafe { &*adapter }.adapter.cancel(id)
 }
 
@@ -588,7 +588,7 @@ pub unsafe extern "C" fn rnr_adapter_cancel(adapter: *const RnrAdapter, id: u64)
 /// # Safety
 /// `adapter` is live.
 #[no_mangle]
-pub unsafe extern "C" fn rnr_adapter_teardown(adapter: *const RnrAdapter, reason: u32) -> u32 {
+pub unsafe extern "C" fn rnrs_adapter_teardown(adapter: *const RnrsAdapter, reason: u32) -> u32 {
     unsafe { &*adapter }.teardown(reason)
 }
 
@@ -598,7 +598,7 @@ pub unsafe extern "C" fn rnr_adapter_teardown(adapter: *const RnrAdapter, reason
 /// # Safety
 /// `adapter` is live and not used afterwards.
 #[no_mangle]
-pub unsafe extern "C" fn rnr_adapter_free(adapter: *mut RnrAdapter) {
+pub unsafe extern "C" fn rnrs_adapter_free(adapter: *mut RnrsAdapter) {
     drop(unsafe { Box::from_raw(adapter) });
 }
 
@@ -608,7 +608,7 @@ pub unsafe extern "C" fn rnr_adapter_free(adapter: *mut RnrAdapter) {
 /// # Safety
 /// `adapter` is live; `(name, len)` is readable; `index` and `is_async` are writable.
 #[no_mangle]
-pub unsafe extern "C" fn rnr_adapter_method_find(adapter: *const RnrAdapter, name: *const u8, len: usize, index: *mut u32, is_async: *mut bool) -> bool {
+pub unsafe extern "C" fn rnrs_adapter_method_find(adapter: *const RnrsAdapter, name: *const u8, len: usize, index: *mut u32, is_async: *mut bool) -> bool {
     let name = unsafe { str_arg(name, len) };
     let def = unsafe { &*adapter }.adapter.def();
     match def.methods.iter().position(|m| m.name == name) {
@@ -624,12 +624,12 @@ pub unsafe extern "C" fn rnr_adapter_method_find(adapter: *const RnrAdapter, nam
 }
 
 /// A second owner of the object in `native` (a `NativeBox` from a wrapper): a new box,
-/// released through `rnr_native_release` independently of the first. Thread-safe.
+/// released through `rnrs_native_release` independently of the first. Thread-safe.
 ///
 /// # Safety
 /// `native` is a live `NativeBox` pointer (from `wrap_native` or this function).
 #[no_mangle]
-pub unsafe extern "C" fn rnr_native_share(native: *const c_void) -> *mut c_void {
+pub unsafe extern "C" fn rnrs_native_share(native: *const c_void) -> *mut c_void {
     let boxed = unsafe { &*(native as *const NativeBox) };
     Box::into_raw(Box::new(boxed.share())) as *mut c_void
 }
@@ -639,7 +639,7 @@ pub unsafe extern "C" fn rnr_native_share(native: *const c_void) -> *mut c_void 
 /// # Safety
 /// `native` is a live `NativeBox` pointer; `len` is writable.
 #[no_mangle]
-pub unsafe extern "C" fn rnr_native_spec_name(native: *const c_void, len: *mut usize) -> *const u8 {
+pub unsafe extern "C" fn rnrs_native_spec_name(native: *const c_void, len: *mut usize) -> *const u8 {
     let name = unsafe { &*(native as *const NativeBox) }.spec_name;
     unsafe { len.write(name.len()) };
     name.as_ptr()
@@ -649,7 +649,7 @@ pub unsafe extern "C" fn rnr_native_spec_name(native: *const c_void, len: *mut u
 /// `Native<T>` with `T: Send + Sync`, so the final drop may run on any thread (Hermes
 /// finalizes wrappers off the JS thread during runtime destruction).
 #[no_mangle]
-pub extern "C" fn rnr_native_release(native: *mut c_void) {
+pub extern "C" fn rnrs_native_release(native: *mut c_void) {
     if !native.is_null() {
         drop(unsafe { Box::from_raw(native as *mut NativeBox) });
     }
@@ -661,8 +661,8 @@ mod tests {
 
     mod teardown_hook {
         //! The runtime-teardown hook through the C ABI used by Android (JNI) and iOS: an
-        //! explicit `rnr_adapter_teardown` and the Drop-only path (`rnr_adapter_free` without
-        //! teardown, as RNR_TEARDOWN_DESTRUCTOR) both retire what the module registered, even
+        //! explicit `rnrs_adapter_teardown` and the Drop-only path (`rnrs_adapter_free` without
+        //! teardown, as RNRS_TEARDOWN_DESTRUCTOR) both retire what the module registered, even
         //! while another reference to the resource is held.
         use super::*;
         use rnrs_core::bind::{Call, MethodDef, NativeTypeDef};
@@ -707,11 +707,11 @@ mod tests {
             0
         }
 
-        fn new_adapter() -> (*mut RnrAdapter, Arc<Resource>) {
+        fn new_adapter() -> (*mut RnrsAdapter, Arc<Resource>) {
             register(&DEFS);
             let index = modules().iter().position(|d| d.name == DEF.name).expect("registered") as u32;
             let mut error = [0u8; 256];
-            let adapter = unsafe { rnr_adapter_new(index, 4, noop, queued, noop, std::ptr::null_mut(), error.as_mut_ptr(), error.len()) };
+            let adapter = unsafe { rnrs_adapter_new(index, 4, noop, queued, noop, std::ptr::null_mut(), error.as_mut_ptr(), error.len()) };
             assert!(!adapter.is_null());
             let resource = CREATED.lock().unwrap().last().cloned().expect("instantiated");
             (adapter, resource)
@@ -721,13 +721,13 @@ mod tests {
         fn explicit_teardown_and_drop_only_paths_retire_registered_resources() {
             let (adapter, explicit) = new_adapter();
             assert_eq!(explicit.0.load(Ordering::SeqCst), 0);
-            unsafe { rnr_adapter_teardown(adapter, 0) };
+            unsafe { rnrs_adapter_teardown(adapter, 0) };
             assert_eq!(explicit.0.load(Ordering::SeqCst), 1, "explicit teardown retires");
-            unsafe { rnr_adapter_free(adapter) };
+            unsafe { rnrs_adapter_free(adapter) };
             assert_eq!(explicit.0.load(Ordering::SeqCst), 1, "exactly once");
 
             let (adapter, dropped) = new_adapter();
-            unsafe { rnr_adapter_free(adapter) };
+            unsafe { rnrs_adapter_free(adapter) };
             assert_eq!(dropped.0.load(Ordering::SeqCst), 1, "freed without teardown (destructor path) retires");
             assert_eq!(UNOWNED.load(Ordering::SeqCst), 0, "adapter construction always provides a scope");
             assert!(TeardownScope::current().is_none(), "the scope is not left current after construction");
@@ -746,7 +746,7 @@ mod tests {
         #[test]
         fn a_failed_instantiate_retires_what_it_registered() {
             let notifier = Notifier { notify: noop, delivery: queued, release: noop, ctx: std::ptr::null_mut() };
-            assert!(RnrAdapter::new(&FAILING, 4, budget().clone(), notifier).is_err());
+            assert!(RnrsAdapter::new(&FAILING, 4, budget().clone(), notifier).is_err());
             let resource = FAILING_RESOURCE.lock().unwrap().clone().expect("registered");
             assert_eq!(resource.0.load(Ordering::SeqCst), 1);
         }
@@ -781,7 +781,7 @@ mod tests {
 /// `out` points to 10 writable u64.
 #[cfg(feature = "diagnostics")]
 #[no_mangle]
-pub unsafe extern "C" fn rnr_diagnostics(out: *mut u64) {
+pub unsafe extern "C" fn rnrs_diagnostics(out: *mut u64) {
     let snapshot = rnrs_core::diagnostics::snapshot();
     unsafe { std::ptr::copy_nonoverlapping(snapshot.as_ptr(), out, snapshot.len()) };
 }
@@ -822,7 +822,7 @@ mod utf8_tests {
 /// # Safety
 /// `(ptr, len)` is a readable byte range for the duration of the call.
 #[no_mangle]
-pub unsafe extern "C" fn rnr_set_app_data_dir(ptr: *const u8, len: usize) -> bool {
+pub unsafe extern "C" fn rnrs_set_app_data_dir(ptr: *const u8, len: usize) -> bool {
     let bytes = if len == 0 { &[][..] } else { std::slice::from_raw_parts(ptr, len) };
     match std::str::from_utf8(bytes) {
         Ok(path) if !path.is_empty() => rnrs_core::platform::set_app_data_dir(path.into()).is_ok(),

@@ -1,5 +1,5 @@
 // iOS surface touch input in the simulator (docs/surface.md, "Touch input"): the harness app
-// (RNR_IOS_FIXTURE=touch-probe: fixtures/touch-probe-ios, a GPU-free @rnrs/labs-touch-probe surface)
+// (RNRS_IOS_FIXTURE=touch-probe: fixtures/touch-probe-ios, a GPU-free @rnrs/labs-touch-probe surface)
 // gets real UIKit touches from the XCUITest runner (tools/ios-touch-uitest), and this script reads
 // the probe's explicit drain over the app's HTTP command channel (127.0.0.1:8765). Runs on the Mac:
 //   node scripts/consumer/ios-touch-sim-test.mjs --app <HelloWorld.app> --device <simulator udid>
@@ -108,7 +108,7 @@ const step = (name, data) => {
 /** One gesture through the XCUITest runner; resolves with its exit status and log tail. */
 function gesture(name, env = {}) {
   return new Promise((resolve) => {
-    const vars = { RNR_BUNDLE_ID: BUNDLE, RNR_GESTURE: name, ...env };
+    const vars = { RNRS_BUNDLE_ID: BUNDLE, RNRS_GESTURE: name, ...env };
     const childEnv = {
       ...process.env,
       ...Object.fromEntries(Object.entries(vars).map(([k, v]) => [`TEST_RUNNER_${k}`, String(v)])),
@@ -136,10 +136,10 @@ function gesture(name, env = {}) {
       resolve({
         gesture: name,
         status,
-        done: log.includes(`RNR-GESTURE-DONE ${name}`),
+        done: log.includes(`RNRS-GESTURE-DONE ${name}`),
         tail: log
           .split('\n')
-          .filter((l) => /error|fail|passed|RNR-GESTURE/i.test(l))
+          .filter((l) => /error|fail|passed|RNRS-GESTURE/i.test(l))
           .slice(-8),
       }),
     );
@@ -201,7 +201,7 @@ try {
   const FRAME = frames.surface.join(',');
 
   // --- Drag: down, moves, up of one new pointer at the expected physical position.
-  const g1 = await gesture('drag', { RNR_FRAME: FRAME });
+  const g1 = await gesture('drag', { RNRS_FRAME: FRAME });
   const s1 = await stats();
   const r1 = fresh(s0, s1);
   step('drag', { gesture: g1, probe: s1 });
@@ -244,7 +244,7 @@ try {
   // --- Overlay: a tap on the Pressable above the surface reaches JS and not Rust.
   const [ox, oy, ow, oh] = frames.overlay;
   const before = await command('stats');
-  const g2 = await gesture('tap', { RNR_POINT: `${ox + ow / 2},${oy + oh / 2}` });
+  const g2 = await gesture('tap', { RNRS_POINT: `${ox + ow / 2},${oy + oh / 2}` });
   await sleep(500);
   const after = await command('stats');
   step('overlay tap', { gesture: g2, js: after.js, probe: after.probe });
@@ -265,7 +265,7 @@ try {
   // (polled with explicit drains), then run after their delays.
   const hold = (env, actions) =>
     Promise.all([
-      gesture('hold', { RNR_FRAME: FRAME, RNR_HOLD_S: 5, ...env }),
+      gesture('hold', { RNRS_FRAME: FRAME, RNRS_HOLD_S: 5, ...env }),
       (async () => {
         const until = Date.now() + 90000;
         while ((await stats()).producerDown < 1) {
@@ -324,7 +324,7 @@ try {
     s4b.attachment > s4.attachment && delta(s4, s4b, 'downs') === 1 && s4b.state === 'attached',
     { attachments: [s4.attachment, s4b.attachment], downs: delta(s4, s4b, 'downs') },
   );
-  const g4b = await gesture('drag', { RNR_FRAME: FRAME });
+  const g4b = await gesture('drag', { RNRS_FRAME: FRAME });
   const s4c = await stats();
   const r4c = fresh(s4b, s4c);
   step('drag after reattach', { gesture: g4b, probe: s4c });
@@ -394,7 +394,7 @@ try {
       s7: s7.state,
     },
   );
-  const g7 = await gesture('drag', { RNR_FRAME: FRAME });
+  const g7 = await gesture('drag', { RNRS_FRAME: FRAME });
   const s7b = await stats();
   step('drag on the new surface', { gesture: g7, probe: s7b });
   check(

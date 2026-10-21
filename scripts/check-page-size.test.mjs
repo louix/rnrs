@@ -86,7 +86,7 @@ test('missing tools are "unavailable" (exit 2), distinct from a violation', () =
   // Tools present (fake executables) but the file is not an APK: still unable to validate.
   const notZip = spawnSync(process.execPath, ['scripts/check-page-size.mjs', 'package.json'], {
     encoding: 'utf8',
-    env: { PATH: '', RNR_LLVM_READELF: process.execPath, RNR_ZIPALIGN: process.execPath },
+    env: { PATH: '', RNRS_LLVM_READELF: process.execPath, RNRS_ZIPALIGN: process.execPath },
   });
   assert.equal(notZip.status, 2);
   assert.match(notZip.stdout, /cannot read package.json/);
@@ -136,7 +136,7 @@ function zip(entries) {
 }
 
 function fixture() {
-  const dir = mkdtempSync(path.join(tmpdir(), 'rnr page size ')); // a path with spaces
+  const dir = mkdtempSync(path.join(tmpdir(), 'rnrs page size ')); // a path with spaces
   const tool = (name, body) => {
     const f = path.join(dir, name);
     writeFileSync(f, `#!/bin/sh\n${body}\n`);
@@ -169,15 +169,15 @@ test('a corrupt library (readelf fails) or unparsable readelf output is exit 2, 
     const okZip = tool('zipalign', 'exit 0');
     const failing = tool('readelf-fail', 'echo "llvm-readelf: error: not an ELF file" >&2; exit 1');
     let r = run(['scripts/check-page-size.mjs', apk], {
-      RNR_LLVM_READELF: failing,
-      RNR_ZIPALIGN: okZip,
+      RNRS_LLVM_READELF: failing,
+      RNRS_ZIPALIGN: okZip,
     });
     assert.equal(r.status, 2, r.stdout + r.stderr);
     assert.match(r.stdout, /could not inspect the libraries: llvm-readelf: error: not an ELF file/);
     const garbage = tool('readelf-garbage', 'echo "  LOAD  this is not a program header"');
     r = run(['scripts/check-page-size.mjs', apk], {
-      RNR_LLVM_READELF: garbage,
-      RNR_ZIPALIGN: okZip,
+      RNRS_LLVM_READELF: garbage,
+      RNRS_ZIPALIGN: okZip,
     });
     assert.equal(r.status, 2);
     assert.match(r.stdout, /could not inspect the libraries: unparsed program header/);
@@ -194,13 +194,16 @@ test('zipalign: a tool error is exit 2; a reported verification failure is a vio
     const good = tool('readelf-good', `echo '${H('LOAD', 0, 0, 0x100, 'R E', 0x4000)}'`);
     const broken = tool('zipalign-broken', 'echo "Unable to open" >&2; exit 1');
     let r = run(['scripts/check-page-size.mjs', apk], {
-      RNR_LLVM_READELF: good,
-      RNR_ZIPALIGN: broken,
+      RNRS_LLVM_READELF: good,
+      RNRS_ZIPALIGN: broken,
     });
     assert.equal(r.status, 2);
     assert.match(r.stdout, /zipalign could not verify: Unable to open/);
     const failed = tool('zipalign-failed', 'echo "Verification FAILED"; exit 1');
-    r = run(['scripts/check-page-size.mjs', apk], { RNR_LLVM_READELF: good, RNR_ZIPALIGN: failed });
+    r = run(['scripts/check-page-size.mjs', apk], {
+      RNRS_LLVM_READELF: good,
+      RNRS_ZIPALIGN: failed,
+    });
     assert.equal(r.status, 1);
     assert.match(r.stdout, /status: violation/);
   } finally {

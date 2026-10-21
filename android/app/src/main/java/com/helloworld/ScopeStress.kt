@@ -1,8 +1,8 @@
 package com.helloworld
 
 import android.util.Log
-import dev.rustjsilab.rnr.RnrScopeDiagnostics
-import dev.rustjsilab.rnr.RuntimeScopeOwner
+import dev.rustjsilab.rnrs.RnrsScopeDiagnostics
+import dev.rustjsilab.rnrs.RuntimeScopeOwner
 import java.util.concurrent.CyclicBarrier
 import kotlin.concurrent.thread
 
@@ -10,11 +10,11 @@ import kotlin.concurrent.thread
  * Test hook (`adb shell am broadcast -a dev.rustjsilab.SCOPE_STRESS`): exercises runtime-scope
  * ownership without relying on React Native's call ordering. It races bindings requests
  * against invalidation on separate threads, then drops scopes that were never invalidated, and
- * checks that every native scope is eventually freed. Logs one `rnr scope stress:` line.
+ * checks that every native scope is eventually freed. Logs one `rnrs scope stress:` line.
  */
 internal object ScopeStress {
-  fun run() = thread(name = "rnr-scope-stress") {
-    val (created0, destroyed0, _) = RnrScopeDiagnostics.counters()
+  fun run() = thread(name = "rnrs-scope-stress") {
+    val (created0, destroyed0, _) = RnrsScopeDiagnostics.counters()
     var installers = 0
     var refused = 0
     val rounds = 500
@@ -45,12 +45,12 @@ internal object ScopeStress {
       System.gc()
       System.runFinalization()
       Thread.sleep(50)
-      val (created, destroyed, _) = RnrScopeDiagnostics.counters()
+      val (created, destroyed, _) = RnrsScopeDiagnostics.counters()
       freed = destroyed - destroyed0
       if (created - created0 == expected && freed >= expected) break
     }
-    val (created, _, _) = RnrScopeDiagnostics.counters()
-    Log.i("rnr", "rnr scope stress: {\"rounds\":$rounds,\"installers\":$installers,\"refused\":$refused," +
+    val (created, _, _) = RnrsScopeDiagnostics.counters()
+    Log.i("rnrs", "rnrs scope stress: {\"rounds\":$rounds,\"installers\":$installers,\"refused\":$refused," +
         "\"created\":${created - created0},\"freed\":$freed,\"expected\":$expected}")
   }
 }

@@ -1,6 +1,6 @@
 // Logging smoke (docs/logging.md): calls the lab-only log-probe fixture on the JS thread and
 // on an executor worker. Which of its events reach the platform log is checked from logcat by
-// scripts/consumer/rn-smoke.mjs (RNR_EXPECT_LOG); this only reports the threads used.
+// scripts/consumer/rn-smoke.mjs (RNRS_EXPECT_LOG); this only reports the threads used.
 import { logProbeModule } from '@rnrs/labs-log-probe';
 
 export interface SmokeResult {

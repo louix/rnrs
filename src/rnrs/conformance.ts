@@ -1,7 +1,7 @@
 // One Counter/async contract suite, run unchanged against each backend, over the
 // generated Counter module (packages/counter/counter.spec.ts).
-import { RnrError, type AdapterStats } from '../../packages/runtime/src/runtime';
-import { Counter, type CounterModule } from '../../.generated/rnr/counter';
+import { RnrsError, type AdapterStats } from '../../packages/runtime/src/runtime';
+import { Counter, type CounterModule } from '../../.generated/rnrs/counter';
 
 export interface ConformanceEnv {
   platform: string;
@@ -188,7 +188,7 @@ export async function runConformance(env: ConformanceEnv): Promise<CheckResult[]
     const started = now();
     const error = await rejection(promise);
     expect(
-      error instanceof RnrError && error.code === 'cancelled' && error.name === 'AbortError',
+      error instanceof RnrsError && error.code === 'cancelled' && error.name === 'AbortError',
       `got ${error}`,
     );
     const elapsed = now() - started;
@@ -340,7 +340,7 @@ export async function runConformance(env: ConformanceEnv): Promise<CheckResult[]
         env.registeredModules!() === registered,
         `registry ${env.registeredModules!()} != baseline ${registered}`,
       );
-      (globalThis as any).__rnrSettle(closedGeneration, 1, 0, 0, ''); // closed generation: silently ignored
+      (globalThis as any).__rnrsSettle(closedGeneration, 1, 0, 0, ''); // closed generation: silently ignored
     }
     await waitFor(
       '20 freed adapters',

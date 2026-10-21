@@ -8,7 +8,7 @@ export interface RendererOptions {
   /** Raster pixels per physical surface pixel, 0.25 to 1. Lower values render a smaller
    *  image and let the GPU scale it up when presenting. */
   resolutionScale: number;
-  /** Lab diagnostics (docs/research/js-contention-plan.md): capacity of a ring of submit and
+  /** Lab diagnostics: capacity of a ring of submit and
    *  present events with monotonic timestamps, read with `drainTimings()`. 0 or absent (the
    *  default) records and allocates nothing. At most 65536. */
   timingRecords?: number;

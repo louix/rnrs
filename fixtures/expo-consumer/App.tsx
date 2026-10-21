@@ -1,5 +1,5 @@
 // The fresh Expo consumer's only source change (scripts/consumer/expo-app.sh): call the counter
-// module through the framework runtime and report it as `RNR_SMOKE <i>/<n> <chunk>` lines
+// module through the framework runtime and report it as `RNRS_SMOKE <i>/<n> <chunk>` lines
 // (scripts/consumer/ios-smoke-sim-test.mjs). console.error, because release builds forward it
 // to os_log (and Android's logcat); chunks, because os_log truncates long messages.
 import React, { useEffect, useState } from 'react';
@@ -41,7 +41,7 @@ export default function App() {
         const text = JSON.stringify(result);
         const n = Math.max(1, Math.ceil(text.length / 700));
         for (let i = 0; i < n; i++)
-          console.error(`RNR_SMOKE ${i + 1}/${n} ${text.slice(i * 700, (i + 1) * 700)}`);
+          console.error(`RNRS_SMOKE ${i + 1}/${n} ${text.slice(i * 700, (i + 1) * 700)}`);
         setStatus(JSON.stringify(result, null, 2));
       });
   }, []);

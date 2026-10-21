@@ -4,14 +4,14 @@
 presentation, rendered with React Native Web 0.21.4 / React DOM 19.3.0. Rust owns the scene and its simulation; the
 browser host's requestAnimationFrame drives one Bevy update and one canvas submit per frame.
 No thread, no pixels across the bridge, no CPU copy, no Canvas 2D or WebGL fallback. Design and
-limits: [docs/bevy3d.md](../../packages/bevy3d/README.md#browser-webgpu).
+limits: [Bevy README](../../packages/bevy3d/README.md#browser-webgpu).
 
 ```sh
 nix develop .#web --offline
 npm ci && (cd fixtures/web-bevy && npm ci)
 export RUSTUP_HOME=$PWD/.generated/rust-1.97.1/rustup CARGO_HOME=$PWD/.generated/rust-1.97.1/cargo RUSTUP_TOOLCHAIN=1.97.1
 rustup toolchain install 1.97.1 --profile minimal --target wasm32-unknown-unknown   # once
-RNR_OFFLINE=0 node fixtures/web-bevy/build.mjs --test   # first build (fetches crates)
+RNRS_OFFLINE=0 node fixtures/web-bevy/build.mjs --test   # first build (fetches crates)
 node fixtures/web-bevy/serve.mjs 8780                    # headed: http://localhost:8780/?expect=view
 ```
 

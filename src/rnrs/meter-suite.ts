@@ -3,9 +3,9 @@
 // sync, void and boolean methods, per-runtime module state, native objects as arguments,
 // async methods on the module itself, an async result that is a native object, and an
 // async error path.
-import { RnrError } from '../../packages/runtime/src/runtime';
-import { counterModule } from '../../.generated/rnr/counter';
-import { Gauge, createMeterModuleForTesting, meterModule } from '../../.generated/rnr/meter';
+import { RnrsError } from '../../packages/runtime/src/runtime';
+import { counterModule } from '../../.generated/rnrs/counter';
+import { Gauge, createMeterModuleForTesting, meterModule } from '../../.generated/rnrs/meter';
 import type { CheckResult } from './conformance';
 
 export interface MeterEnv {
@@ -104,7 +104,7 @@ export async function runMeterSuite(env: MeterEnv): Promise<CheckResult[]> {
     expect(g instanceof Gauge && g.get() === 3, 'native result is a live wrapper');
     const failed = await rejection(meter.checkLater(-1));
     expect(
-      failed instanceof RnrError &&
+      failed instanceof RnrsError &&
         failed.code === 'failed' &&
         failed.message === 'negative reading: -1',
       `got ${failed}`,

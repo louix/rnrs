@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 use common::Capture;
 use tracing_subscriber::prelude::*;
 
-const CHILD: &str = "RNR_LOG_CHILD";
+const CHILD: &str = "RNRS_LOG_CHILD";
 
 /// Runs the test function `name` of this binary in a child process; returns its stdout.
 fn run_child(name: &str) -> String {

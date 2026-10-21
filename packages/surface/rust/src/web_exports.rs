@@ -14,7 +14,7 @@ fn extent(w: f64, h: f64, scale: f64) -> Result<Extent, JsValue> {
     Ok(Extent { width: w as u32, height: h as u32, scale: scale as f32 })
 }
 #[wasm_bindgen]
-pub fn rnr_surface_attach(k: f64, w: f64, h: f64, scale: f64) -> Result<JsValue, JsValue> {
+pub fn rnrs_surface_attach(k: f64, w: f64, h: f64, scale: f64) -> Result<JsValue, JsValue> {
     Ok(match web_host::attach(key(k)?, extent(w,h,scale)?).map_err(|e| JsValue::from_str(&e))? {
         web_host::Attached::Closed => JsValue::from_str("closed"),
         web_host::Attached::Busy => JsValue::from_f64(0.0),
@@ -22,18 +22,18 @@ pub fn rnr_surface_attach(k: f64, w: f64, h: f64, scale: f64) -> Result<JsValue,
     })
 }
 #[wasm_bindgen]
-pub fn rnr_surface_resize(k: f64, t: f64, w: f64, h: f64, scale: f64) -> Result<JsValue, JsValue> {
+pub fn rnrs_surface_resize(k: f64, t: f64, w: f64, h: f64, scale: f64) -> Result<JsValue, JsValue> {
     let status = web_host::resize(key(k)?,key(t)?,extent(w,h,scale)?).map_err(|e| JsValue::from_str(&e))?;
     Ok(JsValue::from_str(match status {
         web_host::Resized::Ok => "ok", web_host::Resized::Closed => "closed", web_host::Resized::Stale => "stale",
     }))
 }
 #[wasm_bindgen]
-pub fn rnr_surface_detach(k: f64, t: f64) -> Result<(), JsValue> {
+pub fn rnrs_surface_detach(k: f64, t: f64) -> Result<(), JsValue> {
     web_host::detach(key(k)?,key(t)?); Ok(())
 }
 #[wasm_bindgen]
-pub fn rnr_surface_render(k: f64, t: f64, redraw: bool) -> Result<JsValue, JsValue> {
+pub fn rnrs_surface_render(k: f64, t: f64, redraw: bool) -> Result<JsValue, JsValue> {
     let result = web_producer::render(key(k)?,key(t)?,redraw).map_err(|e| JsValue::from_str(&e))?;
     let object = js_sys::Object::new();
     let status = match result {
@@ -65,7 +65,7 @@ pub fn rnr_surface_render(k: f64, t: f64, redraw: bool) -> Result<JsValue, JsVal
 /// PointerEvent's `timeStamp` (milliseconds since `performance.timeOrigin`, truncated).
 /// False if refused (not opted in, stale, closed, capacity or unknown pointer).
 #[wasm_bindgen]
-pub fn rnr_surface_touch(k: f64, t: f64, phase: u32, pointer: f64, x_px: f64, y_px: f64, time_ms: f64) -> Result<bool, JsValue> {
+pub fn rnrs_surface_touch(k: f64, t: f64, phase: u32, pointer: f64, x_px: f64, y_px: f64, time_ms: f64) -> Result<bool, JsValue> {
     let phase = i32::try_from(phase).ok().and_then(crate::touch::Phase::from_code).ok_or_else(|| JsValue::from_str("invalid touch phase"))?;
     if !(pointer.fract() == 0.0 && (i32::MIN as f64..=i32::MAX as f64).contains(&pointer)) {
         return Err(JsValue::from_str("invalid pointer id"));
@@ -76,7 +76,7 @@ pub fn rnr_surface_touch(k: f64, t: f64, phase: u32, pointer: f64, x_px: f64, y_
 /// Touch diagnostics of surface `k`: [accepted, coalesced, refusedStale, refusedCapacity,
 /// dropped, overflows, resets, active]; empty when the key matches no live surface.
 #[wasm_bindgen]
-pub fn rnr_surface_touch_counters(k: f64) -> Result<Vec<f64>, JsValue> {
+pub fn rnrs_surface_touch_counters(k: f64) -> Result<Vec<f64>, JsValue> {
     let Some(inner) = crate::lookup(key(k)?) else { return Ok(Vec::new()); };
     let (c, active) = crate::Surface { inner }.touch_counters();
     Ok([c.accepted, c.coalesced, c.refused_stale, c.refused_capacity, c.dropped, c.overflows, c.resets, active as u64]
@@ -84,7 +84,7 @@ pub fn rnr_surface_touch_counters(k: f64) -> Result<Vec<f64>, JsValue> {
 }
 
 #[wasm_bindgen]
-pub fn rnr_surface_presentation(k: f64) -> Result<JsValue, JsValue> {
+pub fn rnrs_surface_presentation(k: f64) -> Result<JsValue, JsValue> {
     Ok(JsValue::from_str(match web_producer::presentation(key(k)?) {
         None => "closed",
         Some(web_producer::Presentation::Canvas2d) => "canvas2d",
@@ -93,7 +93,7 @@ pub fn rnr_surface_presentation(k: f64) -> Result<JsValue, JsValue> {
 }
 /// `canvas` is the host's HTMLCanvasElement for this attachment; only a WebGpu producer takes it.
 #[wasm_bindgen]
-pub fn rnr_surface_bind_canvas(k: f64, t: f64, canvas: JsValue) -> Result<JsValue, JsValue> {
+pub fn rnrs_surface_bind_canvas(k: f64, t: f64, canvas: JsValue) -> Result<JsValue, JsValue> {
     let bound = web_producer::bind_canvas(key(k)?, key(t)?, &canvas).map_err(|e| JsValue::from_str(&e))?;
     Ok(JsValue::from_str(match bound {
         web_producer::Bound::Ok => "ok", web_producer::Bound::Stale => "stale", web_producer::Bound::Closed => "closed",
@@ -101,7 +101,7 @@ pub fn rnr_surface_bind_canvas(k: f64, t: f64, canvas: JsValue) -> Result<JsValu
 }
 
 #[wasm_bindgen]
-pub fn rnr_surface_diagnostics() -> Vec<f64> {
+pub fn rnrs_surface_diagnostics() -> Vec<f64> {
     let (owners,pixels,entries) = web_producer::diagnostics();
     let live = { crate::registry().values().filter(|w| w.strong_count() > 0).count() };
     vec![live as f64, owners as f64, pixels as f64, entries as f64]
@@ -109,21 +109,21 @@ pub fn rnr_surface_diagnostics() -> Vec<f64> {
 /// Called by generated startup to retain these exports in the SAME cdylib as adapters.
 pub fn keep_exports() {
     std::hint::black_box([
-        rnr_surface_attach as *const (), rnr_surface_resize as *const (),
-        rnr_surface_detach as *const (), rnr_surface_render as *const (),
-        rnr_surface_diagnostics as *const (), rnr_surface_set_release_listener as *const (),
-        rnr_surface_presentation as *const (), rnr_surface_bind_canvas as *const (),
-        rnr_surface_touch as *const (), rnr_surface_touch_counters as *const (),
+        rnrs_surface_attach as *const (), rnrs_surface_resize as *const (),
+        rnrs_surface_detach as *const (), rnrs_surface_render as *const (),
+        rnrs_surface_diagnostics as *const (), rnrs_surface_set_release_listener as *const (),
+        rnrs_surface_presentation as *const (), rnrs_surface_bind_canvas as *const (),
+        rnrs_surface_touch as *const (), rnrs_surface_touch_counters as *const (),
     ]);
     #[cfg(feature = "lab-hooks")]
-    std::hint::black_box(rnr_surface_hold_gpu_setups_for_testing as *const ());
+    std::hint::black_box(rnrs_surface_hold_gpu_setups_for_testing as *const ());
 }
 
 thread_local! {
     static RELEASE_LISTENER: std::cell::RefCell<Option<js_sys::Function>> = const { std::cell::RefCell::new(None) };
 }
 #[wasm_bindgen]
-pub fn rnr_surface_set_release_listener(listener: Option<js_sys::Function>) {
+pub fn rnrs_surface_set_release_listener(listener: Option<js_sys::Function>) {
     RELEASE_LISTENER.with(|slot| { *slot.borrow_mut() = listener; });
 }
 pub(crate) fn released(key: u64, token: u64) {
@@ -141,7 +141,7 @@ pub(crate) fn released(key: u64, token: u64) {
 /// apps, and any page script could stall GPU setups with it (it is not a security boundary).
 #[cfg(feature = "lab-hooks")]
 #[wasm_bindgen]
-pub fn rnr_surface_hold_gpu_setups_for_testing(hold: bool) -> u32 {
+pub fn rnrs_surface_hold_gpu_setups_for_testing(hold: bool) -> u32 {
     SETUP_HOLD.with(|h| h.set(hold));
     let waiting = SETUP_WAITERS.with(|w| w.borrow().len()) as u32;
     if !hold {
@@ -158,7 +158,7 @@ thread_local! {
     static SETUP_WAITERS: std::cell::RefCell<Vec<std::task::Waker>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
-/// Resolves at once unless setups are held (rnr_surface_hold_gpu_setups_for_testing, feature
+/// Resolves at once unless setups are held (rnrs_surface_hold_gpu_setups_for_testing, feature
 /// `lab-hooks`); without that feature it always resolves at once.
 #[cfg(feature = "lab-hooks")]
 pub(crate) fn setup_gate() -> impl std::future::Future<Output = ()> {

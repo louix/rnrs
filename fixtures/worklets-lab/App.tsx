@@ -1,5 +1,5 @@
-// Worklets lab app (docs/research/worklets-poc-plan.md): runs the staged checks in smoke.ts
-// and logs one RNR_WORKLETS line. JS only; the native trees are the RN 0.88.0 template's.
+// Worklets lab app: runs the staged checks in smoke.ts
+// and logs one RNRS_WORKLETS line. JS only; the native trees are the RN 0.88.0 template's.
 import React, { useEffect, useState } from 'react';
 import { SafeAreaView, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -8,14 +8,14 @@ import { GestureLab, type GestureLabProps } from './GestureLab';
 import { onGestureLab, runWorkletsSmoke } from './smoke';
 
 // Logcat truncates long lines (about 4 KB): the result goes out in numbered chunks,
-// "RNR_WORKLETS <run> <i>/<n> <text>", reassembled by scripts/consumer/worklets-device-test.mjs.
+// "RNRS_WORKLETS <run> <i>/<n> <text>", reassembled by scripts/consumer/worklets-device-test.mjs.
 function report(result: unknown) {
   const text = JSON.stringify(result);
   const run = Date.now().toString(36);
   const size = 3000;
   const n = Math.max(1, Math.ceil(text.length / size));
   for (let i = 0; i < n; i++)
-    console.log(`RNR_WORKLETS ${run} ${i + 1}/${n} ${text.slice(i * size, (i + 1) * size)}`);
+    console.log(`RNRS_WORKLETS ${run} ${i + 1}/${n} ${text.slice(i * size, (i + 1) * size)}`);
 }
 
 export default function App() {

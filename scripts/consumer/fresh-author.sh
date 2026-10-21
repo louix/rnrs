@@ -45,10 +45,10 @@ npx rnrs check
 tarball="$PKG/$(npm pack --silent | tail -1)"
 listing="$(tar -tzf "$tarball")"
 echo "author tarball: $(echo "$listing" | tr '\n' ' ')"
-for f in crc.spec.ts rust/Cargo.toml rust/src/lib.rs rust/src/rnr_interface.rs rnr/index.ts rnr/web.ts; do
+for f in crc.spec.ts rust/Cargo.toml rust/src/lib.rs rust/src/rnrs_interface.rs rnrs/index.ts rnrs/web.ts; do
   grep -qx "package/$f" <<< "$listing" || { echo "the tarball lacks $f" >&2; exit 1; }
 done
-native=$(find "$PKG" \( -path "$PKG/node_modules" -o -path "$PKG/.rnr" \) -prune -o -type f \
+native=$(find "$PKG" \( -path "$PKG/node_modules" -o -path "$PKG/.rnrs" \) -prune -o -type f \
   \( -name '*.c' -o -name '*.cpp' -o -name '*.h' -o -name '*.mm' -o -name '*.m' -o -name '*.swift' -o -name '*.kt' \
      -o -name '*.java' -o -name '*.gradle' -o -name CMakeLists.txt -o -name '*.podspec' \) -print)
 if [ -n "$native" ]; then echo "native sources in the author package: $native" >&2; exit 1; fi
@@ -67,7 +67,7 @@ web)
   npm install --no-audit --no-fund "$PACK/rnrs-cli-0.1.0.tgz" "$PACK/rnrs-runtime-0.1.0.tgz" "$C/demo-crc-0.1.0.tgz"
   npx rnrs build --target web --app .
   npx vite build --logLevel warn
-  RNR_WEB_ROOT="$APP/dist" node "$ROOT/scripts/web-test.mjs" $OUT_JSON
+  RNRS_WEB_ROOT="$APP/dist" node "$ROOT/scripts/web-test.mjs" $OUT_JSON
   ;;
 android)
   NODE_DIR="$WORK/node bin"
@@ -77,7 +77,7 @@ android)
   NODE_BINARY="$NODE_DIR/node" FIXTURE=fresh-crc MODULES="" NAME=fresh-rn EXTRA_TARBALLS="$C/demo-crc-0.1.0.tgz" \
     bash "$ROOT/scripts/consumer/rn-app.sh"
   grep -q "cli/run.mjs build --target android" "$NODE_DIR/used" || { echo "the Gradle task did not run NODE_BINARY" >&2; exit 1; }
-  echo "rnrBuildRustBundle ran NODE_BINARY ($NODE_DIR/node)"
+  echo "rnrsBuildRustBundle ran NODE_BINARY ($NODE_DIR/node)"
   ;;
 *) echo "unknown mode $MODE" >&2; exit 2 ;;
 esac

@@ -1,9 +1,9 @@
-pub mod rnr_interface;
+pub mod rnrs_interface;
 
 #[derive(Default)]
 pub struct Module;
 
-impl rnr_interface::CrcModule for Module {
+impl rnrs_interface::CrcModule for Module {
     fn crc32(&self, data: Vec<u8>) -> Result<f64, String> {
         Ok(crc32fast::hash(&data) as f64)
     }
@@ -14,7 +14,7 @@ impl rnr_interface::CrcModule for Module {
 
 #[cfg(test)]
 mod tests {
-    use super::rnr_interface::CrcModule;
+    use super::rnrs_interface::CrcModule;
 
     #[test]
     fn check_value() {

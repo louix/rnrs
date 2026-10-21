@@ -25,10 +25,10 @@ const fakeClock = (tick = 0.25) => {
   return c;
 };
 
-test('run selection: only an rnrgame://contention URI selects a run; unknown values throw', () => {
+test('run selection: only an rnrsgame://contention URI selects a run; unknown values throw', () => {
   assert.equal(parseConfig(null), null);
   assert.equal(parseConfig('https://example.com'), null);
-  assert.deepEqual(parseConfig('rnrgame://contention?profile=control&run=r1'), {
+  assert.deepEqual(parseConfig('rnrsgame://contention?profile=control&run=r1'), {
     run: 'r1',
     profile: 'control',
     placement: 'raf',
@@ -39,7 +39,7 @@ test('run selection: only an rnrgame://contention URI selects a run; unknown val
   });
   assert.deepEqual(
     parseConfig(
-      'rnrgame://contention?profile=burst-500&placement=task&instrumented=0&touch=1&run=x',
+      'rnrsgame://contention?profile=burst-500&placement=task&instrumented=0&touch=1&run=x',
     ),
     {
       run: 'x',
@@ -51,8 +51,8 @@ test('run selection: only an rnrgame://contention URI selects a run; unknown val
       hermes: 'phase',
     },
   );
-  assert.throws(() => parseConfig('rnrgame://contention?profile=heavy'));
-  assert.throws(() => parseConfig('rnrgame://contention?profile=control&placement=idle'));
+  assert.throws(() => parseConfig('rnrsgame://contention?profile=heavy'));
+  assert.throws(() => parseConfig('rnrsgame://contention?profile=control&placement=idle'));
 });
 
 test('schedule: periodic-100 every second inside the phase; burst-500 at 8 s; control none', () => {
@@ -179,7 +179,7 @@ test('session: warm-up, throughput and touch phases by wall time, stalls only in
   const c = fakeClock(0.01);
   const lines = [];
   const s = new Session(
-    parseConfig('rnrgame://contention?profile=periodic-100&touch=1&run=t'),
+    parseConfig('rnrsgame://contention?profile=periodic-100&touch=1&run=t'),
     c.now,
     (l) => lines.push(l),
     (ls) => lines.push(...ls),
@@ -207,11 +207,11 @@ test('session: warm-up, throughput and touch phases by wall time, stalls only in
     );
     assert.ok(s.touches.records.length > 0 && s.touches.records.every((t) => t.frame !== null));
     assert.ok(
-      lines.at(-1).startsWith('RNR_CONTENTION ') &&
+      lines.at(-1).startsWith('RNRS_CONTENTION ') &&
         JSON.parse(lines.at(-1).slice(15)).event === 'done',
     );
     assert.ok(
-      lines.filter((l) => l.startsWith('RNR_CONTENTION_DATA ')).every((l) => l.length < 4000),
+      lines.filter((l) => l.startsWith('RNRS_CONTENTION_DATA ')).every((l) => l.length < 4000),
     );
   }
 });
@@ -236,7 +236,7 @@ test('paced log: every line, in order, a batch per interval', async () => {
 test('session: a throughput-only run ends after the throughput phase; pauses while measuring are recorded', () => {
   const c = fakeClock(0.01);
   const s = new Session(
-    parseConfig('rnrgame://contention?profile=control&run=b'),
+    parseConfig('rnrsgame://contention?profile=control&run=b'),
     c.now,
     () => {},
     () => {},
@@ -251,18 +251,18 @@ test('session: a throughput-only run ends after the throughput phase; pauses whi
 });
 
 test('config: churn and Hermes sampling options, validated', () => {
-  const c = parseConfig('rnrgame://contention?profile=control&churn=33334&hermes=tick&run=b');
+  const c = parseConfig('rnrsgame://contention?profile=control&churn=33334&hermes=tick&run=b');
   assert.deepEqual([c.churn, c.hermes], [33334, 'tick']);
   assert.deepEqual(
     [
-      parseConfig('rnrgame://contention?profile=control').churn,
-      parseConfig('rnrgame://contention?profile=control').hermes,
+      parseConfig('rnrsgame://contention?profile=control').churn,
+      parseConfig('rnrsgame://contention?profile=control').hermes,
     ],
     [0, 'phase'],
   );
-  assert.throws(() => parseConfig('rnrgame://contention?profile=control&churn=1.5'));
-  assert.throws(() => parseConfig('rnrgame://contention?profile=control&churn=-1'));
-  assert.throws(() => parseConfig('rnrgame://contention?profile=control&hermes=always'));
+  assert.throws(() => parseConfig('rnrsgame://contention?profile=control&churn=1.5'));
+  assert.throws(() => parseConfig('rnrsgame://contention?profile=control&churn=-1'));
+  assert.throws(() => parseConfig('rnrsgame://contention?profile=control&hermes=always'));
 });
 
 test('Hermes sampler: bracketing timestamps, counters in order, bounded with overflow and missing counted', () => {
@@ -314,7 +314,7 @@ test('churn: whole nominal arrays per call; session churns only in measured phas
   const c = fakeClock(0.01);
   const lines = [];
   const s = new Session(
-    parseConfig('rnrgame://contention?profile=periodic-100&churn=2048&hermes=tick&run=g'),
+    parseConfig('rnrsgame://contention?profile=periodic-100&churn=2048&hermes=tick&run=g'),
     c.now,
     (l) => lines.push(l),
     (ls) => lines.push(...ls),
@@ -334,13 +334,13 @@ test('churn: whole nominal arrays per call; session churns only in measured phas
     assert.ok(before.length > 0);
   }
   const data = lines
-    .filter((l) => l.startsWith('RNR_CONTENTION_DATA '))
+    .filter((l) => l.startsWith('RNRS_CONTENTION_DATA '))
     .map((l) => JSON.parse(l.slice(20)).key);
   assert.ok(['runtime', 'churn', 'hermesSamples'].every((k) => data.includes(k)));
 });
 
 test('config: an empty churn value is rejected, not read as 0', () => {
-  assert.throws(() => parseConfig('rnrgame://contention?profile=control&churn='));
-  assert.throws(() => parseConfig('rnrgame://contention?profile=control&churn=%20'));
-  assert.throws(() => parseConfig('rnrgame://contention?profile=control&hermes='));
+  assert.throws(() => parseConfig('rnrsgame://contention?profile=control&churn='));
+  assert.throws(() => parseConfig('rnrsgame://contention?profile=control&churn=%20'));
+  assert.throws(() => parseConfig('rnrsgame://contention?profile=control&hermes='));
 });

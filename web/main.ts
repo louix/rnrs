@@ -1,16 +1,16 @@
 // Browser harness: runs the shared suites against the generated modules on the Wasm backend.
-import init, * as wasm from './rnr/pkg/rnr_bundle.js';
+import init, * as wasm from './rnrs/pkg/rnrs_bundle.js';
 import {
   checkWasmAdapter,
   installWebBackend,
-  type RnrWasm,
+  type RnrsWasm,
 } from '../packages/runtime/src/web-backend';
 import { runProtocolSuite } from '../src/rnrs/protocol-suite';
 import { runConformance } from '../src/rnrs/conformance';
 import { runMeterSuite } from '../src/rnrs/meter-suite';
 import { runValuesSuite } from '../src/rnrs/values-suite';
 import { runBlake3Suite } from '../src/rnrs/blake3-suite';
-import { counterModule, createCounterModuleForTesting } from '../.generated/rnr/counter';
+import { counterModule, createCounterModuleForTesting } from '../.generated/rnrs/counter';
 
 const output = document.getElementById('out')!;
 const gc = (globalThis as any).gc as (() => void) | undefined;
@@ -24,8 +24,8 @@ async function collectGarbage() {
 }
 
 async function main() {
-  await init({ module_or_path: new URL('../rnr/pkg/rnr_bundle_bg.wasm', import.meta.url) });
-  installWebBackend(wasm as unknown as RnrWasm);
+  await init({ module_or_path: new URL('../rnrs/pkg/rnrs_bundle_bg.wasm', import.meta.url) });
+  installWebBackend(wasm as unknown as RnrsWasm);
   const checks = await runConformance({
     platform: 'web',
     makeModule: createCounterModuleForTesting,
@@ -52,11 +52,11 @@ async function main() {
     checks,
   };
   output.textContent = JSON.stringify(result, null, 2);
-  (globalThis as any).__rnrResult = result;
+  (globalThis as any).__rnrsResult = result;
 }
 
 main().catch((error) => {
-  (globalThis as any).__rnrResult = {
+  (globalThis as any).__rnrsResult = {
     platform: 'web',
     ok: false,
     error: String(error?.stack ?? error),

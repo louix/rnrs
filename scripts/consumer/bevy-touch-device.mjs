@@ -1,5 +1,5 @@
 // Bounded device proof of native touch input for the Bevy example (fixtures/bevy-consumer,
-// docs/bevy3d.md "Native touch input"). Same build as bevy-device-test.mjs:
+// packages/bevy3d/README.md "Native touch"). Same build as bevy-device-test.mjs:
 // `FIXTURE=bevy-consumer MODULES=example-bevy3d PACKS=rnrs-surface NAME=bevy-app scripts/consumer/rn-app.sh`
 // with RUSTUP_TOOLCHAIN=1.97.1 and ANDROID_MIN_SDK=26.
 //
@@ -13,7 +13,7 @@
 // 4. Background mid-gesture: DOWN, MOVE, HOME, foreground → the touch is canceled (by Android's
 //    cancel or the detach reset), nothing stays pressed, and a new drag works after reattach.
 // 5. JS stall: the overlay's Stall JS button blocks JS for 1.5 s between two synchronous
-//    stats() calls; a drag during it reaches Rust and rotates the cube (RNR_STALL).
+//    stats() calls; a drag during it reaches Rust and rotates the cube (RNRS_STALL).
 // Screen pixels = layout × (wm density / 160), plus the status bar for y unless the app is
 // edge-to-edge (the 0.88 template default; bevy-device-test.mjs).
 //
@@ -71,7 +71,7 @@ const logLines = (tag) =>
         return { truncated: true, length: text.length };
       }
     });
-const latestStats = () => logLines('RNR_BEVY_STATS').at(-1);
+const latestStats = () => logLines('RNRS_BEVY_STATS').at(-1);
 async function waitFor(pred, timeoutMs, what) {
   const end = Date.now() + timeoutMs;
   for (;;) {
@@ -107,12 +107,12 @@ function screenGeometry() {
   );
   return { scale: dpi / 160, statusBarPx, edgeToEdge, topPx: edgeToEdge ? 0 : statusBarPx };
 }
-/** Taps the centre of the button `id` from its latest RNR_BUTTON layout line. */
+/** Taps the centre of the button `id` from its latest RNRS_BUTTON layout line. */
 function tap(id) {
-  const b = logLines('RNR_BUTTON')
+  const b = logLines('RNRS_BUTTON')
     .filter((l) => l.id === id)
     .at(-1);
-  if (!b) throw new Error(`no RNR_BUTTON for ${id}`);
+  if (!b) throw new Error(`no RNRS_BUTTON for ${id}`);
   const g = (result.screen ??= screenGeometry());
   const [x, y] = [
     Math.round((b.x + b.w / 2) * g.scale),
@@ -183,10 +183,10 @@ const pick = (s) =>
   };
 /** A stats line logged after `afterMs` (device clock is not compared; we wait for fresh lines). */
 async function freshStats(pred = () => true, timeoutMs = 6000) {
-  const seen = logLines('RNR_BEVY_STATS').length;
+  const seen = logLines('RNRS_BEVY_STATS').length;
   return waitFor(
     () => {
-      const all = logLines('RNR_BEVY_STATS');
+      const all = logLines('RNRS_BEVY_STATS');
       return all.length > seen + 1 && pred(all.at(-1)) && all.at(-1);
     },
     timeoutMs,
@@ -202,7 +202,7 @@ try {
   start();
   await sleep(1000);
   notePid();
-  const smoke = await waitFor(() => logLines('RNR_SMOKE')[0], 120000, 'RNR_SMOKE');
+  const smoke = await waitFor(() => logLines('RNRS_SMOKE')[0], 120000, 'RNRS_SMOKE');
   check(
     'in-app sequence',
     smoke.ok,
@@ -210,7 +210,7 @@ try {
   );
   await waitFor(() => latestStats(), 10000, 'stats');
   const g = (result.screen = screenGeometry());
-  const rect = await waitFor(() => logLines('RNR_SURFACE').at(-1), 5000, 'RNR_SURFACE');
+  const rect = await waitFor(() => logLines('RNRS_SURFACE').at(-1), 5000, 'RNRS_SURFACE');
   const cx = Math.round((rect.x + rect.w / 2) * g.scale),
     cy = Math.round((rect.y + rect.h / 2) * g.scale + g.topPx);
   const half = Math.round(rect.w * g.scale * 0.3);
@@ -313,7 +313,7 @@ try {
     String(cy),
     '500',
   );
-  const stall = await waitFor(() => logLines('RNR_STALL').at(-1), 10000, 'RNR_STALL');
+  const stall = await waitFor(() => logLines('RNRS_STALL').at(-1), 10000, 'RNRS_STALL');
   result.stall = { ms: stall.ms, before: pick(stall.before), after: pick(stall.after) };
   check(
     'JS stall: touch reaches Rust and moves the cube while JS is blocked',

@@ -2,7 +2,7 @@
 
 This module draws an orange triangle on black using the same Rust code on Android,
 iOS and browser WebGPU. rnrs owns the surface and render loop; you supply the shader,
-pipeline and draw commands. Start with the [quickstart's tools](quickstart.md#0-tools).
+pipeline and draw commands. Start with the [tools](setup.md#tools).
 
 ## Create the module
 
@@ -16,7 +16,7 @@ npm install --save-dev @rnrs/surface
 ```
 
 For a local framework checkout, substitute the matching package archives as described
-in [local package testing](lab.md#local-package-testing), including the surface package.
+in [local framework packages](setup.md#local-framework-packages), including the surface package.
 Keep its version aligned with the runtime. In `rust/Cargo.toml`, enable the GPU feature
 on the existing dependency:
 
@@ -48,8 +48,8 @@ Replace `rust/src/lib.rs` with:
 use rnrs::gpu::{self, wgpu, Frame, Gpu, GpuSurface, Next, Options, TargetInfo};
 use rnrs::{Native, TeardownScope};
 
-pub mod rnr_interface;
-use rnr_interface as spec;
+pub mod rnrs_interface;
+use rnrs_interface as spec;
 
 const SHADER: &str = r#"
 @vertex fn vs(@builtin(vertex_index) i: u32) -> @builtin(position) vec4<f32> {
@@ -187,7 +187,7 @@ Create native objects in an effect, not during React rendering. The cleanup clos
 renderer and releases its JS-owned handle. Unmounting a view alone detaches it but does
 not dispose the native object. Give the view a nonzero size.
 
-Android and iOS builds use the [normal native setup](quickstart.md#4-use-it-in-an-app).
+Android and iOS builds use the [normal app setup](setup.md#use-a-module-in-an-app).
 
 ## Browser initialization
 
@@ -243,12 +243,12 @@ In your `main.tsx`, initialize the surface backend before mounting React:
 ```tsx
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import { initRnr } from '@rnrs/runtime/web';
+import { initRnrs } from '@rnrs/runtime/web';
 import { createSurfaceBootstrap } from '@rnrs/surface/browser';
-import * as bundle from './.rnr/web/pkg/rnr_bundle.js';
+import * as bundle from './.rnrs/web/pkg/rnrs_bundle.js';
 import { TriangleView } from './TriangleView';
 
-initRnr(bundle, undefined, { bootstrap: createSurfaceBootstrap }).then(() => {
+initRnrs(bundle, undefined, { bootstrap: createSurfaceBootstrap }).then(() => {
   createRoot(document.getElementById('root')!).render(<TriangleView />);
 }).catch(console.error);
 ```
@@ -266,4 +266,4 @@ npx vite preview
 WebGPU requires a secure context (HTTPS or localhost), a browser with WebGPU enabled,
 and an available adapter. There is no automatic Canvas 2D fallback. A successful build
 or GPU submission does not prove visible output: open the page and check the triangle,
-then unmount and remount it. See [surface lifecycle and failure rules](surface.md#the-wgpu-adapter-rnrsgpu).
+then unmount and remount it. See [surface lifecycle and failure rules](surface.md#browser-presentation).

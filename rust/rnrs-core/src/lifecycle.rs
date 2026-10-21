@@ -1,4 +1,4 @@
-//! Runtime-teardown hook for module-owned resources (docs/surface.md, "Teardown hook").
+//! Runtime-teardown hook for module-owned resources (docs/surface.md, "Runtime teardown hook").
 //!
 //! Some modules own resources that must stop when their JS runtime generation is torn down
 //! (React Native reload, invalidation) even if JS or native references to them survive: a

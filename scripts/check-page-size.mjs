@@ -1,5 +1,6 @@
-// 16 KB page-size gate for an APK's native libraries (docs/page-size.md). For every library of
-// one ABI, extracted from the APK itself (what ships), it records the full LOAD / GNU_RELRO
+// 16 KB page-size gate for an APK's native libraries. The runtime links librnrs.so (and the Rust
+// bundle in it) with -z max-page-size=16384 -z common-page-size=16384; passing this gate does not
+// prove runtime compatibility with a 16 KB-page device. For every library of one ABI, extracted from the APK itself (what ships), it records the full LOAD / GNU_RELRO
 // segment table and checks, separately:
 //   1. LOAD: p_align >= 16384 and p_offset ≡ p_vaddr (mod 16384).
 //   2. RELRO hazard: the loader write-protects RELRO rounded out to whole pages (bionic
@@ -8,8 +9,8 @@
 //      read-only. Reported as a violation; an unaligned RELRO end alone is not one.
 //   3. APK ZIP: uncompressed .so data 16 KB aligned, and `zipalign -c -P 16 4`.
 // Exit status: 0 all checks passed; 1 a violation; 2 could not validate (a tool or the SDK
-// is missing, the APK has no libraries for the ABI). Tool paths: RNR_LLVM_READELF /
-// RNR_ZIPALIGN, else ANDROID_HOME or ANDROID_SDK_ROOT (newest NDK / build-tools), else PATH.
+// is missing, the APK has no libraries for the ABI). Tool paths: RNRS_LLVM_READELF /
+// RNRS_ZIPALIGN, else ANDROID_HOME or ANDROID_SDK_ROOT (newest NDK / build-tools), else PATH.
 // Usage: node scripts/check-page-size.mjs <app.apk> [abi=arm64-v8a] [out.json]
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -51,8 +52,8 @@ export function findTools(env = process.env) {
         : null
       : (candidates.find((c) => c && existsSync(c)) ?? null);
   return {
-    readelf: pick(env.RNR_LLVM_READELF, fromNdk, onPath('llvm-readelf')),
-    zipalign: pick(env.RNR_ZIPALIGN, fromBuildTools, onPath('zipalign')),
+    readelf: pick(env.RNRS_LLVM_READELF, fromNdk, onPath('llvm-readelf')),
+    zipalign: pick(env.RNRS_ZIPALIGN, fromBuildTools, onPath('zipalign')),
     sdk,
   };
 }
@@ -180,7 +181,7 @@ function main([apk, abi = 'arm64-v8a', out]) {
   if (!tools.readelf || !tools.zipalign) {
     report.status = 'unavailable';
     report.problems.push(
-      `missing tool(s): ${[!tools.readelf && 'llvm-readelf', !tools.zipalign && 'zipalign'].filter(Boolean).join(', ')} (set ANDROID_HOME, RNR_LLVM_READELF or RNR_ZIPALIGN)`,
+      `missing tool(s): ${[!tools.readelf && 'llvm-readelf', !tools.zipalign && 'zipalign'].filter(Boolean).join(', ')} (set ANDROID_HOME, RNRS_LLVM_READELF or RNRS_ZIPALIGN)`,
     );
     return finish(2);
   }
@@ -197,7 +198,7 @@ function main([apk, abi = 'arm64-v8a', out]) {
     report.problems.push(`no lib/${abi}/*.so in the APK`);
     return finish(2);
   }
-  const dir = mkdtempSync(path.join(tmpdir(), 'rnr-pagesize-'));
+  const dir = mkdtempSync(path.join(tmpdir(), 'rnrs-pagesize-'));
   try {
     // Anything unexpected while inspecting (a failing or unparsable readelf, a corrupt
     // library) means the APK could not be validated: exit 2, never a pass or a violation.

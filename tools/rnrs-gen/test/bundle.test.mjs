@@ -31,7 +31,8 @@ const counterCopy = (app, name, { targets, crate }) => {
   const dir = path.join(app, 'node_modules', name);
   cpSync(path.join(ROOT, 'packages/counter'), dir, {
     recursive: true,
-    filter: (src) => !src.includes(`${path.sep}rnr${path.sep}`) && !src.endsWith(`${path.sep}rnr`),
+    filter: (src) =>
+      !src.includes(`${path.sep}rnrs${path.sep}`) && !src.endsWith(`${path.sep}rnrs`),
   });
   const manifest = JSON.parse(readFileSync(path.join(dir, 'package.json'), 'utf8'));
   manifest.name = name;
@@ -41,7 +42,7 @@ const counterCopy = (app, name, { targets, crate }) => {
 };
 
 function withApp(build, body) {
-  const app = mkdtempSync(path.join(tmpdir(), 'rnr-app-'));
+  const app = mkdtempSync(path.join(tmpdir(), 'rnrs-app-'));
   const cleanup = () => rmSync(app, { recursive: true, force: true });
   let result;
   try {
@@ -81,7 +82,7 @@ test('discovery follows dependencies transitively, dedupes, and ignores dev/peer
         'app -> wrapper -> @rnrs/labs-values',
         'app -> wrapper -> @rnrs/example-counter',
       ]);
-      const { crateDir, modules } = generateBundle(app, 'android', path.join(app, '.rnr/android'));
+      const { crateDir, modules } = generateBundle(app, 'android', path.join(app, '.rnrs/android'));
       assert.deepEqual(modules.map((m) => m.crate).sort(), ['counter', 'values']);
       const cargo = readFileSync(path.join(crateDir, 'Cargo.toml'), 'utf8');
       assert.match(cargo, /^counter = \{ path = /m);
@@ -93,7 +94,7 @@ test('discovery follows dependencies transitively, dedupes, and ignores dev/peer
         lib,
         /static MODULES: &\[&rnrs_core::bind::ModuleDef\] = &\[&glue::values::MODULE, &glue::counter::MODULE\];/,
       );
-      assert.match(lib, /rnr_bundle_init/);
+      assert.match(lib, /rnrs_bundle_init/);
     },
   ));
 
@@ -167,7 +168,7 @@ test('two packages with the same crate or module name are rejected', () =>
         dependencies: { '@rnrs/example-counter': '1', 'copy-b': '1' },
       });
       assert.throws(
-        () => generateBundle(app, 'android', path.join(app, '.rnr/android')),
+        () => generateBundle(app, 'android', path.join(app, '.rnrs/android')),
         /app -> copy-b: module name CounterModule is already used by app -> @rnrs\/example-counter/,
       );
     },
@@ -178,13 +179,13 @@ test('a module whose committed interface is stale is rejected', () =>
     (app) => {
       json(path.join(app, 'package.json'), { name: 'app', dependencies: { stale: '1' } });
       counterCopy(app, 'stale', { targets: ['android', 'web'], crate: 'stale' });
-      const iface = path.join(app, 'node_modules/stale/rust/src/rnr_interface.rs');
+      const iface = path.join(app, 'node_modules/stale/rust/src/rnrs_interface.rs');
       writeFileSync(iface, readFileSync(iface, 'utf8') + '// edited\n');
     },
     (app) => {
       assert.throws(
-        () => generateBundle(app, 'web', path.join(app, '.rnr/web')),
-        /app -> stale: rust\/src\/rnr_interface.rs does not match its spec/,
+        () => generateBundle(app, 'web', path.join(app, '.rnrs/web')),
+        /app -> stale: rust\/src\/rnrs_interface.rs does not match its spec/,
       );
     },
   ));
@@ -207,14 +208,14 @@ test('ios packages generate, check and bundle as a native staticlib', async () =
         } finally {
           console.log = log;
         }
-        const { crateDir } = generateBundle(app, 'ios', path.join(app, '.rnr/ios'));
+        const { crateDir } = generateBundle(app, 'ios', path.join(app, '.rnrs/ios'));
         const cargo = readFileSync(path.join(crateDir, 'Cargo.toml'), 'utf8');
         assert.match(cargo, /crate-type = \["staticlib"\]/);
         assert.match(cargo, /rnrs-core = \{ path = .*, features = \["tokio"\] \}/);
         assert.match(cargo, /^rnrs-android = \{ path = /m);
         assert.match(
           readFileSync(path.join(crateDir, 'src/lib.rs'), 'utf8'),
-          /pub extern "C" fn rnr_bundle_init\(\)/,
+          /pub extern "C" fn rnrs_bundle_init\(\)/,
         );
         if (!targets.includes('android'))
           assert.throws(
@@ -232,7 +233,7 @@ test('a declared but unimplemented known target fails with an actionable error',
   assert.deepEqual(implementedTargets(manifest), ['android', 'ios']);
   assert.throws(
     () => implementedTargets(manifest, 'package.json', ['android', 'web']),
-    /pkg: rustNative.targets in package.json declares "ios", which rnr does not implement yet \(implemented: android, web\)/,
+    /pkg: rustNative.targets in package.json declares "ios", which rnrs does not implement yet \(implemented: android, web\)/,
   );
 });
 
@@ -291,7 +292,7 @@ test('framework crates resolved from anywhere but the framework copy are rejecte
 
 test('module crates must require an rnrs-core version the framework provides', async () => {
   const { checkCoreRequirement } = await import('../cli.mjs');
-  const dir = mkdtempSync(path.join(tmpdir(), 'rnr-core-req-'));
+  const dir = mkdtempSync(path.join(tmpdir(), 'rnrs-core-req-'));
   const pkg = { cratePath: dir };
   const with_ = (line) =>
     writeFileSync(
@@ -394,7 +395,7 @@ test('library packages are selected and target-checked, patched by crate name, a
       const { crateDir, modules, libraries } = generateBundle(
         app,
         'android',
-        path.join(app, '.rnr/android'),
+        path.join(app, '.rnrs/android'),
       );
       assert.deepEqual(
         modules.map((m) => m.crate),
@@ -480,7 +481,7 @@ test('library crates resolved from anywhere but the installed package are reject
     () => checkProvenance({ packages: [registry] }, [lib]),
     /rnrs-surface 0\.1\.3 resolved from registry\+.*, not the installed library package app -> @rnrs\/surface/,
   );
-  // Without the library package installed it is still refused: rnr-* is a reserved namespace.
+  // Without the library package installed it is still refused: rnrs-* is a reserved namespace.
   assert.throws(
     () => checkProvenance({ packages: [registry] }),
     /Crates named rnrs-\* \(and the former rnr-\* names\) are reserved for the framework/,
@@ -506,7 +507,7 @@ test('web surface is a direct bundle dependency and retained export; headless/na
         if (surface) link(app, '@rnrs/surface', 'surface');
       },
       (app) => {
-        const { crateDir } = generateBundle(app, target, path.join(app, '.rnr', target));
+        const { crateDir } = generateBundle(app, target, path.join(app, '.rnrs', target));
         const cargo = readFileSync(path.join(crateDir, 'Cargo.toml'), 'utf8');
         const direct = cargo.split('[patch.crates-io]')[0];
         const lib = readFileSync(path.join(crateDir, 'src/lib.rs'), 'utf8');

@@ -1,4 +1,4 @@
-// Android harness for the ownership prototype (launch with `--es mode rnr`).
+// Android harness for the ownership prototype (launch with `--es mode rnrs`).
 // scripts/rnrs-device-test.mjs drives it: each JS runtime runs one step loop that asks the
 // runner for the next step, runs it and reports. The runner performs the lifecycle actions
 // in between (reload, ReactHost destroy, background/foreground, Activity destruction), so
@@ -16,17 +16,17 @@ import {
   counterModule,
   createCounterModuleForTesting,
   type Counter,
-} from '../.generated/rnr/counter';
+} from '../.generated/rnrs/counter';
 import { runMeterSuite } from './rnrs/meter-suite';
 import { runValuesSuite } from './rnrs/values-suite';
 import { runBlake3Suite } from './rnrs/blake3-suite';
-import { valuesModule } from '../.generated/rnr/values';
-import { httpModule } from '../.generated/rnr/rnrs_http';
-import { kvModule } from '../.generated/rnr/rnrs_kv';
+import { valuesModule } from '../.generated/rnrs/values';
+import { httpModule } from '../.generated/rnrs/rnrs_http';
+import { kvModule } from '../.generated/rnrs/rnrs_kv';
 
 // The lab's own test databases (deleted by the runner's last step; nothing else is touched).
-const KV_LIFECYCLE = 'rnr-lab-lifecycle';
-const KV_PERSIST = 'rnr-lab-persist';
+const KV_LIFECYCLE = 'rnrs-lab-lifecycle';
+const KV_PERSIST = 'rnrs-lab-persist';
 const KV_VALUE = 16 * 1024;
 const kvValue = (i: number) => new Uint8Array(KV_VALUE).fill(i % 251).buffer;
 /** Whether `b` is exactly the value written for `i` (never a partial write). */
@@ -55,7 +55,7 @@ async function report(record: object) {
     // Logged so a lost report is distinguishable from a step that never finished (the
     // runner keeps logcat on failure).
     console.log(
-      'RNR_REPORT_FAILED ' + JSON.stringify({ type: (record as any).type, error: String(error) }),
+      'RNRS_REPORT_FAILED ' + JSON.stringify({ type: (record as any).type, error: String(error) }),
     );
     throw error;
   }
@@ -180,7 +180,7 @@ async function runStep(step: Step, update: (message: string) => void): Promise<b
         type: step.tag,
         ...snapshot(main),
         generation: main.generation,
-        mounts: global.__rnrMounts,
+        mounts: global.__rnrsMounts,
       });
       return true;
     case 'background': {
@@ -197,7 +197,7 @@ async function runStep(step: Step, update: (message: string) => void): Promise<b
         setTimeout(
           () =>
             console.log(
-              'RNR_BG_WAIT ' +
+              'RNRS_BG_WAIT ' +
                 JSON.stringify({ elapsedMs: Date.now() - started, ...snapshot(main) }),
             ),
           ms,
@@ -222,7 +222,7 @@ async function runStep(step: Step, update: (message: string) => void): Promise<b
       };
       // In logcat before the report is sent while the app is backgrounded: if bg-result
       // never reaches the runner, this shows whether the operation settled.
-      console.log('RNR_BG_RESULT ' + JSON.stringify(result));
+      console.log('RNRS_BG_RESULT ' + JSON.stringify(result));
       await report(result);
       return true;
     }
@@ -389,9 +389,9 @@ async function runStep(step: Step, update: (message: string) => void): Promise<b
         }
         const busyFrom = Date.now();
         void report({ type: 'go', busyFrom, busyMs: step.busyMs }).catch(() => {});
-        console.log(`rnr: JS thread busy from ${busyFrom} for ${step.busyMs} ms`);
+        console.log(`rnrs: JS thread busy from ${busyFrom} for ${step.busyMs} ms`);
         busyWait(step.busyMs);
-        console.log(`rnr: JS thread free at ${Date.now()}`);
+        console.log(`rnrs: JS thread free at ${Date.now()}`);
       }
       return true;
     }
@@ -465,14 +465,14 @@ async function runStep(step: Step, update: (message: string) => void): Promise<b
   }
 }
 
-export async function runRnrPrototype(update: (message: string) => void) {
-  global.__rnrMounts = (global.__rnrMounts ?? 0) + 1;
+export async function runRnrsPrototype(update: (message: string) => void) {
+  global.__rnrsMounts = (global.__rnrsMounts ?? 0) + 1;
   // One loop per runtime; a remounted surface (new Activity) reuses it.
-  if (global.__rnrLoop) {
-    update(`Remounted (mount ${global.__rnrMounts}) in the same runtime`);
+  if (global.__rnrsLoop) {
+    update(`Remounted (mount ${global.__rnrsMounts}) in the same runtime`);
     return;
   }
-  global.__rnrLoop = true;
+  global.__rnrsLoop = true;
   NativeBench.install();
   installAndroidBackend();
   const main = counterModule();
@@ -486,7 +486,7 @@ export async function runRnrPrototype(update: (message: string) => void) {
   for (;;) {
     let step: Step;
     try {
-      step = await nextStep({ scope: runtimeBindings().scopeId, mounts: global.__rnrMounts });
+      step = await nextStep({ scope: runtimeBindings().scopeId, mounts: global.__rnrsMounts });
     } catch {
       await sleep(500); // collector not reachable yet
       continue;

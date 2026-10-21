@@ -1,4 +1,4 @@
-// Lab-only fixture for the Worklets proof of concept (docs/research/worklets-poc-plan.md):
+// Lab-only fixture for the Worklets proof of concept:
 // sync scalar methods a worklet endpoint may expose, a native object for the boxed-handle
 // path, and methods of every other shape that the endpoint must refuse. Not a production module.
 import type { NativeModule, NativeObject } from '@rnrs/runtime/spec';

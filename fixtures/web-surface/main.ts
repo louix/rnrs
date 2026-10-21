@@ -1,7 +1,7 @@
-import init, * as wasm from './rnr/pkg/rnr_bundle.js';
-import { installWebBackend, initRnr, type RnrWasm } from '@rnrs/runtime/web';
+import init, * as wasm from './rnrs/pkg/rnrs_bundle.js';
+import { installWebBackend, initRnrs, type RnrsWasm } from '@rnrs/runtime/web';
 import { createSurfaceBootstrap } from '@rnrs/surface/browser';
-import { createVello2DModuleForTesting } from '../../.generated/rnr/rnrs_vello2d';
+import { createVello2DModuleForTesting } from '../../.generated/rnrs/rnrs_vello2d';
 import { FrameWriter } from '../../packages/vello2d/frame';
 
 const checks: { name: string; ok: boolean; detail: string }[] = [];
@@ -15,7 +15,7 @@ const nextFrames = async () => {
   await new Promise(requestAnimationFrame);
   await new Promise(requestAnimationFrame);
 };
-const stats = () => Array.from(wasm.rnr_surface_diagnostics()) as number[];
+const stats = () => Array.from(wasm.rnrs_surface_diagnostics()) as number[];
 let memory: WebAssembly.Memory;
 async function test(
   name: string,
@@ -41,10 +41,10 @@ function setup(deferredRelease = false) {
   const bundle = deferredRelease
     ? {
         ...wasm,
-        rnr_surface_set_release_listener(
+        rnrs_surface_set_release_listener(
           listener: ((key: number, token: number) => void) | undefined,
         ) {
-          wasm.rnr_surface_set_release_listener(
+          wasm.rnrs_surface_set_release_listener(
             listener
               ? (key: number, token: number) => queueMicrotask(() => listener(key, token))
               : undefined,
@@ -53,7 +53,7 @@ function setup(deferredRelease = false) {
       }
     : wasm;
   const backend = installWebBackend(
-    bundle as unknown as RnrWasm,
+    bundle as unknown as RnrsWasm,
     (same) => (boot = createSurfaceBootstrap(same)),
   );
   const module = createVello2DModuleForTesting(8);
@@ -68,26 +68,27 @@ function setup(deferredRelease = false) {
   return { backend, boot, module, renderer, key, wrapper, canvas };
 }
 function attach(key: number, width = 8, height = 8) {
-  const token = wasm.rnr_surface_attach(key, width, height, 1);
+  const token = wasm.rnrs_surface_attach(key, width, height, 1);
   assert(typeof token === 'number' && token > 0, 'attachment acquired');
   return token;
 }
 function pixels(key: number, token: number, redraw = true) {
-  const p = wasm.rnr_surface_render(key, token, redraw);
+  const p = wasm.rnrs_surface_render(key, token, redraw);
   assert(p.status === 'pixels', 'expected pixels: ' + p.status);
   return p as { status: 'pixels'; width: number; height: number; pixels: Uint8Array };
 }
 async function main() {
   const exports = await init({
-    module_or_path: new URL('../rnr/pkg/rnr_bundle_bg.wasm', import.meta.url),
+    module_or_path: new URL('../rnrs/pkg/rnrs_bundle_bg.wasm', import.meta.url),
   });
   memory = exports.memory;
   const publicBundle = { ...wasm, default: async () => exports };
-  const initializing = initRnr(publicBundle as any, undefined, {
+  const initializing = initRnrs(publicBundle as any, undefined, {
     bootstrap: createSurfaceBootstrap,
   });
   assert(
-    initializing === initRnr(publicBundle as any, undefined, { bootstrap: createSurfaceBootstrap }),
+    initializing ===
+      initRnrs(publicBundle as any, undefined, { bootstrap: createSurfaceBootstrap }),
     'public init shares initialization',
   );
   await initializing;
@@ -100,7 +101,7 @@ async function main() {
   );
   firstModule.teardown();
   checks.push({
-    name: 'public initRnr optional surface bootstrap shares the real bundle',
+    name: 'public initRnrs optional surface bootstrap shares the real bundle',
     ok: true,
     detail: '',
   });
@@ -130,7 +131,7 @@ async function main() {
     h.renderer.close();
     assert(p.pixels.length === 256, 'owned copy survives renderer disposal');
     assert(
-      wasm.rnr_surface_render(h.key, token, true).status === 'closed',
+      wasm.rnrs_surface_render(h.key, token, true).status === 'closed',
       'closed authority checked',
     );
   });
@@ -148,7 +149,7 @@ async function main() {
       'invalid frame retained scene',
     );
     assert(
-      wasm.rnr_surface_render(h.key, token, false).status === 'unchanged',
+      wasm.rnrs_surface_render(h.key, token, false).status === 'unchanged',
       'no duplicate presentation',
     );
     const st = h.renderer.stats();
@@ -163,17 +164,20 @@ async function main() {
   });
   await test('authoritative first-wins attachment, stale tokens and resize', (h) => {
     const old = attach(h.key);
-    assert(wasm.rnr_surface_attach(h.key, 8, 8, 1) === 0, 'first attachment wins');
-    wasm.rnr_surface_detach(h.key, old);
+    assert(wasm.rnrs_surface_attach(h.key, 8, 8, 1) === 0, 'first attachment wins');
+    wasm.rnrs_surface_detach(h.key, old);
     const current = attach(h.key, 10, 12);
     assert(current !== old, 'fresh token');
-    wasm.rnr_surface_detach(h.key, old);
-    assert(wasm.rnr_surface_render(h.key, old, true).status === 'stale', 'stale callback rejected');
+    wasm.rnrs_surface_detach(h.key, old);
     assert(
-      wasm.rnr_surface_resize(h.key, old, 20, 24, 2) === 'stale',
+      wasm.rnrs_surface_render(h.key, old, true).status === 'stale',
+      'stale callback rejected',
+    );
+    assert(
+      wasm.rnrs_surface_resize(h.key, old, 20, 24, 2) === 'stale',
       'stale resize is expected status',
     );
-    assert(wasm.rnr_surface_resize(h.key, current, 20, 24, 2) === 'ok', 'current resize succeeds');
+    assert(wasm.rnrs_surface_resize(h.key, current, 20, 24, 2) === 'ok', 'current resize succeeds');
     h.renderer.submit(frame([1, 0, 0, 1]));
     const p = pixels(h.key, current);
     assert(p.width === 20 && p.height === 24 && h.renderer.stats().scale === 2, 'resize and DPR');
@@ -255,7 +259,7 @@ async function main() {
       h.renderer.stats().refusedAttaches === 5 && errors.length === 1,
       'bounded attempts exhausted',
     );
-    wasm.rnr_surface_detach(h.key, token); // no first CanvasMount; notification comes from Wasm
+    wasm.rnrs_surface_detach(h.key, token); // no first CanvasMount; notification comes from Wasm
     await new Promise((r) => setTimeout(r, 30));
     await nextFrames();
     assert(
@@ -316,13 +320,13 @@ async function main() {
     assert(refused && stats()[2] === 8_388_608, 'third allocation refused');
     let resizeFailed = false;
     try {
-      wasm.rnr_surface_resize(h.key, firstToken, 4096, 4096, 1);
+      wasm.rnrs_surface_resize(h.key, firstToken, 4096, 4096, 1);
     } catch {
       resizeFailed = true;
     }
     assert(resizeFailed && stats()[2] === 4_194_304, 'old raster freed before failed reservation');
-    wasm.rnr_surface_detach(h.key, firstToken);
-    wasm.rnr_surface_detach(second.surfaceKey(), secondToken);
+    wasm.rnrs_surface_detach(h.key, firstToken);
+    wasm.rnrs_surface_detach(second.surfaceKey(), secondToken);
     assert(stats()[2] === 0, 'all raster storage released');
     second.close();
     third.close();
@@ -372,10 +376,13 @@ async function main() {
       'host and resources cleaned',
     );
     assert(
-      wasm.rnr_surface_attach(h.key, 8, 8, 1) === 'closed',
+      wasm.rnrs_surface_attach(h.key, 8, 8, 1) === 'closed',
       'retained wrapper cannot reattach',
     );
-    assert(wasm.rnr_surface_resize(h.key, 1, 8, 8, 1) === 'closed', 'closed resize does not throw');
+    assert(
+      wasm.rnrs_surface_resize(h.key, 1, 8, 8, 1) === 'closed',
+      'closed resize does not throw',
+    );
     let refused = false;
     try {
       h.renderer.submit(frame([0, 1, 0, 1]));
@@ -387,7 +394,7 @@ async function main() {
   await test('backend replacement invalidates old canvas epoch and closes resources', async (h) => {
     h.renderer.submit(frame([1, 0, 0, 1]));
     h.boot.host.mount(h.canvas, h.wrapper, h.key);
-    const replacement = installWebBackend(wasm as unknown as RnrWasm, (same) =>
+    const replacement = installWebBackend(wasm as unknown as RnrsWasm, (same) =>
       createSurfaceBootstrap(same),
     );
     try {
@@ -396,7 +403,7 @@ async function main() {
         h.canvas.width === 0 && stats()[1] === 0,
         'replacement closes old host before retained RAF',
       );
-      assert(wasm.rnr_surface_attach(h.key, 8, 8, 1) === 'closed', 'old key is terminal');
+      assert(wasm.rnrs_surface_attach(h.key, 8, 8, 1) === 'closed', 'old key is terminal');
       let refused = false;
       try {
         h.renderer.submit(frame([1, 0, 0, 1]));
@@ -472,14 +479,14 @@ async function main() {
   await test('backend cleanup attempts every adapter and reports failures before replacement publication', () => {
     let teardowns = 0,
       published = false;
-    class FailingAdapter extends wasm.RnrWebAdapter {
+    class FailingAdapter extends wasm.RnrsWebAdapter {
       teardown() {
         super.teardown();
         if (++teardowns === 1) throw new Error('adapter cleanup failure');
       }
     }
     const backend = installWebBackend(
-      { ...wasm, RnrWebAdapter: FailingAdapter } as unknown as RnrWasm,
+      { ...wasm, RnrsWebAdapter: FailingAdapter } as unknown as RnrsWasm,
       () => ({
         dispose() {
           throw new Error('bootstrap cleanup failure');
@@ -494,7 +501,7 @@ async function main() {
       kb = rb.surfaceKey();
     let error: unknown;
     try {
-      installWebBackend(wasm as unknown as RnrWasm, () => {
+      installWebBackend(wasm as unknown as RnrsWasm, () => {
         published = true;
         return { dispose() {} };
       });
@@ -510,8 +517,8 @@ async function main() {
       'all adapters attempted; replacement bootstrap not started',
     );
     assert(
-      wasm.rnr_surface_attach(ka, 8, 8, 1) === 'closed' &&
-        wasm.rnr_surface_attach(kb, 8, 8, 1) === 'closed',
+      wasm.rnrs_surface_attach(ka, 8, 8, 1) === 'closed' &&
+        wasm.rnrs_surface_attach(kb, 8, 8, 1) === 'closed',
       'retained renderer keys closed',
     );
     backend.dispose(); // completed disposal is idempotent despite its reported errors
@@ -520,7 +527,7 @@ async function main() {
     let rolledBack = 0,
       failed = false;
     try {
-      installWebBackend(wasm as unknown as RnrWasm, (_bundle, rollback) => {
+      installWebBackend(wasm as unknown as RnrsWasm, (_bundle, rollback) => {
         rollback(() => {
           rolledBack++;
         });
@@ -557,7 +564,7 @@ async function main() {
         }
       } as any;
       try {
-        installWebBackend(wasm as unknown as RnrWasm, () => ({
+        installWebBackend(wasm as unknown as RnrsWasm, () => ({
           dispose() {
             cleaned++;
           },
@@ -602,9 +609,9 @@ async function main() {
     limitation:
       'W1 correctness proof. DOM Canvas and real generated single Wasm bundle; synthetic page/context events. Storage caps do not bound execution time.',
   };
-  (globalThis as any).__rnrResult = result;
+  (globalThis as any).__rnrsResult = result;
   document.querySelector('#out')!.textContent = JSON.stringify(result, null, 2);
 }
 main().catch((error) => {
-  (globalThis as any).__rnrResult = { ok: false, checks, error: String(error?.stack ?? error) };
+  (globalThis as any).__rnrsResult = { ok: false, checks, error: String(error?.stack ?? error) };
 });

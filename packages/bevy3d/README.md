@@ -1,6 +1,6 @@
 # Bevy example
 
-Rust-owned Bevy scene with TypeScript controls. Android requires API 26 and Rust 1.97.1 for this example. The iOS build does not render on the simulator. Browser WebGPU has known Firefox unmount crashes and headless software-device loss; there is no production-readiness or performance claim.
+Rust-owned Bevy scene with TypeScript controls. Android requires API 26 and Rust 1.97.1 for this example. The iOS build does not render on the simulator. In the browser, unmounting crashes Firefox, and headless browsers with software WebGPU can lose the device.
 
 ## Browser WebGPU
 
@@ -12,7 +12,7 @@ Opt in with `<SurfaceView surfaceKey={…} touchInput="rust" />` and `surface.en
 
 ## What the author writes
 
-`packages/bevy3d` (`@rnrs/example-bevy3d`) is an ordinary module package: a TypeScript spec (`bevy3d.spec.ts`) and a Rust crate (`rust/`). No Kotlin, Java, C++, JSI or handwritten glue; the generated interface and JS wrapper come from `rnr-gen`. The consumer (`fixtures/bevy-consumer`) is the pristine RN template (0.88.0; device results from 0.83.1) plus `App.tsx`/`smoke.ts`.
+`packages/bevy3d` (`@rnrs/example-bevy3d`) is an ordinary module package: a TypeScript spec (`bevy3d.spec.ts`) and a Rust crate (`rust/`). No Kotlin, Java, C++, JSI or handwritten glue; the generated interface and JS wrapper come from `rnrs-gen`. The consumer app (`fixtures/bevy-consumer`) has no native edits.
 
 ```ts
 const scene = bevy3DModule().create();          // Rust starts the render thread
@@ -44,13 +44,13 @@ Failure policy (deliberately simpler than vello2d's recovery): a failed device c
 ## Adapter limits
 
 - **The lease is held across every Bevy update.** The warm-up covers pipeline compilation at startup only. A pipeline compiled later (for example a new material or mesh layout) runs inside `app.update()` while the `Target` holds the lease, and could exceed the platform's 500 ms detach budget. Such a detach would time out (counted in `detachTimeouts`), and the contract still holds.
-- **A revocation during resize can benignly mark the attachment failed.** A configure that finds the attachment already revoked returns an error. `gpuState` becomes "failed" and `lastError` stays set until the next attachment, which starts fresh. There is no general recovery; this is the prototype's failure policy, not robust recovery.
+- **A revocation during resize can benignly mark the attachment failed.** A configure that finds the attachment already revoked returns an error. `gpuState` becomes "failed" and `lastError` stays set until the next attachment, which starts fresh. There is no general recovery.
 - **`stats().state` is "attached" whenever the surface has an attachment, including one with zero size**, while the render thread does not bind or render it. (The Android view normally detaches at zero size.)
 - `setColor` takes gamma-encoded sRGB components (`Color::srgb`), not linear values.
 
 ## Limits and workarounds (third-party, example-only)
 
-- **Toolchain.** Bevy 0.20.0 requires Rust 1.97.1 (`rust-version`, checked on crates.io). The whole app bundle is one Cargo build, so an app with this module builds with 1.97.1: `RUSTUP_TOOLCHAIN=1.97.1` (with `RUSTUP_HOME`/`CARGO_HOME` pointing at an isolated install, as `rn-app.sh` already allows). The framework's default and tested toolchain (1.90.0) is unchanged; only this consumer was built with 1.97.1. The crate is excluded from the root Cargo workspace for that reason.
+- **Toolchain.** Bevy 0.20.0 requires Rust 1.97.1 (`rust-version`, checked on crates.io). The whole app bundle is one Cargo build, so an app with this module builds with 1.97.1: `RUSTUP_TOOLCHAIN=1.97.1` (with `RUSTUP_HOME`/`CARGO_HOME` pointing at an isolated install, as `rn-app.sh` already allows). The framework's default toolchain (1.90.0) is unchanged. The crate is excluded from the root Cargo workspace for that reason.
 - **android-activity.** On Android `bevy_render` → `bevy_asset` → `bevy_android` → `android-activity`, which refuses to compile without an activity backend. The crate enables `native-activity` only to compile, and defines the `android_main` symbol that its `ANativeActivity_onCreate` export references. Nothing invokes it: Android calls that export only for a `NativeActivity` declared in the manifest, and the RN app has none. The stub logs and aborts if it is ever reached. The bundle therefore carries an unused `ANativeActivity_onCreate` export.
 - **Android minSdk 26.** `android-properties` (via `android-activity`) needs API 26; apps set `minSdkVersion` 26 . API 24–25 are unsupported for this example.
 - **No file assets.** Bevy's Android file reader expects the activity Bevy would own and panics otherwise (and panics abort the app). The default asset source is replaced by one whose every read fails with "file assets are not supported by @rnrs/example-bevy3d". The scene uses in-code meshes, materials and Bevy's embedded shaders only.

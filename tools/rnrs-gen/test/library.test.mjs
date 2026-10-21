@@ -26,7 +26,7 @@ if (!process.env.CARGO_HOME && existsSync(path.join(local, 'cargo'))) {
   process.env.RUSTUP_TOOLCHAIN ??= '1.90.0';
 }
 const skip =
-  spawnSync(process.env.RNR_CARGO ?? 'cargo', ['--version']).status === 0
+  spawnSync(process.env.RNRS_CARGO ?? 'cargo', ['--version']).status === 0
     ? false
     : 'cargo is not available';
 
@@ -57,7 +57,8 @@ function moduleUsing(app, name, { crate, requirement, dependsOn }) {
   const dir = path.join(app, 'node_modules', name);
   cpSync(path.join(ROOT, 'packages/counter'), dir, {
     recursive: true,
-    filter: (src) => !src.includes(`${path.sep}rnr${path.sep}`) && !src.endsWith(`${path.sep}rnr`),
+    filter: (src) =>
+      !src.includes(`${path.sep}rnrs${path.sep}`) && !src.endsWith(`${path.sep}rnrs`),
   });
   const manifest = JSON.parse(readFileSync(path.join(dir, 'package.json'), 'utf8'));
   manifest.name = name;
@@ -76,7 +77,7 @@ function moduleUsing(app, name, { crate, requirement, dependsOn }) {
 }
 
 function withApp(build, body) {
-  const app = mkdtempSync(path.join(tmpdir(), 'rnr-lib-'));
+  const app = mkdtempSync(path.join(tmpdir(), 'rnrs-lib-'));
   try {
     build(app);
     return body(app);
@@ -165,7 +166,7 @@ test('a module crate may not use a framework crate name either', () =>
   ));
 
 test('generate, check and pack-js refuse library packages', async () => {
-  const app = mkdtempSync(path.join(tmpdir(), 'rnr-lib-'));
+  const app = mkdtempSync(path.join(tmpdir(), 'rnrs-lib-'));
   try {
     const dir = library(app, 'lib-cli', { crate: 'lib-cli' });
     for (const command of ['generate', 'check', 'pack-js']) {
@@ -185,8 +186,8 @@ test(
   'a module crate depending on a library by version resolves to the installed package, also after relocation',
   { skip },
   () => {
-    const app = mkdtempSync(path.join(tmpdir(), 'rnr-lib-'));
-    const moved = mkdtempSync(path.join(tmpdir(), 'rnr-lib-moved-'));
+    const app = mkdtempSync(path.join(tmpdir(), 'rnrs-lib-'));
+    const moved = mkdtempSync(path.join(tmpdir(), 'rnrs-lib-moved-'));
     try {
       json(path.join(app, 'package.json'), { name: 'app', dependencies: { 'uses-lib': '1' } });
       moduleUsing(app, 'uses-lib', {
@@ -195,7 +196,7 @@ test(
         dependsOn: { '@scope/shared-lib': '1' },
       });
       library(app, '@scope/shared-lib', { crate: 'shared-lib', version: '0.1.4' });
-      const opts = (dir) => ({ out: path.join(dir, '.rnr/web'), offline: true });
+      const opts = (dir) => ({ out: path.join(dir, '.rnrs/web'), offline: true });
       const result = lockBundle(app, 'web', opts(app));
       assert.deepEqual(
         result.modules.map((m) => m.crate),
@@ -213,7 +214,7 @@ test(
       assert.equal(entries[0][2], undefined, 'no registry source');
       for (const p of [app, ROOT, tmpdir()]) assert.ok(!lock.includes(p), `lock mentions ${p}`);
       // A relocated app (another absolute path) checks against the same lock unchanged.
-      cpSync(app, moved, { recursive: true, filter: (src) => !src.includes(`${path.sep}.rnr`) });
+      cpSync(app, moved, { recursive: true, filter: (src) => !src.includes(`${path.sep}.rnrs`) });
       assert.doesNotThrow(() => lockBundle(moved, 'web', { ...opts(moved), check: true }));
       assert.equal(readFileSync(lockFile(moved, 'web'), 'utf8'), lock);
       // The installed library changes to an incompatible version: the committed lock is stale,
@@ -240,7 +241,7 @@ test(
   'packed @rnrs/surface and @rnrs/example-vello2d tarballs: the library must be a direct app dependency, and then resolves from the installed package',
   { skip },
   () => {
-    const work = mkdtempSync(path.join(tmpdir(), 'rnr-lib-pack-'));
+    const work = mkdtempSync(path.join(tmpdir(), 'rnrs-lib-pack-'));
     try {
       const app = path.join(work, 'app');
       mkdirSync(app);
@@ -280,7 +281,7 @@ test(
         dependencies: { '@rnrs/example-vello2d': '0.1.0', '@rnrs/surface': '0.1.0' },
       });
       const result = lockBundle(app, 'android', {
-        out: path.join(app, '.rnr/android'),
+        out: path.join(app, '.rnrs/android'),
         offline: true,
       });
       assert.deepEqual(
@@ -387,8 +388,8 @@ test('a module crate depending on a former rnr-* framework name is refused with 
   ));
 
 test('rnrs-* and rnr-* dependency scanning covers dependency tables, renames and target tables, not dev-dependencies', async () => {
-  const { rnrCrateDependencies } = await import('../bundle.mjs');
-  const dir = mkdtempSync(path.join(tmpdir(), 'rnr-deps-'));
+  const { rnrsCrateDependencies } = await import('../bundle.mjs');
+  const dir = mkdtempSync(path.join(tmpdir(), 'rnrs-deps-'));
   try {
     const file = path.join(dir, 'Cargo.toml');
     writeFileSync(
@@ -416,7 +417,7 @@ test('rnrs-* and rnr-* dependency scanning covers dependency tables, renames and
         'rnrs-build = "0.1"',
       ].join('\n'),
     );
-    assert.deepEqual(rnrCrateDependencies(file).sort(), [
+    assert.deepEqual(rnrsCrateDependencies(file).sort(), [
       'rnr-table',
       'rnr_extra',
       'rnrs-build',

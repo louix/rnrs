@@ -95,7 +95,7 @@ pub fn note_closed() {
 /// Test diagnostics for the browser fixture: setups started and discarded (stale after an
 /// await), devices created and destroyed, and scenes currently holding GPU state.
 #[wasm_bindgen]
-pub fn rnr_bevy3d_web_diagnostics() -> Vec<f64> {
+pub fn rnrs_bevy3d_web_diagnostics() -> Vec<f64> {
     COUNTERS.with(|c| {
         vec![c.inits_started.get() as f64, c.inits_discarded.get() as f64, c.devices_created.get() as f64,
              c.devices_destroyed.get() as f64, c.gfx_alive.get() as f64, c.open.get() as f64]
@@ -281,7 +281,7 @@ impl Shared {
     }
 
     fn failed(s: &mut State, message: String) -> Phase {
-        log::error!("rnr-bevy3d: {message}");
+        log::error!("rnrs-bevy3d: {message}");
         s.last_step_ms = None;
         s.stats.last_error = Some(message.clone());
         s.stats.presentation.clear();
@@ -323,7 +323,7 @@ async fn setup(weak: Weak<Shared>, generation: u64, instance: wgpu::Instance, su
     // build its SSAO pipelines (which need 5).
     let device = adapter
         .request_device(&wgpu::DeviceDescriptor {
-            label: Some("rnr-bevy3d"),
+            label: Some("rnrs-bevy3d"),
             required_limits: wgpu::Limits::default().using_resolution(adapter.limits()),
             ..Default::default()
         })
@@ -501,7 +501,7 @@ fn frame(s: &mut State, extent: Extent, redraw: bool) -> Result<Frame, String> {
         other => return Err(format!("canvas texture unavailable: {other:?}")),
     };
     let view = texture.texture.create_view(&wgpu::TextureViewDescriptor { format: Some(gfx.view_format), ..Default::default() });
-    let mut encoder = gfx.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("rnr-bevy3d blit") });
+    let mut encoder = gfx.device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("rnrs-bevy3d blit") });
     gfx.blitter.copy(&gfx.device, &mut encoder, scene.view(), &view);
     gfx.queue.submit([encoder.finish()]);
     gfx.queue.present(texture);

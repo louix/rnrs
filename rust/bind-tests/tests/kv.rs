@@ -8,7 +8,7 @@ use bind_tests::modules::rnrs_kv as kv_glue;
 use bind_tests::V;
 
 fn harness() -> Harness {
-    let dir = std::env::temp_dir().join(format!("rnr-kv-glue-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("rnrs-kv-glue-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     rnrs_core::platform::set_app_data_dir(dir).unwrap();
     Harness::new(&kv_glue::MODULE, 32)

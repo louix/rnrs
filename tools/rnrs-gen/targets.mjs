@@ -4,7 +4,7 @@ import path from 'node:path';
 
 /** Target names a package may declare. */
 export const KNOWN_TARGETS = ['android', 'ios', 'web'];
-/** Targets rnr can actually build and run. Every known target is implemented now; the check
+/** Targets rnrs can actually build and run. Every known target is implemented now; the check
  *  stays so that a future known name cannot be declared before its backend exists. */
 export const IMPLEMENTED_TARGETS = ['android', 'ios', 'web'];
 
@@ -40,7 +40,7 @@ export function implementedTargets(
   if (missing.length) {
     const name = manifest?.name ?? manifestPath;
     throw new Error(
-      `${name}: rustNative.targets in ${manifestPath} declares ${missing.map((t) => JSON.stringify(t)).join(', ')}, which rnr does not implement yet ` +
+      `${name}: rustNative.targets in ${manifestPath} declares ${missing.map((t) => JSON.stringify(t)).join(', ')}, which rnrs does not implement yet ` +
         `(implemented: ${implemented.join(', ')}). Declaring it would promise support that does not exist; remove it until a backend is available.`,
     );
   }

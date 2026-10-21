@@ -1,17 +1,16 @@
-// JS-contention pilot on the paddle game (docs/research/js-contention-plan.md). Runs an explicit
+// JS-contention pilot on the paddle game. Runs an explicit
 // manifest of contention runs of the consumer built with
 // `FIXTURE=paddle-game FIXTURE_FILES="game.ts contention.ts" MODULES=example-vello2d PACKS=rnrs-surface NAME=game-app scripts/consumer/rn-app.sh`.
 //
 // Usage (inside `nix develop`): node scripts/consumer/contention-device-test.mjs <adb-serial> [pilot|feasibility|A|B]
 //
-// Trials: "pilot" (docs/research/js-contention-plan.md); "feasibility", "A" and "B"
-// (docs/research/js-contention-trial2-plan.md): throughput phase only, at least 30 s rest between
+// Trials: "pilot"; "feasibility", "A" and "B": throughput phase only, at least 30 s rest between
 // runs (longer, up to 5 min, while the thermal status is above 0; recorded, and the run goes ahead),
 // thermal status recorded as a result, and one retry only for a capture failure (incomplete data,
 // crash, timeout) with the first attempt's files kept as run-<n>-attempt1.*.
 //
 // Per run: force-stop (a fresh process), clear all log buffers, record thermal status, stream
-// logcat to a file, start the activity with the run's rnrgame://contention data URI (VIEW action,
+// logcat to a file, start the activity with the run's rnrsgame://contention data URI (VIEW action,
 // read by Linking.getInitialURL). During the warm-up: meminfo and a gfxinfo reset, the
 // SurfaceFlinger layer list. 9.2 s into each measured phase (after the burst-500 stall):
 // `dumpsys SurfaceFlinger --latency` for each SurfaceView layer of the app. In the touch phase:
@@ -238,10 +237,6 @@ writeFileSync(
   path.join(dir, 'manifest.json'),
   JSON.stringify(
     {
-      plan:
-        TRIAL === 'pilot'
-          ? 'docs/research/js-contention-plan.md'
-          : 'docs/research/js-contention-trial2-plan.md',
       trial: TRIAL,
       device,
       provenance,
@@ -279,7 +274,7 @@ check(
 );
 
 const uriOf = (r) =>
-  `rnrgame://contention?profile=${r.profile}&placement=${r.placement}&instrumented=${r.instrumented ? 1 : 0}&touch=${r.touch ? 1 : 0}&churn=${r.churn}&hermes=${r.hermes}&run=${r.id}`;
+  `rnrsgame://contention?profile=${r.profile}&placement=${r.placement}&instrumented=${r.instrumented ? 1 : 0}&touch=${r.touch ? 1 : 0}&churn=${r.churn}&hermes=${r.hermes}&run=${r.id}`;
 const thermalStatus = (text) => Number(text.match(/Thermal Status:\s*(\d+)/)?.[1] ?? NaN);
 /** App log lines (this pid) from the streamed logcat file: {t (epoch s), text}. */
 function appLines(file, pid) {
@@ -292,12 +287,12 @@ function appLines(file, pid) {
 }
 const events = (lines) =>
   lines
-    .filter((l) => l.text.startsWith('RNR_CONTENTION '))
+    .filter((l) => l.text.startsWith('RNRS_CONTENTION '))
     .map((l) => ({ ...JSON.parse(l.text.slice(15)), _t: l.t }));
 function assemble(lines) {
   const parts = {};
   for (const l of lines) {
-    if (!l.text.startsWith('RNR_CONTENTION_DATA ')) continue;
+    if (!l.text.startsWith('RNRS_CONTENTION_DATA ')) continue;
     const c = JSON.parse(l.text.slice(20));
     (parts[c.key] ??= { parts: c.parts, chunks: [] }).chunks[c.part] = c.data;
   }

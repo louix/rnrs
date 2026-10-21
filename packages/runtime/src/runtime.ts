@@ -149,7 +149,7 @@ export const conversionHelpers = Object.freeze({
 
 export type ErrorCode = 'cancelled' | 'overloaded' | 'closed' | 'failed' | 'lost';
 
-export class RnrError extends Error {
+export class RnrsError extends Error {
   constructor(
     readonly code: ErrorCode,
     message: string,
@@ -158,7 +158,7 @@ export class RnrError extends Error {
     readonly scope?: 'module' | 'executor',
   ) {
     super(message);
-    this.name = code === 'cancelled' ? 'AbortError' : 'RnrError';
+    this.name = code === 'cancelled' ? 'AbortError' : 'RnrsError';
   }
 }
 
@@ -260,7 +260,7 @@ export interface Backend {
 
 let backend: Backend | undefined;
 let missingBackend =
-  '@rnrs/runtime: no platform backend is installed (import @rnrs/runtime under React Native, or call initRnr from @rnrs/runtime/web in the browser)';
+  '@rnrs/runtime: no platform backend is installed (import @rnrs/runtime under React Native, or call initRnrs from @rnrs/runtime/web in the browser)';
 
 /** Called once by the platform entry point (native.ts, web.ts) or a test harness. */
 export function setBackend(b: Backend): void {
@@ -282,19 +282,19 @@ const Status = { Ok: 0, Cancelled: 1, Failed: 2, Lost: 3 } as const;
 
 interface PendingOperation {
   resolve(value: unknown): void;
-  reject(error: RnrError): void;
+  reject(error: RnrsError): void;
   detach(): void;
   wrap?: (value: unknown) => unknown;
 }
 
-function admitError(failure: AdmitFailure): RnrError {
+function admitError(failure: AdmitFailure): RnrsError {
   switch (failure.code) {
     case -1:
-      return new RnrError('closed', failure.message);
+      return new RnrsError('closed', failure.message);
     case -2:
-      return new RnrError('overloaded', failure.message, 'module');
+      return new RnrsError('overloaded', failure.message, 'module');
     default:
-      return new RnrError('overloaded', failure.message, 'executor');
+      return new RnrsError('overloaded', failure.message, 'executor');
   }
 }
 
@@ -343,17 +343,17 @@ export class ModuleHost {
         try {
           operation.resolve(operation.wrap ? operation.wrap(value) : value);
         } catch (error) {
-          operation.reject(new RnrError('failed', String(error)));
+          operation.reject(new RnrsError('failed', String(error)));
         }
         break;
       case Status.Cancelled:
-        operation.reject(new RnrError('cancelled', 'operation cancelled'));
+        operation.reject(new RnrsError('cancelled', 'operation cancelled'));
         break;
       case Status.Lost:
-        operation.reject(new RnrError('lost', 'executor dropped the operation'));
+        operation.reject(new RnrsError('lost', 'executor dropped the operation'));
         break;
       default:
-        operation.reject(new RnrError('failed', message));
+        operation.reject(new RnrsError('failed', message));
     }
   }
 
@@ -379,7 +379,7 @@ export class ModuleHost {
     wrap?: (value: unknown) => unknown,
   ): Promise<unknown> {
     const signal = options?.signal;
-    if (signal?.aborted) return Promise.reject(new RnrError('cancelled', 'aborted before start'));
+    if (signal?.aborted) return Promise.reject(new RnrsError('cancelled', 'aborted before start'));
     let started: unknown;
     try {
       started = this.adapter.call(index, receiver, args);
@@ -428,7 +428,7 @@ export class ModuleHost {
     this.pendingOps.clear();
     for (const operation of operations) {
       operation.detach();
-      operation.reject(new RnrError('closed', 'runtime adapter torn down'));
+      operation.reject(new RnrsError('closed', 'runtime adapter torn down'));
     }
   }
 }

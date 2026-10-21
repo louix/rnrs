@@ -43,7 +43,7 @@ mod tokio_adapter {
         pub fn owned(worker_threads: usize) -> std::io::Result<Self> {
             let runtime = tokio::runtime::Builder::new_multi_thread()
                 .worker_threads(worker_threads)
-                .thread_name("rnr-tokio")
+                .thread_name("rnrs-tokio")
                 .enable_all()
                 .build()?;
             Ok(Self { handle: runtime.handle().clone(), _owned: Some(Arc::new(Owned(Some(runtime)))) })

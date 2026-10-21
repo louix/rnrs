@@ -269,7 +269,7 @@ pub fn spawn_with<P: Presenter>(surface: &Surface, presenter: P, cap: usize, eve
     });
     let (thread_shared, thread_surface) = (shared.clone(), surface.clone());
     std::thread::Builder::new()
-        .name("rnr-vello2d".into())
+        .name("rnrs-vello2d".into())
         .spawn(move || {
             let _slot = slot; // released after run() has dropped the presenter
             run(thread_shared, thread_surface, presenter);
@@ -280,7 +280,7 @@ pub fn spawn_with<P: Presenter>(surface: &Surface, presenter: P, cap: usize, eve
 }
 
 fn record_error(shared: &Shared, error: String) {
-    log::warn!("rnr-vello2d: {error}");
+    log::warn!("rnrs-vello2d: {error}");
     let mut stats = lock(&shared.stats);
     stats.surface_errors += 1;
     stats.last_error = Some(error);
@@ -452,7 +452,7 @@ fn run<P: Presenter>(shared: Arc<Shared>, surface: Surface, mut presenter: P) {
                     stats.last_submit_to_present_ms = submitted.elapsed().as_secs_f64() * 1e3;
                 }
             }
-            Err(PresentError::Skipped(reason)) => log::debug!("rnr-vello2d: frame skipped: {reason}"),
+            Err(PresentError::Skipped(reason)) => log::debug!("rnrs-vello2d: frame skipped: {reason}"),
             // Detached or closed: the snapshot shows it on the next iteration (the waker fired).
             Err(PresentError::Revoked) => {}
             // The state is recorded first, then old resources are dropped here, on this

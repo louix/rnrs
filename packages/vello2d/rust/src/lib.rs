@@ -29,11 +29,11 @@ mod render;
 #[path = "web_render.rs"]
 mod render;
 mod render_state;
-pub mod rnr_interface;
+pub mod rnrs_interface;
 mod timing;
 
 use render::Shared;
-use rnr_interface as spec;
+use rnrs_interface as spec;
 
 /// Render threads alive at once in the process (each with its own Vulkan device), counting
 /// closed renderers still releasing their resources.

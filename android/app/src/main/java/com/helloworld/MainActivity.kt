@@ -27,10 +27,10 @@ class MainActivity : ReactActivity() {
   private val reloadReceiver = object : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
       val host = (application as ReactApplication).reactHost ?: return
-      Log.i("rnr", "lifecycle test hook: ${intent.action} at ${System.currentTimeMillis()}")
+      Log.i("rnrs", "lifecycle test hook: ${intent.action} at ${System.currentTimeMillis()}")
       when (intent.action) {
-        RELOAD -> host.reload("rnr reload test")
-        DESTROY -> host.destroy("rnr destroy test", null) { _ -> runOnUiThread { recreate() } }
+        RELOAD -> host.reload("rnrs reload test")
+        DESTROY -> host.destroy("rnrs destroy test", null) { _ -> runOnUiThread { recreate() } }
         SCOPE_STRESS -> ScopeStress.run()
       }
     }
@@ -39,10 +39,10 @@ class MainActivity : ReactActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     if (!beforeDestroyLogged) {
-      // Timeline diagnostics for docs/prototype.md: ReactHost's before-destroy step (UI thread).
+      // Timeline diagnostics: ReactHost's before-destroy step (UI thread).
       beforeDestroyLogged = true
       (application as ReactApplication).reactHost?.addBeforeDestroyListener {
-        Log.i("rnr", "ReactHost before-destroy listeners at ${System.currentTimeMillis()}")
+        Log.i("rnrs", "ReactHost before-destroy listeners at ${System.currentTimeMillis()}")
       }
     }
     window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -73,6 +73,6 @@ class MainActivity : ReactActivity() {
   override fun createReactActivityDelegate(): ReactActivityDelegate =
       object : DefaultReactActivityDelegate(this, mainComponentName, fabricEnabled) {
         override fun getLaunchOptions(): Bundle =
-            Bundle().apply { putString("mode", intent?.getStringExtra("mode") ?: "rnr") }
+            Bundle().apply { putString("mode", intent?.getStringExtra("mode") ?: "rnrs") }
       }
 }

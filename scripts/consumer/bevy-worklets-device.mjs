@@ -34,7 +34,7 @@ const reports = (tag) =>
     .split('\n')
     .filter((l) => l.includes(tag + ' '))
     .map((l) => JSON.parse(l.slice(l.indexOf(tag + ' ') + tag.length + 1)));
-const latest = () => reports('RNR_INPUT').at(-1);
+const latest = () => reports('RNRS_INPUT').at(-1);
 async function until(test, label, timeout = 30000) {
   const end = Date.now() + timeout;
   while (Date.now() < end) {
@@ -62,7 +62,7 @@ const swipe = (duration) =>
     child.on('exit', (code) => (code === 0 ? resolve() : reject(new Error('swipe exit ' + code))));
   });
 function tap(id) {
-  const b = reports('RNR_BUTTON').find((b) => b.id === id);
+  const b = reports('RNRS_BUTTON').find((b) => b.id === id);
   if (!b) throw new Error('button missing: ' + id);
   const density = adb('shell', 'wm', 'density');
   const dpi = Number(
@@ -119,9 +119,9 @@ try {
     execFileSync('adb', ['-s', serial, 'exec-out', 'screencap', '-p']),
   );
   tap('Stall JS');
-  await until(() => reports('RNR_STALL_ARMED').length, 'stall armed');
+  await until(() => reports('RNRS_STALL_ARMED').length, 'stall armed');
   await swipe(2400);
-  const stall = await until(() => reports('RNR_STALL').at(-1), 'stall finished');
+  const stall = await until(() => reports('RNRS_STALL').at(-1), 'stall finished');
   check(
     'Rust receipt continues inside 1.5 second RN JS stall',
     stall.after.inputReceived > stall.before.inputReceived && stall.elapsedMs >= 1500,
@@ -158,7 +158,7 @@ try {
 } finally {
   writeFileSync(
     path.join(output, 'logcat.txt'),
-    adb('logcat', '-d', '-s', 'ReactNativeJS:*', 'RnrRuntime:*', 'RNR:*'),
+    adb('logcat', '-d', '-s', 'ReactNativeJS:*', 'RnrsRuntime:*', 'RNRS:*'),
   );
   const crashes = adb('logcat', '-d', '-b', 'crash');
   check('no app crash', !crashes.includes('com.helloworld'), crashes);

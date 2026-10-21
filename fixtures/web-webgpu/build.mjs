@@ -33,20 +33,20 @@ for (const dir of ['vello2d', 'fixtures/webgpu-triangle']) {
 // package enables; this fixture's bundle does, unless --default-exports builds it as an app would
 // (then the hook must be absent; only the build and that check run).
 const defaultExports = process.argv.includes('--default-exports');
-if (!defaultExports) process.env.RNR_BUNDLE_FEATURES ??= 'rnrs-surface/lab-hooks';
+if (!defaultExports) process.env.RNRS_BUNDLE_FEATURES ??= 'rnrs-surface/lab-hooks';
 buildBundle(fixture, 'web', {
-  out: path.join(fixture, 'rnr'),
+  out: path.join(fixture, 'rnrs'),
   locked: existsSync(lockFile(fixture, 'web')),
-  offline: process.env.RNR_OFFLINE !== '0',
+  offline: process.env.RNRS_OFFLINE !== '0',
 });
-const bindings = readFileSync(path.join(fixture, 'rnr/pkg/rnr_bundle.js'), 'utf8');
-const hasHook = /export function rnr_surface_hold_gpu_setups_for_testing\b/.test(bindings);
+const bindings = readFileSync(path.join(fixture, 'rnrs/pkg/rnrs_bundle.js'), 'utf8');
+const hasHook = /export function rnrs_surface_hold_gpu_setups_for_testing\b/.test(bindings);
 if (hasHook === defaultExports)
   throw new Error(
-    `rnr_surface_hold_gpu_setups_for_testing is ${hasHook ? 'exported' : 'missing'} in a ${defaultExports ? 'default' : 'lab'} build`,
+    `rnrs_surface_hold_gpu_setups_for_testing is ${hasHook ? 'exported' : 'missing'} in a ${defaultExports ? 'default' : 'lab'} build`,
   );
 console.log(
-  `exports: rnr_surface_hold_gpu_setups_for_testing ${hasHook ? 'present (lab build)' : 'absent (default build)'}`,
+  `exports: rnrs_surface_hold_gpu_setups_for_testing ${hasHook ? 'present (lab build)' : 'absent (default build)'}`,
 );
 if (defaultExports) process.exit(0);
 const run = (cmd, args, env = process.env) => {
@@ -62,20 +62,20 @@ run('esbuild', [
   '--outfile=' + path.join(fixture, 'dist/main.js'),
 ]);
 if (process.argv.includes('--test')) {
-  const env = { ...process.env, RNR_WEB_ROOT: fixture };
+  const env = { ...process.env, RNRS_WEB_ROOT: fixture };
   run('node', ['scripts/web-test.mjs', path.join(fixture, 'result-unsupported.json')], {
     ...env,
-    RNR_WEB_QUERY: 'expect=unsupported',
+    RNRS_WEB_QUERY: 'expect=unsupported',
   });
   run('node', ['scripts/web-test.mjs', path.join(fixture, 'result-swiftshader.json')], {
     ...env,
-    RNR_WEB_QUERY: 'expect=webgpu',
-    RNR_WEB_UNSAFE_WEBGPU: '1',
+    RNRS_WEB_QUERY: 'expect=webgpu',
+    RNRS_WEB_UNSAFE_WEBGPU: '1',
   });
   // Hook reentrancy and setup interleaving (rnrs::gpu), in a fresh browser.
   run('node', ['scripts/web-test.mjs', path.join(fixture, 'result-reentrancy.json')], {
     ...env,
-    RNR_WEB_QUERY: 'expect=reentrancy',
-    RNR_WEB_UNSAFE_WEBGPU: '1',
+    RNRS_WEB_QUERY: 'expect=reentrancy',
+    RNRS_WEB_UNSAFE_WEBGPU: '1',
   });
 }

@@ -24,7 +24,7 @@ const json = (file, value) => {
 };
 
 function app(logging) {
-  const dir = mkdtempSync(path.join(tmpdir(), 'rnr-logging-'));
+  const dir = mkdtempSync(path.join(tmpdir(), 'rnrs-logging-'));
   json(path.join(dir, 'package.json'), {
     name: 'app',
     dependencies: { '@rnrs/example-counter': '1' },
@@ -76,14 +76,14 @@ test('logging config: default off, managed defaults, external, and actionable er
 test('generated bundles: nothing for default off; rnrs-log, build check and install for managed; link only for external', () => {
   for (const target of ['android', 'ios', 'web']) {
     withApp(undefined, (dir) => {
-      const { crateDir } = generateBundle(dir, target, path.join(dir, '.rnr', target));
+      const { crateDir } = generateBundle(dir, target, path.join(dir, '.rnrs', target));
       const cargo = readFileSync(path.join(crateDir, 'Cargo.toml'), 'utf8');
       assert.doesNotMatch(cargo, /rnrs-log|build-dependencies/);
       assert.equal(existsSync(path.join(crateDir, 'build.rs')), false);
       assert.doesNotMatch(readFileSync(path.join(crateDir, 'src/lib.rs'), 'utf8'), /rnrs_log/);
     });
     withApp({ filter: 'info,sled=warn', iosPrivacy: 'public' }, (dir) => {
-      const { crateDir } = generateBundle(dir, target, path.join(dir, '.rnr', target));
+      const { crateDir } = generateBundle(dir, target, path.join(dir, '.rnrs', target));
       const cargo = readFileSync(path.join(crateDir, 'Cargo.toml'), 'utf8');
       assert.match(cargo, /^rnrs-log = \{ path = ".*rust\/rnrs-log" \}$/m);
       assert.match(
@@ -102,7 +102,7 @@ test('generated bundles: nothing for default off; rnrs-log, build check and inst
       );
     });
     withApp({ mode: 'external' }, (dir) => {
-      const { crateDir } = generateBundle(dir, target, path.join(dir, '.rnr', target));
+      const { crateDir } = generateBundle(dir, target, path.join(dir, '.rnrs', target));
       assert.match(readFileSync(path.join(crateDir, 'Cargo.toml'), 'utf8'), /^rnrs-log = /m);
       assert.equal(existsSync(path.join(crateDir, 'build.rs')), false);
       assert.doesNotMatch(
@@ -113,7 +113,7 @@ test('generated bundles: nothing for default off; rnrs-log, build check and inst
   }
   // Turning logging off again removes the generated build script.
   withApp({}, (dir) => {
-    const out = path.join(dir, '.rnr/android');
+    const out = path.join(dir, '.rnrs/android');
     generateBundle(dir, 'android', out);
     assert.equal(existsSync(path.join(out, 'bundle/build.rs')), true);
     json(path.join(dir, 'package.json'), {
@@ -175,7 +175,7 @@ if (!process.env.CARGO_HOME && existsSync(path.join(local, 'cargo'))) {
   process.env.RUSTUP_HOME ??= path.join(local, 'rustup');
   process.env.RUSTUP_TOOLCHAIN ??= '1.90.0';
 }
-const cargo = process.env.RNR_CARGO ?? 'cargo';
+const cargo = process.env.RNRS_CARGO ?? 'cargo';
 const skip = spawnSync(cargo, ['--version']).status === 0 ? false : 'cargo is not available';
 
 test(
@@ -187,7 +187,7 @@ test(
       ['info,sled=warn', true],
     ]) {
       withApp({ filter }, (dir) => {
-        const { crateDir } = generateBundle(dir, 'android', path.join(dir, '.rnr/android'));
+        const { crateDir } = generateBundle(dir, 'android', path.join(dir, '.rnrs/android'));
         // The root workspace lock pins the same dependency versions; cargo stays offline.
         writeFileSync(
           path.join(crateDir, 'Cargo.lock'),

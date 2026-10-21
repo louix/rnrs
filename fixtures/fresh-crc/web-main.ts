@@ -1,16 +1,16 @@
 // The fresh Vite consumer: load the app's Wasm bundle, then run the smoke test.
-import { initRnr } from '@rnrs/runtime/web';
-import * as bundle from './.rnr/web/pkg/rnr_bundle.js';
+import { initRnrs } from '@rnrs/runtime/web';
+import * as bundle from './.rnrs/web/pkg/rnrs_bundle.js';
 import { runSmoke } from './smoke';
 
 async function main() {
-  await initRnr(bundle);
+  await initRnrs(bundle);
   const result = await runSmoke();
-  (globalThis as any).__rnrResult = { platform: 'web', userAgent: navigator.userAgent, ...result };
+  (globalThis as any).__rnrsResult = { platform: 'web', userAgent: navigator.userAgent, ...result };
   document.getElementById('out')!.textContent = JSON.stringify(result, null, 2);
 }
 main().catch((error) => {
-  (globalThis as any).__rnrResult = {
+  (globalThis as any).__rnrsResult = {
     platform: 'web',
     ok: false,
     checks: [],

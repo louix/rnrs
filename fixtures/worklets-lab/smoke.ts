@@ -1,5 +1,5 @@
-// Worklets lab checks, staged as in docs/research/worklets-poc-plan.md. Test-hooks build only
-// (RNR_TEST_HOOKS=1); uses lab diagnostics from @rnrs/runtime/testing.
+// Worklets lab checks, in stages. Test-hooks build only
+// (RNRS_TEST_HOOKS=1); uses lab diagnostics from @rnrs/runtime/testing.
 import * as Worklets from 'react-native-worklets';
 import {
   createWorkletRuntime,
@@ -8,7 +8,7 @@ import {
   scheduleOnUI,
 } from 'react-native-worklets';
 import { makeMutable } from 'react-native-reanimated';
-import { enableWorklets, isRnrClosedError, workletEndpoint } from '@rnrs/runtime/worklets';
+import { enableWorklets, isRnrsClosedError, workletEndpoint } from '@rnrs/runtime/worklets';
 import type { GestureLabProps, GestureStats } from './GestureLab';
 
 // The app's GestureLab mount (W6): the smoke supplies its props when the stage starts.
@@ -85,7 +85,7 @@ export async function runWorkletsSmoke(): Promise<WorkletsResult> {
     rn,
   );
   check(
-    'W1: UI call arrives in another runtime (address differs, no rnr identity), binding refuses',
+    'W1: UI call arrives in another runtime (address differs, no rnrs identity), binding refuses',
     !!ui && !ui.sameAddress && ui.callIdentity === 0 && !ui.acceptedByInstallBinding,
     ui,
   );
@@ -103,7 +103,7 @@ export async function runWorkletsSmoke(): Promise<WorkletsResult> {
   // unguarded adapter must never be called from a worklet runtime.
   if (bindings.runtimeGuard !== true) {
     check(
-      'W2: native runtime guard present (__rnrRuntime.runtimeGuard)',
+      'W2: native runtime guard present (__rnrsRuntime.runtimeGuard)',
       false,
       'older native library',
     );
@@ -143,8 +143,8 @@ export async function runWorkletsSmoke(): Promise<WorkletsResult> {
     observations.foreignCalls = foreign;
     for (const r of foreign)
       check(
-        `W2: ${r.what} from the UI runtime throws ERR_RNR_FOREIGN_RUNTIME`,
-        r.threw && r.code === 'ERR_RNR_FOREIGN_RUNTIME',
+        `W2: ${r.what} from the UI runtime throws ERR_RNRS_FOREIGN_RUNTIME`,
+        r.threw && r.code === 'ERR_RNRS_FOREIGN_RUNTIME',
         r,
       );
     // The adapter is untouched: same results, still open, the handle not disposed.
@@ -209,7 +209,7 @@ async function reloadIteration(
   const ep = workletEndpoint(probe, ['scale', 'Accumulator.add']) as any;
   enableWorklets(Worklets);
   const acc = probe.createAccumulator(0);
-  const custom = createWorkletRuntime({ name: `rnr-lab-${iteration}` });
+  const custom = createWorkletRuntime({ name: `rnrs-lab-${iteration}` });
   runOnRuntimeSync(custom, () => {
     'worklet';
     (globalThis as any).__labAcc = acc;
@@ -228,9 +228,9 @@ async function reloadIteration(
           g.__labAcc.add(1);
           g.__labCalls++;
         } catch (error) {
-          // Contained: ERR_RNR_CLOSED is expected once the scope is torn down; anything else
+          // Contained: ERR_RNRS_CLOSED is expected once the scope is torn down; anything else
           // is recorded as a failure (never rethrown into Reanimated's fatal path).
-          if (isRnrClosedError(error)) g.__labClosed++;
+          if (isRnrsClosedError(error)) g.__labClosed++;
           else if (g.__labUnexpected.length < 5)
             g.__labUnexpected.push(
               String((error as any)?.code) + ': ' + String((error as any)?.message ?? error),
@@ -299,14 +299,14 @@ async function endpointStages(
   // W3: endpoint creation (RN runtime). Async methods are refused when listed.
   const asyncAttempt = attempt(() => workletEndpoint(probe, ['scaleLater']));
   check(
-    'W3: listing an async method is refused (ERR_RNR_WORKLET_ASYNC)',
-    !asyncAttempt.ok && asyncAttempt.code === 'ERR_RNR_WORKLET_ASYNC',
+    'W3: listing an async method is refused (ERR_RNRS_WORKLET_ASYNC)',
+    !asyncAttempt.ok && asyncAttempt.code === 'ERR_RNRS_WORKLET_ASYNC',
     asyncAttempt,
   );
   const unknown = attempt(() => workletEndpoint(probe, ['nope']));
   check(
     'W3: listing an unknown method is refused',
-    !unknown.ok && unknown.code === 'ERR_RNR_WORKLET_SHAPE',
+    !unknown.ok && unknown.code === 'ERR_RNRS_WORKLET_SHAPE',
     unknown,
   );
   const ep = workletEndpoint(probe, [
@@ -346,7 +346,7 @@ async function endpointStages(
       missing: typeof ep.scaleLater,
     };
   };
-  const custom = createWorkletRuntime({ name: 'rnr-lab' });
+  const custom = createWorkletRuntime({ name: 'rnrs-lab' });
   const results = {
     rn: exercise(),
     ui: runOnUISync(exercise),
@@ -366,8 +366,8 @@ async function endpointStages(
     );
     const shapes = [r.stringResult, r.recordResult, r.arrayResult, r.nativeResult, r.tooManyArgs];
     check(
-      `W3 ${where}: string/record/array/native results and >4 args refused (ERR_RNR_WORKLET_SHAPE)`,
-      shapes.every((s) => !s.ok && s.code === 'ERR_RNR_WORKLET_SHAPE'),
+      `W3 ${where}: string/record/array/native results and >4 args refused (ERR_RNRS_WORKLET_SHAPE)`,
+      shapes.every((s) => !s.ok && s.code === 'ERR_RNRS_WORKLET_SHAPE'),
       shapes,
     );
     check(`W3 ${where}: unlisted method absent`, r.missing === 'undefined', r.missing);
@@ -495,7 +495,7 @@ async function endpointStages(
   );
 
   // W6: gesture and SharedValue forwarding. The device runner swipes once for each new
-  // "RNR_WORKLETS_SWIPE <tag>" line.
+  // "RNRS_WORKLETS_SWIPE <tag>" line.
   const reactions = probe.createAccumulator(0);
   const stats = makeMutable<GestureStats>({
     events: 0,
@@ -535,7 +535,7 @@ async function endpointStages(
     }
     return waited;
   };
-  console.log('RNR_WORKLETS_SWIPE w6');
+  console.log('RNRS_WORKLETS_SWIPE w6');
   const gestureWaited = await settle(
     () => stats.value.events >= 20 && reactions.value() >= 10,
     () => stats.value.events,
@@ -590,7 +590,7 @@ async function endpointStages(
   );
 
   // W5a: late calls after the RN runtime's scope is torn down (test hook: invalidation while
-  // JS still runs). Boxes and the endpoint stay allocated and refuse with ERR_RNR_CLOSED.
+  // JS still runs). Boxes and the endpoint stay allocated and refuse with ERR_RNRS_CLOSED.
   bindings.invalidateForTesting();
   const late = {
     rn: attempt(() => ep.scale(1, 2)),
@@ -606,18 +606,18 @@ async function endpointStages(
   observations.lateCalls = late;
   const all = [late.rn, ...late.ui, ...late.custom];
   check(
-    'W5a: endpoint and box calls after teardown throw ERR_RNR_CLOSED',
-    all.every((r) => !r.ok && r.code === 'ERR_RNR_CLOSED'),
+    'W5a: endpoint and box calls after teardown throw ERR_RNRS_CLOSED',
+    all.every((r) => !r.ok && r.code === 'ERR_RNRS_CLOSED'),
     all,
   );
   check('W5a: endpoint reports $open false after teardown', ep.$open === false, ep.$open);
 
   // W5a, late gestures (the view stays mounted). Phase 1: the handler sees $open false and
   // skips. Phase 2 (forced): the handler calls the closed endpoint without checking $open, so
-  // ERR_RNR_CLOSED is actually thrown on the UI thread and must be caught there (and in the
+  // ERR_RNRS_CLOSED is actually thrown on the UI thread and must be caught there (and in the
   // reaction it drives); an uncaught one would crash the app.
   const beforeSkip = stats.value;
-  console.log('RNR_WORKLETS_SWIPE late-skip');
+  console.log('RNRS_WORKLETS_SWIPE late-skip');
   await settle(
     () => stats.value.skippedClosed - beforeSkip.skippedClosed >= 5,
     () => stats.value.skippedClosed,
@@ -625,7 +625,7 @@ async function endpointStages(
   );
   const afterSkip = stats.value;
   control.value = { bypassOpen: true };
-  console.log('RNR_WORKLETS_SWIPE late-forced');
+  console.log('RNRS_WORKLETS_SWIPE late-forced');
   await settle(
     () =>
       stats.value.caughtClosed - afterSkip.caughtClosed >= 5 &&
@@ -654,7 +654,7 @@ async function endpointStages(
     lateGesture.skip,
   );
   check(
-    'W5a: forced late gesture calls threw ERR_RNR_CLOSED on the UI thread and were caught in the handler and the reaction',
+    'W5a: forced late gesture calls threw ERR_RNRS_CLOSED on the UI thread and were caught in the handler and the reaction',
     lateGesture.forced.caughtClosed > 0 &&
       lateGesture.forced.reactionCaughtClosed > 0 &&
       lateGesture.forced.skippedClosed === 0,

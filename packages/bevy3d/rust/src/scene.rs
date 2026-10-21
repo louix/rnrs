@@ -112,7 +112,7 @@ impl AssetReader for NoFiles {
 }
 
 fn no_files(path: &Path) -> AssetReaderError {
-    log::error!("rnr-bevy3d: {NO_FILES}: {}", path.display());
+    log::error!("rnrs-bevy3d: {NO_FILES}: {}", path.display());
     AssetReaderError::Io(std::sync::Arc::new(std::io::Error::new(std::io::ErrorKind::Unsupported, NO_FILES)))
 }
 
@@ -130,7 +130,7 @@ struct Sim {
 /// Cube rotation per logical pixel of horizontal drag.
 const DRAG_RADIANS_PER_POINT: f32 = 0.01;
 
-/// The entity named by every `TouchInput::window`: a marker for the rnr surface, not a Bevy
+/// The entity named by every `TouchInput::window`: a marker for the rnrs surface, not a Bevy
 /// `Window` (there is none).
 #[derive(Component)]
 pub struct SurfaceTouchTarget;
@@ -394,7 +394,7 @@ impl BevyScene {
             return Err(format!("offscreen size {}x{} outside 1..={max}", size.0, size.1));
         }
         let texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("rnr-bevy3d offscreen"),
+            label: Some("rnrs-bevy3d offscreen"),
             size: wgpu::Extent3d { width: size.0, height: size.1, depth_or_array_layers: 1 },
             mip_level_count: 1,
             sample_count: 1,

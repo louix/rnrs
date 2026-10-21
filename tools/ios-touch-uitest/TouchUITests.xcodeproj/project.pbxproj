@@ -124,7 +124,7 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				GENERATE_INFOPLIST_FILE = YES;
-				PRODUCT_BUNDLE_IDENTIFIER = dev.rustjsilab.rnr.touchuitests;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.rustjsilab.rnrs.touchuitests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphonesimulator";
 				SWIFT_VERSION = 5.0;

@@ -1,7 +1,7 @@
 // @rnrs/runtime Android library: lifecycle TurboModule (codegen spec in ../src/specs), the
-// generic JSI adapter (librnr.so), and the app's generated Rust bundle. Applications add
+// generic JSI adapter (librnrs.so), and the app's generated Rust bundle. Applications add
 // nothing: autolinking includes this project, and the Rust bundle is generated from the app's
-// npm dependencies by the rnrBuildRustBundle task below.
+// npm dependencies by the rnrsBuildRustBundle task below.
 apply plugin: "com.android.library"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
@@ -12,17 +12,17 @@ def ext(name, fallback) {
 
 // <app>/android is the Gradle root; the app's package.json is one level up.
 def appRoot = rootProject.projectDir.parentFile
-def rnrOut = new File(appRoot, ".rnr/android")
+def rnrsOut = new File(appRoot, ".rnrs/android")
 def architectures = (rootProject.findProperty("reactNativeArchitectures") ?: "armeabi-v7a,x86,x86_64,arm64-v8a").split(",").collect { it.trim() }
 def minSdk = ext("minSdkVersion", 24)
 // Native test hooks (scope invalidation, forced GC, forced copy fallback) are compiled only
-// for device test harnesses: Gradle property rnr.testHooks=true or RNR_TEST_HOOKS=1.
-def testHooks = rootProject.findProperty("rnr.testHooks") == "true" || System.getenv("RNR_TEST_HOOKS") == "1"
-// Attribution counters (docs/optimization.md): -Prnr.diagnostics=true. Never for measurements.
-def diagnostics = rootProject.findProperty("rnr.diagnostics") == "true"
+// for device test harnesses: Gradle property rnrs.testHooks=true or RNRS_TEST_HOOKS=1.
+def testHooks = rootProject.findProperty("rnrs.testHooks") == "true" || System.getenv("RNRS_TEST_HOOKS") == "1"
+// Attribution counters: -Prnrs.diagnostics=true. Never for measurements.
+def diagnostics = rootProject.findProperty("rnrs.diagnostics") == "true"
 
 android {
-  namespace "dev.rustjsilab.rnr"
+  namespace "dev.rustjsilab.rnrs"
   compileSdk ext("compileSdkVersion", 37)
   ndkVersion ext("ndkVersion", "27.1.12297006")
   if (rootProject.ext.has("buildToolsVersion")) buildToolsVersion rootProject.ext.buildToolsVersion
@@ -31,8 +31,8 @@ android {
     minSdkVersion minSdk
     externalNativeBuild {
       cmake {
-        arguments "-DANDROID_STL=c++_shared", "-DRNR_BUNDLE_TARGET_DIR=${new File(rnrOut, "target").absolutePath}",
-            "-DRNR_TEST_HOOKS=${testHooks ? "ON" : "OFF"}", "-DRNR_DIAGNOSTICS=${diagnostics ? "ON" : "OFF"}"
+        arguments "-DANDROID_STL=c++_shared", "-DRNRS_BUNDLE_TARGET_DIR=${new File(rnrsOut, "target").absolutePath}",
+            "-DRNRS_TEST_HOOKS=${testHooks ? "ON" : "OFF"}", "-DRNRS_DIAGNOSTICS=${diagnostics ? "ON" : "OFF"}"
         abiFilters(*architectures)
       }
     }
@@ -59,14 +59,14 @@ def clangPrefix = ["arm64-v8a": "aarch64-linux-android", "armeabi-v7a": "armv7a-
 
 // Generates the app's Rust bundle crate from its dependency graph and builds it per ABI.
 // Requires node, cargo and the Rust Android targets (rustup target add ...) on PATH; set
-// RNR_CARGO to use another cargo, and -Prnr.node=/path/to/node or NODE_BINARY another node. Always runs: cargo itself decides what is up to date.
-// Uses the app's rnr-android.Cargo.lock (created on the first build if absent). CI:
-// -Prnr.locked=true (or RNR_LOCKED=1) fails if that lock is missing or stale.
-def rnrBuildRustBundle = tasks.register("rnrBuildRustBundle", Exec) {
-  group = "rnr"
+// RNRS_CARGO to use another cargo, and -Prnrs.node=/path/to/node or NODE_BINARY another node. Always runs: cargo itself decides what is up to date.
+// Uses the app's rnrs-android.Cargo.lock (created on the first build if absent). CI:
+// -Prnrs.locked=true (or RNRS_LOCKED=1) fails if that lock is missing or stale.
+def rnrsBuildRustBundle = tasks.register("rnrsBuildRustBundle", Exec) {
+  group = "rnrs"
   description = "Generate and build the app's Rust module bundle"
   workingDir appRoot
-  if (diagnostics) environment "RNR_BUNDLE_FEATURES", "rnrs-android/diagnostics"
+  if (diagnostics) environment "RNRS_BUNDLE_FEATURES", "rnrs-android/diagnostics"
   doFirst {
     def ndk = android.ndkDirectory
     def host = System.getProperty("os.name").toLowerCase().contains("mac") ? "darwin-x86_64" : "linux-x86_64"
@@ -80,23 +80,23 @@ def rnrBuildRustBundle = tasks.register("rnrBuildRustBundle", Exec) {
       environment "CARGO_TARGET_${key.toUpperCase()}_LINKER", new File(bin, "${clangPrefix[abi]}${minSdk}-clang").absolutePath
     }
   }
-  def locked = rootProject.findProperty("rnr.locked") == "true" ? ["--locked"] : []
-  // The node executable: Gradle property rnr.node, else NODE_BINARY (as React Native's iOS
+  def locked = rootProject.findProperty("rnrs.locked") == "true" ? ["--locked"] : []
+  // The node executable: Gradle property rnrs.node, else NODE_BINARY (as React Native's iOS
   // scripts use), else `node` on PATH. Passed as one argument, so paths with spaces work.
-  def node = (rootProject.findProperty("rnr.node") ?: System.getenv("NODE_BINARY") ?: "node").toString()
+  def node = (rootProject.findProperty("rnrs.node") ?: System.getenv("NODE_BINARY") ?: "node").toString()
   doFirst {
     if (node.contains(File.separator) && !new File(node).isAbsolute())
-      throw new GradleException("rnr: node executable '${node}' (from -Prnr.node or NODE_BINARY) must be an absolute path or a command name on PATH")
+      throw new GradleException("rnrs: node executable '${node}' (from -Prnrs.node or NODE_BINARY) must be an absolute path or a command name on PATH")
     if (new File(node).isAbsolute() && !new File(node).canExecute())
-      throw new GradleException("rnr: node executable '${node}' (from -Prnr.node or NODE_BINARY) does not exist or is not executable")
+      throw new GradleException("rnrs: node executable '${node}' (from -Prnrs.node or NODE_BINARY) does not exist or is not executable")
   }
   commandLine([node, new File(projectDir, "../cli/run.mjs").absolutePath, "build", "--target", "android",
-      "--app", appRoot.absolutePath, "--out", rnrOut.absolutePath, "--abi", architectures.join(",")] + locked)
+      "--app", appRoot.absolutePath, "--out", rnrsOut.absolutePath, "--abi", architectures.join(",")] + locked)
 }
-preBuild.dependsOn rnrBuildRustBundle
+preBuild.dependsOn rnrsBuildRustBundle
 // CMake configure/build tasks are not necessarily ordered after preBuild; make
 // the bundle a direct prerequisite. (An IDE sync can configure CMake without this task; the
 // CMake script then warns instead of failing, and the first Gradle build builds the bundle.)
 tasks.configureEach { task ->
-  if (task.name.startsWith("configureCMake") || task.name.startsWith("buildCMake")) task.dependsOn rnrBuildRustBundle
+  if (task.name.startsWith("configureCMake") || task.name.startsWith("buildCMake")) task.dependsOn rnrsBuildRustBundle
 }

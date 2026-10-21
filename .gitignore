@@ -12,10 +12,10 @@ node_modules/
 *.tgz
 /rust/target/
 /rust/target/
-/.rnr/
-/web/rnr/
-/packages/*/rnr/
-/packages/fixtures/*/rnr/
+/.rnrs/
+/web/rnrs/
+/packages/*/rnrs/
+/packages/fixtures/*/rnrs/
 /fixtures/*/node_modules/
 /packages/runtime/android/build/
 /packages/runtime/android/.cxx/
@@ -27,5 +27,3 @@ node_modules/
 /fixtures/web-*/result*.jsonl
 /fixtures/web-paddle/provenance.json
 /fixtures/web-paddle/dpr-emulation.json
-/fixtures/web-webgpu-probe/canvas-loss.json
-/fixtures/web-webgpu-probe/canvas-readback.json

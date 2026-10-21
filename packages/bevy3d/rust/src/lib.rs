@@ -26,11 +26,11 @@ mod render;
 #[path = "web.rs"]
 mod render;
 mod canvas;
-pub mod rnr_interface;
+pub mod rnrs_interface;
 mod scene;
 
 use render::Shared;
-use rnr_interface as spec;
+use rnrs_interface as spec;
 
 /// Render threads alive at once in the process, each with its own GPU device and Bevy app,
 /// counting closed scenes still releasing their resources. Only one at a time has been run.
@@ -53,7 +53,7 @@ impl spec::Bevy3DModule for Module {
 
     fn create(&self) -> Result<Native<Scene>, String> {
         let surface = Surface::new()?;
-        // Android delivers touches only to views with touchInput="rust" (docs/bevy3d.md).
+        // Android delivers touches only to views with touchInput="rust" (packages/bevy3d/README.md).
         surface.enable_touch();
         let shared = match render::spawn(&surface, MAX_RENDER_THREADS) {
             Ok(shared) => shared,
@@ -207,7 +207,7 @@ impl spec::Scene for Scene {
 #[cfg(target_os = "android")]
 #[no_mangle]
 fn android_main(_app: android_activity::AndroidApp) {
-    log::error!("rnr-bevy3d: android_main was invoked; this module does not own an Android activity");
+    log::error!("rnrs-bevy3d: android_main was invoked; this module does not own an Android activity");
     std::process::abort();
 }
 

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Clean Vite consumer (inside `nix develop .#web`): a minimal Vite app whose only sources are
 # index.html, main.ts, smoke.ts and the vectors JSON, with the packed tarballs installed.
-# `rnrs build --target web` builds the app's Wasm bundle into its ignored .rnr/web; Vite then
+# `rnrs build --target web` builds the app's Wasm bundle into its ignored .rnrs/web; Vite then
 # bundles the app, and scripts/web-test.mjs runs dist/ in headless Chromium. The first
-# build creates the app's rnr-web.Cargo.lock; a relocated copy of the app (another absolute
-# path, no .rnr/) must then build with --locked against that lock unchanged, and --locked
+# build creates the app's rnrs-web.Cargo.lock; a relocated copy of the app (another absolute
+# path, no .rnrs/) must then build with --locked against that lock unchanged, and --locked
 # must fail once the lock is removed.
 # Usage: scripts/consumer/web-app.sh [results.json]
 # FIXTURE (fixtures/<FIXTURE>: index.html, web-main.ts, smoke.ts) and MODULES (packed
@@ -22,7 +22,7 @@ rm -rf "$APP"
 mkdir -p "$APP"
 cat > "$APP/package.json" <<'JSON'
 {
-  "name": "rnr-vite-consumer",
+  "name": "rnrs-vite-consumer",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -33,12 +33,12 @@ cp "$ROOT/fixtures/$FIXTURE/index.html" "$APP/index.html"
 cp "$ROOT/fixtures/$FIXTURE/web-main.ts" "$APP/main.ts"
 cp "$ROOT/fixtures/$FIXTURE/smoke.ts" "$APP/smoke.ts"
 cp "$ROOT/fixtures/blake3/test_vectors.json" "$APP/test_vectors.json"
-printf '.rnr/\nnode_modules/\ndist/\n' > "$APP/.gitignore"
+printf '.rnrs/\nnode_modules/\ndist/\n' > "$APP/.gitignore"
 tarballs=("$PACK/rnrs-cli-0.1.0.tgz" "$PACK/rnrs-runtime-0.1.0.tgz")
 for m in $MODULES; do tarballs+=("$PACK/rnrs-$m-0.1.0.tgz"); done
 (cd "$APP" && npm install --no-audit --no-fund "${tarballs[@]}")
-# Optional Rust logging configuration (RNR_APP_LOGGING, JSON for rustNativeApp.logging).
-if [ -n "${RNR_APP_LOGGING:-}" ]; then node "$ROOT/scripts/consumer/app-logging.mjs" "$APP" "$RNR_APP_LOGGING"; fi
+# Optional Rust logging configuration (RNRS_APP_LOGGING, JSON for rustNativeApp.logging).
+if [ -n "${RNRS_APP_LOGGING:-}" ]; then node "$ROOT/scripts/consumer/app-logging.mjs" "$APP" "$RNRS_APP_LOGGING"; fi
 
 export RUSTUP_HOME="${RUSTUP_HOME:-$ROOT/.generated/rustup}"
 export CARGO_HOME="${CARGO_HOME:-$ROOT/.generated/cargo}"
@@ -48,12 +48,12 @@ export RUSTUP_TOOLCHAIN="${RUSTUP_TOOLCHAIN:-1.90.0}"
 MOVED="$ROOT/.generated/consumer/$NAME-moved"
 rm -rf "$MOVED"
 mkdir -p "$MOVED"
-(cd "$APP" && tar --exclude=./.rnr --exclude=./dist -cf - .) | (cd "$MOVED" && tar -xf -)
+(cd "$APP" && tar --exclude=./.rnrs --exclude=./dist -cf - .) | (cd "$MOVED" && tar -xf -)
 (cd "$MOVED" && npx rnrs build --target web --app . --locked)
-cmp "$APP/rnr-web.Cargo.lock" "$MOVED/rnr-web.Cargo.lock"
-rm "$MOVED/rnr-web.Cargo.lock"
+cmp "$APP/rnrs-web.Cargo.lock" "$MOVED/rnrs-web.Cargo.lock"
+rm "$MOVED/rnrs-web.Cargo.lock"
 if (cd "$MOVED" && npx rnrs build --target web --app . --locked 2>/dev/null); then echo "--locked accepted a missing lock" >&2; exit 1; fi
 echo "relocated consumer built --locked with the same lock; --locked refused a missing lock"
 APP="$MOVED"
 (cd "$APP" && npx vite build --logLevel warn)
-RNR_WEB_ROOT="$APP/dist" node "$ROOT/scripts/web-test.mjs" "${1:-}"
+RNRS_WEB_ROOT="$APP/dist" node "$ROOT/scripts/web-test.mjs" "${1:-}"

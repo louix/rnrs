@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # The author workflow outside this repository (inside `nix develop .#web`): a new package
 # with only package.json, a TS spec and a Rust crate, plus @rnrs/runtime as a dev tool.
-#   rnrs generate .   -> rust/src/rnr_interface.rs (committed by the author)
+#   rnrs generate .   -> rust/src/rnrs_interface.rs (committed by the author)
 #   cargo test       -> the author's Rust tests, rnrs-core taken from the installed runtime
-#   rnrs pack-js .    -> rnr/{index,web}.ts, then npm pack
+#   rnrs pack-js .    -> rnrs/{index,web}.ts, then npm pack
 # The tarball is then installed into a fresh Vite app, bundled and run in headless Chromium.
 set -euo pipefail
 OUT_JSON="${1:+$(realpath -m "$1")}"
@@ -29,11 +29,11 @@ cat > "$PKG/package.json" <<'JSON'
     "spec": "xor.spec.ts",
     "rust": {"crate": "demo-xor", "path": "rust", "module": "Module"}
   },
-  "files": ["xor.spec.ts", "rust/Cargo.toml", "rust/src", "rnr"],
-  "main": "rnr/index.ts",
-  "types": "rnr/index.ts",
-  "browser": "rnr/web.ts",
-  "exports": {".": {"types": "./rnr/index.ts", "browser": "./rnr/web.ts", "default": "./rnr/index.ts"}},
+  "files": ["xor.spec.ts", "rust/Cargo.toml", "rust/src", "rnrs"],
+  "main": "rnrs/index.ts",
+  "types": "rnrs/index.ts",
+  "browser": "rnrs/web.ts",
+  "exports": {".": {"types": "./rnrs/index.ts", "browser": "./rnrs/web.ts", "default": "./rnrs/index.ts"}},
   "peerDependencies": {"@rnrs/runtime": "0.1.0"},
   "license": "UNLICENSED"
 }
@@ -55,7 +55,7 @@ npx rnrs generate .
 npx rnrs check .
 # rnrs-core is not on crates.io; resolve it to the installed framework copy for local builds.
 (cd rust && cargo test --config "patch.crates-io.rnrs-core.path=\"$PKG/node_modules/@rnrs/runtime/rust/rnrs-core\"" \
-  --target-dir "$PKG/.rnr/target" 2>&1 | grep -E '^test |test result')
+  --target-dir "$PKG/.rnrs/target" 2>&1 | grep -E '^test |test result')
 npx rnrs pack-js .
 tarball="$PKG/$(npm pack --ignore-scripts --silent)"
 echo "author tarball: $(tar -tzf "$tarball" | tr '\n' ' ')"
@@ -67,4 +67,4 @@ cp "$ROOT/fixtures/author/smoke.ts" main.ts
 npm install --no-audit --no-fund "$PACK/rnrs-cli-0.1.0.tgz" "$PACK/rnrs-runtime-0.1.0.tgz" "$tarball"
 npx rnrs build --target web --app .
 npx vite build --logLevel warn
-RNR_WEB_ROOT="$APP/dist" node "$ROOT/scripts/web-test.mjs" $OUT_JSON
+RNRS_WEB_ROOT="$APP/dist" node "$ROOT/scripts/web-test.mjs" $OUT_JSON

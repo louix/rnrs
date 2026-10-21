@@ -12,12 +12,12 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PATHS = {
   '@rnrs/runtime': 'packages/runtime/src/index.ts',
   '@rnrs/runtime/testing': 'packages/runtime/src/testing.ts',
-  '@rnrs/example-counter': '.generated/rnr/counter/index.ts',
-  '@rnrs/labs-meter': '.generated/rnr/meter/index.ts',
-  '@rnrs/labs-values': '.generated/rnr/values/index.ts',
-  '@rnrs/example-blake3': '.generated/rnr/rnrs_blake3/index.ts',
-  '@rnrs/example-http': '.generated/rnr/rnrs_http/index.ts',
-  '@rnrs/example-kv': '.generated/rnr/rnrs_kv/index.ts',
+  '@rnrs/example-counter': '.generated/rnrs/counter/index.ts',
+  '@rnrs/labs-meter': '.generated/rnrs/meter/index.ts',
+  '@rnrs/labs-values': '.generated/rnrs/values/index.ts',
+  '@rnrs/example-blake3': '.generated/rnrs/rnrs_blake3/index.ts',
+  '@rnrs/example-http': '.generated/rnrs/rnrs_http/index.ts',
+  '@rnrs/example-kv': '.generated/rnrs/rnrs_kv/index.ts',
 };
 for (const [name, write] of [
   ['ios-fixture-typecheck', writeIosFixture],

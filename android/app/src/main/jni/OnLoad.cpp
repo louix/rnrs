@@ -18,7 +18,7 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
     DefaultTurboModuleManagerDelegate::javaModuleProvider =
       [](const std::string& name, const JavaTurboModule::InitParams& params) -> std::shared_ptr<TurboModule> {
         if (auto module = FBReactNativeSpec_ModuleProvider(name, params)) return module;
-        return autolinking_ModuleProvider(name, params);  // includes the autolinked RnrRuntime module
+        return autolinking_ModuleProvider(name, params);  // includes the autolinked RnrsRuntime module
       };
     DefaultComponentsRegistry::registerComponentDescriptorsFromEntryPoint =
       [](std::shared_ptr<const ComponentDescriptorProviderRegistry> registry) {

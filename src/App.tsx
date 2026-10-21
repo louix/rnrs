@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Button, SafeAreaView, ScrollView, Text } from 'react-native';
-import { runRnrPrototype } from './rnrsAndroid';
+import { runRnrsPrototype } from './rnrsAndroid';
 
 export default function App() {
   const [status, setStatus] = useState('Waiting for startup to settle…');
@@ -11,7 +11,7 @@ export default function App() {
     active.current = true;
     setRunning(true);
     try {
-      await runRnrPrototype(setStatus);
+      await runRnrsPrototype(setStatus);
     } catch (error) {
       setStatus(String(error));
       console.error(error);
@@ -26,7 +26,7 @@ export default function App() {
     const timer = setTimeout(run, 500);
     return () => {
       clearTimeout(timer);
-      console.log(`rnr: surface unmounted at ${Date.now()}`);
+      console.log(`rnrs: surface unmounted at ${Date.now()}`);
     };
   }, []);
   /* oxlint-enable react-hooks/exhaustive-deps */

@@ -10,7 +10,7 @@
 //! Re-exports only: [`core`] is the framework's `rnrs-core` and [`surface`] its `rnrs-surface`,
 //! the same crate instances the app bundle links (it patches both to the installed copies), so
 //! types from here and from a direct `rnrs-core` dependency are identical. The generated
-//! `rnr_interface.rs` of a crate depending on `rnrs` refers to `rnrs::core`.
+//! `rnrs_interface.rs` of a crate depending on `rnrs` refers to `rnrs::core`.
 
 pub use rnrs_core as core;
 pub use rnrs_core::lifecycle::{Retire, TeardownScope};

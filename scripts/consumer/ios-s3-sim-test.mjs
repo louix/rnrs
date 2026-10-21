@@ -1,13 +1,12 @@
-// C1 stage S3 (docs/research/ios-surface-c1-design.md): the iOS surface lifecycle in the
-// simulator with the harness app (RNR_IOS_FIXTURE=surface-s3). Runs on the Mac:
+// The iOS surface lifecycle in the simulator with the harness app (RNRS_IOS_FIXTURE=surface-s3). Runs on the Mac:
 //   node scripts/consumer/ios-s3-sim-test.mjs --app <HelloWorld.app> --device <simulator udid>
-//     --bundle-id <id> --commit <sha> --out <result.json> [--mode <mode>] [--variant <bundle variant>]
+//     --bundle-id <id> --commit <sha> --out <result.json> [--mode full|probe]
 // The app polls this script's HTTP server (127.0.0.1:8765; the simulator shares the host's
 // network) for commands and posts reports. The app is launched with CA_DEBUG_TRANSACTIONS=1
 // and Main Thread Checker injected (whether it actually loaded is recorded from vmmap, not
 // assumed). Unified-log lines of the app process are streamed to a file.
 // The read-back and retirement gates read rnrs_surface info logs: build the app with
-// RNR_APP_LOGGING='{"filter":"warn,rnrs_surface=info,rnrs_vello2d=info","iosPrivacy":"public"}'
+// RNRS_APP_LOGGING='{"filter":"warn,rnrs_surface=info,rnrs_vello2d=info","iosPrivacy":"public"}'
 // (ios-app.sh), or those gates fail for lack of lines.
 //
 // Sequence (--mode full): cold launch; baseline; 20 background/foreground cycles (Settings to the
@@ -32,31 +31,15 @@ const APP = arg('app'),
   COMMIT = arg('commit'),
   OUT = arg('out');
 // --mode full (default): the sequence above.
-// --mode probe (run 3 B, the sublayer repro): cold launch; one resize; one background/foreground
+// --mode probe: cold launch; one resize; one background/foreground
 //   with the PID unchanged; one unmount/remount (the unmount closes a presenting renderer: the
 //   teardown, retiring when an operation is in flight at the revoke); presents after each step;
 //   the UIKit, Core Animation and read-back log gates.
-// --mode control-http (run 3 D1/D3/D4; bundles control-hook-http, control-quiesced-http,
-//   control-delayed-first-fetch): no surface; 10 reloads through the RnrRuntime hook, commanded
-//   over the HTTP transport. With --variant s3* (the S3 harness bundle and its E variants:
-//   s3-instrumented, s3-no-unmount-post) it is the matched repro: the same 10 reloads, each only
-//   while the current runtime presents.
-// --mode control-surface-nofetch (run 3 D2): the app reloads itself after presenting; the driver
-//   reads its console.log lines from the unified log and stops after 10 reloads.
-// Controls: a crash (the process gone or replaced, or no new runtime within 30 s) is recorded with
-// its reload index, the app is cold-launched again and the remaining reloads run; any crash, even
-// 1 in 10, fails the control, and the rate is stated. --variant names the JS bundle; the
-// provenance.json next to the app (scripts/consumer/ios-bundle-variant.sh) is recorded and checked.
 const MODE = process.argv.includes('--mode')
   ? process.argv[process.argv.indexOf('--mode') + 1]
   : 'full';
-if (!['full', 'probe', 'control-http', 'control-surface-nofetch'].includes(MODE))
-  throw new Error(`unknown --mode ${MODE}`);
-const VARIANT = process.argv.includes('--variant')
-  ? process.argv[process.argv.indexOf('--variant') + 1]
-  : 's3';
-const CONTROL_RELOADS = 10;
-// --reloads N: the full sequence's reload count (default 5; run 3's full S3 uses 10, matching D).
+if (!['full', 'probe'].includes(MODE)) throw new Error(`unknown --mode ${MODE}`);
+// --reloads N: the full sequence's reload count (default 5).
 const FULL_RELOADS = process.argv.includes('--reloads')
   ? Number(process.argv[process.argv.indexOf('--reloads') + 1])
   : 5;
@@ -157,15 +140,7 @@ const footprint = (pid) => {
 const sha256 = (file) => createHash('sha256').update(readFileSync(file)).digest('hex');
 const result = {
   mode: MODE,
-  variant: VARIANT,
   appBundleSha256: sha256(`${APP}/main.jsbundle`),
-  provenance: (() => {
-    try {
-      return JSON.parse(readFileSync(`${APP}/../provenance.json`, 'utf8'));
-    } catch {
-      return null;
-    }
-  })(),
   commit: COMMIT,
   app: APP,
   appBinarySha256: sha256(`${APP}/HelloWorld`),
@@ -208,35 +183,6 @@ const logStream = spawn(
   { stdio: ['ignore', 'pipe', 'ignore'] },
 );
 logStream.stdout.pipe(createWriteStream(logFile));
-// Control 2's console.log lines, parsed as they arrive (with the logging process).
-const d2 = { starts: [], reloads: [] };
-let logTail = '';
-logStream.stdout.on('data', (chunk) => {
-  const parts = (logTail + chunk).split('\n');
-  logTail = parts.pop();
-  for (const l of parts) {
-    let e;
-    try {
-      e = JSON.parse(l);
-    } catch {
-      continue;
-    }
-    const msg = e.eventMessage ?? '';
-    const s = msg.match(/RNR-D2 start runtime=(\S+)/);
-    if (s) d2.starts.push({ runtime: s[1], pid: e.processID });
-    const r = msg.match(
-      /RNR-D2 reload runtime=(\S+) state=(\S+) framesPresented=(\d+) surfaceKey=(\S+)/,
-    );
-    if (r)
-      d2.reloads.push({
-        runtime: r[1],
-        state: r[2],
-        framesPresented: Number(r[3]),
-        surfaceKey: r[4],
-        pid: e.processID,
-      });
-  }
-});
 // Main Thread Checker is injected only while it does not break the launch (the dylib is the
 // macOS one; whether it loaded is checked with vmmap, never assumed).
 let injectMtc = true;
@@ -297,56 +243,15 @@ async function coldLaunch(ready, what) {
   const pid = await waitFor(() => pidOf(), 10000, 'pid');
   return { pid, first };
 }
-const runtimeStarts = () => events.filter((e) => e.kind === 'runtime-start');
-/** What "ready" means for the mode: a new runtime (controls) or presenting (surface modes). */
-function readyFor() {
-  if (MODE === 'control-http') {
-    const n = runtimeStarts().length;
-    return () => runtimeStarts().length > n && runtimeStarts().at(-1);
-  }
-  if (MODE === 'control-surface-nofetch') {
-    const n = d2.starts.length;
-    return () => d2.starts.length > n && d2.starts.at(-1);
-  }
-  return () => {
-    const s = lastSnapshot();
-    return s?.renderer?.state === 'attached' && s.renderer.framesPresented > 10 && s;
-  };
-}
-function recordControl(reloads) {
-  const crashes = reloads.filter((r) => r.crashed);
-  result.control = {
-    variant: VARIANT,
-    reloads: reloads.length,
-    crashIndices: crashes.map((r) => r.i),
-    crashRate: `${crashes.length}/${reloads.length}`,
-  };
-  step('control reloads', { reloads });
-  check(
-    `control ${VARIANT}: no crash in ${CONTROL_RELOADS} reloads (any crash, even 1, counts as crashing)`,
-    reloads.length === CONTROL_RELOADS && crashes.length === 0,
-    result.control,
-  );
-}
+/** Ready: the surface attached and presenting. */
+const ready = () => {
+  const s = lastSnapshot();
+  return s?.renderer?.state === 'attached' && s.renderer.framesPresented > 10 && s;
+};
 try {
-  if (result.provenance) {
-    check(
-      "the app's bundle is the recorded variant (provenance.json)",
-      result.provenance.variant === VARIANT &&
-        result.provenance.bundleSha256 === result.appBundleSha256 &&
-        result.provenance.sourceCommit === COMMIT,
-      {
-        variant: [VARIANT, result.provenance.variant],
-        bundle: [result.appBundleSha256, result.provenance.bundleSha256],
-        commit: [COMMIT, result.provenance.sourceCommit],
-      },
-    );
-  } else if (VARIANT !== 's3') {
-    check('a swapped bundle has its provenance.json', false, `no provenance.json next to ${APP}`);
-  }
   // Install the app under test (as the touch and Bevy runners do), then cold launch.
   simctl('install', DEVICE, APP);
-  const { pid, first } = await coldLaunch(readyFor(), 'ready after cold launch');
+  const { pid, first } = await coldLaunch(ready, 'ready after cold launch');
   step('cold launch', { pid, snapshot: first });
   let vm = '';
   try {
@@ -640,147 +545,6 @@ try {
     result.probeThreadExit =
       !re.error && after?.renderer?.renderThreadsAlive === after?.renderer?.renderersOpen;
   }
-
-  if (MODE === 'control-http') {
-    const reloads = [];
-    let pidNow = pid;
-    for (let i = 0; i < CONTROL_RELOADS; i++) {
-      const n = runtimeStarts().length;
-      let crash = null,
-        report = null,
-        fresh = null,
-        presentedBefore = null;
-      if (VARIANT.startsWith('s3')) {
-        // The matched repro (the S3 harness bundle): reload only while this runtime presents.
-        const current = runtimeStarts().at(-1)?.runtime;
-        const s = await waitFor(
-          () => {
-            const v = latest.get(current)?.snapshot;
-            return v?.renderer?.state === 'attached' && v.renderer.framesPresented > 10 && v;
-          },
-          30000,
-          `presenting before reload ${i}`,
-        ).catch((e) => ({ error: String(e) }));
-        if (s.error) crash = s.error;
-        else presentedBefore = s.renderer.framesPresented;
-      }
-      if (!crash)
-        try {
-          report = await command('reload');
-        } catch (e) {
-          crash = `no reload report: ${e}`;
-        }
-      if (!crash) {
-        fresh = await waitFor(
-          () => runtimeStarts().length > n && runtimeStarts().at(-1),
-          30000,
-          `a new runtime after reload ${i}`,
-        ).catch((e) => ({ error: String(e) }));
-        if (fresh.error) crash = fresh.error;
-      }
-      if (!crash) {
-        await sleep(3000);
-        const p = pidOf();
-        if (p !== pidNow) crash = `process ${pidNow} -> ${p ?? 'gone'}`;
-      }
-      // s3* (a surface): the new runtime's renderer stats 3 s after it started; a thread exit is
-      // evidenced when renderThreadsAlive is back to renderersOpen (stats only, no harness post).
-      const sample =
-        !crash && VARIANT.startsWith('s3') ? (latest.get(fresh.runtime) ?? null) : null;
-      const after = sample?.snapshot?.renderer ?? null;
-      // How long after the new runtime started its sampled stats were taken (host clock), ~3 s.
-      const sampleDelayMs = sample ? sample.hostMs - fresh.hostMs : null;
-      reloads.push({
-        i,
-        crashed: !!crash,
-        crash,
-        presentedBefore,
-        quiesce: report?.quiesce ?? null,
-        runtime: fresh?.runtime ?? null,
-        pid: pidOf(),
-        ...(after
-          ? {
-              sampleDelayMs,
-              stateAfter: after.state,
-              presentedAfter: after.framesPresented,
-              renderersOpen: after.renderersOpen,
-              renderThreadsAlive: after.renderThreadsAlive,
-            }
-          : {}),
-      });
-      if (crash) {
-        await sleep(3000);
-        pidNow = (await coldLaunch(readyFor(), `ready after the crash at reload ${i}`)).pid;
-      }
-    }
-    recordControl(reloads);
-    if (VARIANT.startsWith('s3')) {
-      const ok = reloads.filter((r) => !r.crashed);
-      check(
-        's3*: after each completed reload the new runtime is attached, presenting, and its render threads are back to the open count',
-        ok.length > 0 &&
-          ok.every(
-            (r) =>
-              r.stateAfter === 'attached' &&
-              r.presentedAfter > 0 &&
-              r.renderThreadsAlive === r.renderersOpen,
-          ),
-        ok.map((r) => [r.i, r.stateAfter, r.presentedAfter, r.renderersOpen, r.renderThreadsAlive]),
-      );
-    }
-  }
-
-  if (MODE === 'control-surface-nofetch') {
-    const reloads = [];
-    let pidNow = pid;
-    for (let i = 0; i < CONTROL_RELOADS; i++) {
-      const nReload = d2.reloads.length,
-        nStart = d2.starts.length;
-      let crash = null,
-        fresh = null;
-      const line = await waitFor(
-        () => d2.reloads.length > nReload && d2.reloads[nReload],
-        30000,
-        `the reload line ${i}`,
-      ).catch((e) => ({ error: String(e) }));
-      if (line.error) crash = line.error;
-      if (!crash) {
-        fresh = await waitFor(
-          () => d2.starts.length > nStart && d2.starts.at(-1),
-          30000,
-          `a new runtime after reload ${i}`,
-        ).catch((e) => ({ error: String(e) }));
-        if (fresh.error) crash = fresh.error;
-      }
-      if (!crash && i === CONTROL_RELOADS - 1) await sleep(3000);
-      const p = pidOf();
-      if (!crash && p !== pidNow) crash = `process ${pidNow} -> ${p ?? 'gone'}`;
-      reloads.push({
-        i,
-        crashed: !!crash,
-        crash,
-        runtime: line.runtime ?? null,
-        state: line.state ?? null,
-        framesPresented: line.framesPresented ?? null,
-        linePid: line.pid ?? null,
-        nextRuntime: fresh?.runtime ?? null,
-        pid: p,
-      });
-      if (crash) {
-        await sleep(3000);
-        pidNow = (await coldLaunch(readyFor(), `ready after the crash at reload ${i}`)).pid;
-      }
-    }
-    recordControl(reloads);
-    // Teardown is exercised only if the surface was presenting at each reload.
-    const logged = reloads.filter((r) => r.state !== null);
-    check(
-      'control 2: every reload was logged with the surface attached and >= 30 frames presented in that runtime',
-      logged.length === CONTROL_RELOADS &&
-        logged.every((r) => r.state === 'attached' && r.framesPresented >= 30),
-      logged.map((r) => [r.i, r.state, r.framesPresented]),
-    );
-  }
 } catch (error) {
   check('run completed', false, String(error));
 } finally {
@@ -823,12 +587,12 @@ result.logs = {
   lines: lines.length,
   readbackYes: count(/read-back allowsNextDrawableTimeout=YES/),
   readbackNo: count(/read back NO/),
-  bound: count(/rnr-vello2d: bound /),
+  bound: count(/rnrs-vello2d: bound /),
   acquireRefused: count(/acquire refused/),
   retiredMs: { count: retired.length, max: retired.length ? Math.max(...retired) : null },
   retireWarnings: count(/window retired .* after its asynchronous revocation/) - retired.length,
-  attached: count(/RnrSurface: surface \d+: attached/),
-  revoked: count(/RnrSurface: surface \d+: revoked/),
+  attached: count(/RnrsSurface: surface \d+: attached/),
+  revoked: count(/RnrsSurface: surface \d+: revoked/),
   inactiveSkips: count(/not attached while the app is inactive/),
   resign: count(/will resign active/),
   becomeActive: count(/did become active/),
@@ -851,16 +615,13 @@ result.logs = {
     (consoleText.match(/CoreAnimation: (warning|[^\n]*transaction)/gi) ?? []).length +
     count(/CoreAnimation: .*(warning|uncommitted)/i),
 };
-// Runs with a surface: every mode except the no-surface HTTP controls (s3* variants have one).
-const surfaceRun = MODE !== 'control-http' || VARIANT.startsWith('s3');
-if (surfaceRun)
-  check(
-    'read-back YES after every configure (one per bind, none NO)',
-    result.logs.readbackNo === 0 &&
-      result.logs.readbackYes >= result.logs.bound &&
-      result.logs.bound > 0,
-    result.logs,
-  );
+check(
+  'read-back YES after every configure (one per bind, none NO)',
+  result.logs.readbackNo === 0 &&
+    result.logs.readbackYes >= result.logs.bound &&
+    result.logs.bound > 0,
+  result.logs,
+);
 if (MODE === 'full')
   check(
     'revoked on each will-resign-active (native log)',
@@ -873,20 +634,13 @@ if (MODE === 'probe')
     result.logs.resign >= 1 && result.logs.revoked >= 1,
     { resign: result.logs.resign, revoked: result.logs.revoked },
   );
-if (MODE === 'full' || MODE === 'probe' || (MODE === 'control-http' && surfaceRun))
-  check(
-    'longest retirement under 2 s (empirical gate), no warning above 1.5 s',
-    result.logs.retiredMs.count > 0 &&
-      result.logs.retiredMs.max < 2000 &&
-      result.logs.retireWarnings === 0,
-    result.logs.retiredMs,
-  );
-else if (MODE === 'control-surface-nofetch')
-  result.notes.push({
-    name: 'retirements (recorded, not gated in the control)',
-    retiredMs: result.logs.retiredMs,
-    retireWarnings: result.logs.retireWarnings,
-  });
+check(
+  'longest retirement under 2 s (empirical gate), no warning above 1.5 s',
+  result.logs.retiredMs.count > 0 &&
+    result.logs.retiredMs.max < 2000 &&
+    result.logs.retireWarnings === 0,
+  result.logs.retiredMs,
+);
 if (MODE === 'probe') {
   const retiring = count(/revoked #\d+ \(retiring\)/);
   if (retiring > 0)
@@ -900,28 +654,6 @@ if (MODE === 'probe') {
       'a retiring teardown',
       'every revoke released at once: no operation was in flight at a revoke in this run',
     );
-}
-if (MODE === 'control-surface-nofetch') {
-  // Each reload line follows a native attach logged since the previous reload line.
-  const ts = (l) => l.timestamp ?? '';
-  let prev = '';
-  const attachedBefore = lines
-    .filter((l) => /RNR-D2 reload /.test(l.eventMessage ?? ''))
-    .map((rl) => {
-      const ok = lines.some(
-        (l) =>
-          /RnrSurface: surface \d+: attached/.test(l.eventMessage ?? '') &&
-          ts(l) > prev &&
-          ts(l) < ts(rl),
-      );
-      prev = ts(rl);
-      return ok;
-    });
-  check(
-    'control 2: a native attach precedes each reload line',
-    attachedBefore.length >= CONTROL_RELOADS && attachedBefore.every(Boolean),
-    attachedBefore,
-  );
 }
 check(
   "no UIKit off-main layer-modification messages (UIKit's own check, separate from Main Thread Checker)",
@@ -953,10 +685,7 @@ else
 // render-thread exits the run produced (closed renderers whose threads were gone afterwards).
 // Thread exits come from the renderer stats only (renderThreadsAlive back to renderersOpen after a
 // reload or an unmount/remount), never from a harness request (E1 removes the unmount-time post).
-const reloadSteps = [
-  ...(result.steps.find((st) => st.name === 'reloads')?.reloads ?? []),
-  ...(result.steps.find((st) => st.name === 'control reloads')?.reloads ?? []),
-];
+const reloadSteps = [...(result.steps.find((st) => st.name === 'reloads')?.reloads ?? [])];
 const exitsEvidenced =
   reloadSteps.filter(
     (r) =>
@@ -970,12 +699,7 @@ result.renderThreadExits = {
   rendererClosingPosts: events.filter((e) => e.kind === 'renderer-closing').length,
   note: 'a thread exit is evidenced (from stats) when renderThreadsAlive returned to renderersOpen after a reload or an unmount/remount; renderer-closing posts are recorded, not used',
 };
-if (!surfaceRun)
-  result.notes.push({
-    name: 'Core Animation transaction warnings (no surface in this control)',
-    warnings: result.logs.caTransactionWarnings,
-  });
-else if (exitsEvidenced > 0)
+if (exitsEvidenced > 0)
   check(
     'no Core Animation transaction warnings (with render-thread exits during the run)',
     result.logs.caTransactionWarnings === 0,

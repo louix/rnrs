@@ -50,25 +50,61 @@ export function runProtocolSuite(
   ]);
   if (platform === 'Wasm') {
     // A refused Wasm adapter is torn down and freed exactly once each, in that order, even
-    // when teardown throws, and the original error is the one reported.
+    // when cleanup throws. The original error is thrown alone, or first in an AggregateError
+    // followed by the cleanup failures in call order.
     const results: string[] = [];
-    for (const teardownThrows of [false, true]) {
+    let ok = true;
+    for (const [teardownThrows, freeThrows] of [
+      [false, false],
+      [true, false],
+      [false, true],
+      [true, true],
+    ]) {
       const calls: string[] = [];
+      const original = new Error('mismatch');
+      const teardownError = new Error('teardown failed');
+      const freeError = new Error('free failed');
       const fake = {
         teardown() {
           calls.push('teardown');
-          if (teardownThrows) throw new Error('teardown failed');
+          if (teardownThrows) throw teardownError;
         },
         free() {
           calls.push('free');
+          if (freeThrows) throw freeError;
         },
       };
-      const reported = message(() => refuseWasmAdapter(fake, new Error('mismatch')));
-      results.push(`${calls.join(',')}|${reported}`);
+      let thrown: unknown;
+      try {
+        refuseWasmAdapter(fake, original);
+      } catch (e) {
+        thrown = e;
+      }
+      const cleanup = [
+        ...(teardownThrows ? [teardownError] : []),
+        ...(freeThrows ? [freeError] : []),
+      ];
+      const aggregate = thrown instanceof AggregateError ? thrown : undefined;
+      const reported = aggregate
+        ? `AggregateError(${aggregate.message}: ${aggregate.errors.map((e) => (e as Error).message).join(', ')})`
+        : String((thrown as Error)?.message);
+      const caseOk =
+        calls.join(',') === 'teardown,free' &&
+        (cleanup.length === 0
+          ? thrown === original
+          : aggregate !== undefined &&
+            aggregate.message === 'Wasm adapter refusal and cleanup failed' &&
+            aggregate.errors.length === cleanup.length + 1 &&
+            aggregate.errors[0] === original &&
+            cleanup.every((e, i) => aggregate.errors[i + 1] === e));
+      ok &&= caseOk;
+      results.push(
+        `teardown ${teardownThrows ? 'throws' : 'ok'}, free ${freeThrows ? 'throws' : 'ok'}: ${calls.join(',')}|${reported}`,
+      );
     }
     checks.push([
-      'a refused Wasm adapter is torn down then freed, once each, even if teardown throws',
-      results.every((r) => r === 'teardown,free|mismatch'),
+      'a refused Wasm adapter is torn down then freed, once each, reporting the original error with any cleanup failures',
+      ok,
       results.join('; '),
     ]);
   }

@@ -13,8 +13,8 @@ use std::time::Duration;
 use futures_util::future::{select, Either};
 use rnrs_core::CancelToken;
 
-pub mod rnr_interface;
-use rnr_interface as spec;
+pub mod rnrs_interface;
+use rnrs_interface as spec;
 pub use spec::{Header, HttpDiagnostics, HttpRequest, HttpResponse};
 
 pub const DEFAULT_TIMEOUT_MS: f64 = 30_000.0;

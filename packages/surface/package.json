@@ -2,7 +2,7 @@
   "name": "@rnrs/surface",
   "version": "0.1.0",
   "private": true,
-  "description": "Experimental framework rendering surface for React Native (Android, iOS): the <RnrSurfaceView> Fabric component and the rnrs-surface Rust crate that renderer modules depend on. Platform glue is framework code; renderer authors write TypeScript and Rust only.",
+  "description": "Experimental framework rendering surface for React Native (Android, iOS): the <RnrsSurfaceView> Fabric component and the rnrs-surface Rust crate that renderer modules depend on. Platform glue is framework code; renderer authors write TypeScript and Rust only.",
   "main": "src/index.ts",
   "types": "src/index.ts",
   "react-native": "src/index.ts",
@@ -31,15 +31,15 @@
     }
   },
   "codegenConfig": {
-    "name": "RnrSurfaceSpec",
+    "name": "RnrsSurfaceSpec",
     "type": "components",
     "jsSrcsDir": "src/specs",
     "android": {
-      "javaPackageName": "dev.rustjsilab.rnr.surface"
+      "javaPackageName": "dev.rustjsilab.rnrs.surface"
     },
     "ios": {
       "componentProvider": {
-        "RnrSurfaceView": "RnrSurfaceViewComponentView"
+        "RnrsSurfaceView": "RnrsSurfaceViewComponentView"
       }
     }
   },
@@ -52,7 +52,7 @@
     "android/src",
     "react-native.config.js",
     "ios",
-    "RnrSurface.podspec"
+    "RnrsSurface.podspec"
   ],
   "peerDependencies": {
     "@rnrs/runtime": "0.1.0",

@@ -1,2 +1,2 @@
-# JNI entry points are resolved by name from librnr.so.
--keep class dev.rustjsilab.rnr.surface.RnrSurfaceNative { native <methods>; }
+# JNI entry points are resolved by name from librnrs.so.
+-keep class dev.rustjsilab.rnrs.surface.RnrsSurfaceNative { native <methods>; }

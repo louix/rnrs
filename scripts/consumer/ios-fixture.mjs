@@ -14,10 +14,10 @@ export const SUITES = ['conformance', 'meter-suite', 'values-suite', 'blake3-sui
 /** Repository import -> installed package, as an app sees them. */
 const IMPORTS = {
   '../../packages/runtime/src/runtime': '@rnrs/runtime',
-  '../../.generated/rnr/counter': '@rnrs/example-counter',
-  '../../.generated/rnr/meter': '@rnrs/labs-meter',
-  '../../.generated/rnr/values': '@rnrs/labs-values',
-  '../../.generated/rnr/rnrs_blake3': '@rnrs/example-blake3',
+  '../../.generated/rnrs/counter': '@rnrs/example-counter',
+  '../../.generated/rnrs/meter': '@rnrs/labs-meter',
+  '../../.generated/rnrs/values': '@rnrs/labs-values',
+  '../../.generated/rnrs/rnrs_blake3': '@rnrs/example-blake3',
   '../../fixtures/blake3/test_vectors.json': '../test_vectors.json',
 };
 

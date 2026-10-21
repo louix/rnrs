@@ -9,10 +9,10 @@
 //   WebGPU is correctness evidence only.
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import init, * as wasm from './rnr/pkg/rnr_bundle.js';
-import { installWebBackend, type RnrWasm } from '@rnrs/runtime/web';
+import init, * as wasm from './rnrs/pkg/rnrs_bundle.js';
+import { installWebBackend, type RnrsWasm } from '@rnrs/runtime/web';
 import { createSurfaceBootstrap } from '@rnrs/surface/browser';
-import { createBevy3DModuleForTesting } from '../../.generated/rnr/rnrs_bevy3d';
+import { createBevy3DModuleForTesting } from '../../.generated/rnrs/rnrs_bevy3d';
 import App from './.generated/app/App';
 import QuietView from './View';
 import type { Scene } from '@rnrs/example-bevy3d';
@@ -45,7 +45,7 @@ async function test(name: string, run: () => Promise<void>) {
   }
 }
 const surfaceDiagnostics = () => {
-  const [live, owners, pixels, entries] = Array.from(wasm.rnr_surface_diagnostics()) as number[];
+  const [live, owners, pixels, entries] = Array.from(wasm.rnrs_surface_diagnostics()) as number[];
   return { live, owners, pixels, entries };
 };
 const bevyDiagnostics = () => {
@@ -56,7 +56,7 @@ const bevyDiagnostics = () => {
     devicesDestroyed,
     gpuStatesAlive,
     scenesOpen,
-  ] = Array.from((wasm as any).rnr_bevy3d_web_diagnostics()) as number[];
+  ] = Array.from((wasm as any).rnrs_bevy3d_web_diagnostics()) as number[];
   return {
     initsStarted,
     initsDiscarded,
@@ -88,7 +88,7 @@ async function jsAdapter() {
 function harness() {
   let boot!: ReturnType<typeof createSurfaceBootstrap>;
   const backend = installWebBackend(
-    wasm as unknown as RnrWasm,
+    wasm as unknown as RnrsWasm,
     (same) => (boot = createSurfaceBootstrap(same)),
   );
   const module = createBevy3DModuleForTesting(8);
@@ -242,25 +242,25 @@ async function webgpu() {
     });
     await test('late setups after detach and after replacement are discarded and keep no device or Bevy app', async () => {
       const before = bevyDiagnostics();
-      const token = wasm.rnr_surface_attach(key, 64, 48, 1) as number;
+      const token = wasm.rnrs_surface_attach(key, 64, 48, 1) as number;
       assert(token > 0, 'attached');
       const scratch = document.createElement('canvas');
-      assert(wasm.rnr_surface_bind_canvas(key, token, scratch) === 'ok', 'bound');
-      wasm.rnr_surface_detach(key, token);
+      assert(wasm.rnrs_surface_bind_canvas(key, token, scratch) === 'ok', 'bound');
+      wasm.rnrs_surface_detach(key, token);
       assert(
         scene.stats().gpuState === 'none',
         'detach ends setup state at once: ' + scene.stats().gpuState,
       );
-      const second = wasm.rnr_surface_attach(key, 64, 48, 1) as number;
+      const second = wasm.rnrs_surface_attach(key, 64, 48, 1) as number;
       assert(
-        wasm.rnr_surface_bind_canvas(key, second, document.createElement('canvas')) === 'ok',
+        wasm.rnrs_surface_bind_canvas(key, second, document.createElement('canvas')) === 'ok',
         'rebound',
       );
       assert(
-        wasm.rnr_surface_attach(key, 64, 48, 1) === 0,
+        wasm.rnrs_surface_attach(key, 64, 48, 1) === 0,
         'authority refuses a concurrent attachment',
       );
-      wasm.rnr_surface_detach(key, second);
+      wasm.rnrs_surface_detach(key, second);
       await until(
         'stale setups discarded',
         () => bevyDiagnostics().initsDiscarded >= before.initsDiscarded + 2,
@@ -274,19 +274,19 @@ async function webgpu() {
         'devices destroyed: ' + JSON.stringify(d),
       );
       assert(scene.stats().gpuState === 'none', 'nothing kept from stale setups');
-      assert(wasm.rnr_surface_render(key, second, true).status === 'stale', 'old token rejected');
+      assert(wasm.rnrs_surface_render(key, second, true).status === 'stale', 'old token rejected');
     });
     await test('runtime teardown during setup closes the scene and leaves no GPU state', async () => {
       const other = createBevy3DModuleForTesting(8);
       const s = other.create();
       const k = s.surfaceKey();
-      const token = wasm.rnr_surface_attach(k, 32, 32, 1) as number;
+      const token = wasm.rnrs_surface_attach(k, 32, 32, 1) as number;
       assert(
-        wasm.rnr_surface_bind_canvas(k, token, document.createElement('canvas')) === 'ok',
+        wasm.rnrs_surface_bind_canvas(k, token, document.createElement('canvas')) === 'ok',
         'bound',
       );
       other.teardown();
-      assert(wasm.rnr_surface_render(k, token, true).status === 'closed', 'closed by teardown');
+      assert(wasm.rnrs_surface_render(k, token, true).status === 'closed', 'closed by teardown');
       await sleep(1500); // the in-flight setup settles; it must destroy its device, not keep it
       const d = bevyDiagnostics();
       notes.teardown = d;
@@ -316,7 +316,7 @@ async function webgpu() {
   }
 }
 
-const LOG_KEY = 'rnr-web-bevy-log';
+const LOG_KEY = 'rnrs-web-bevy-log';
 const LOG_MAX = 300;
 /** ?expect=view (quiet, default) and ?expect=app (the unchanged consumer app, which runs its
  *  in-app sequence automatically on load: explicit opt-in only). Live diagnostics with a copy
@@ -349,9 +349,9 @@ async function view(app: boolean) {
     const json = (tag: string) =>
       text.startsWith(tag + ' ') ? JSON.parse(text.slice(tag.length + 1)) : undefined;
     try {
-      const stats = json('RNR_BEVY_STATS'),
-        smoke = json('RNR_SMOKE'),
-        check = json('RNR_SMOKE_CHECK');
+      const stats = json('RNRS_BEVY_STATS'),
+        smoke = json('RNRS_SMOKE'),
+        check = json('RNRS_SMOKE_CHECK');
       if (stats) reports.latestStats = stats;
       if (smoke) {
         reports.smoke = smoke;
@@ -368,7 +368,7 @@ async function view(app: boolean) {
     record('error', text);
     error(...args);
   };
-  installWebBackend(wasm as unknown as RnrWasm, createSurfaceBootstrap);
+  installWebBackend(wasm as unknown as RnrsWasm, createSurfaceBootstrap);
   const gpu = (navigator as any).gpu;
   const info: Record<string, unknown> = {
     url: location.href,
@@ -397,7 +397,7 @@ async function view(app: boolean) {
           scene = s;
         }}
         onActions={(a) => {
-          (globalThis as any).rnrActions = a;
+          (globalThis as any).rnrsActions = a;
         }}
       />
     ),
@@ -440,11 +440,11 @@ async function view(app: boolean) {
   };
   tick();
   setInterval(tick, 1000);
-  (globalThis as any).rnrDiagnostics = snapshot;
+  (globalThis as any).rnrsDiagnostics = snapshot;
 }
 
 async function main() {
-  await init({ module_or_path: new URL('../rnr/pkg/rnr_bundle_bg.wasm', import.meta.url) });
+  await init({ module_or_path: new URL('../rnrs/pkg/rnrs_bundle_bg.wasm', import.meta.url) });
   notes.userAgent = navigator.userAgent;
   notes.navigatorGpu = 'gpu' in navigator;
   if (expect === 'unsupported') await unsupported();
@@ -454,7 +454,7 @@ async function main() {
     return;
   } else if (expect === 'log') {
     document.getElementById('out')!.textContent =
-      localStorage.getItem('rnr-web-bevy-log') ?? 'no persisted log';
+      localStorage.getItem('rnrs-web-bevy-log') ?? 'no persisted log';
     return;
   } // no GPU use
   else checks.push({ name: 'expect query', ok: false, detail: 'unknown ?expect=' + expect });
@@ -465,7 +465,7 @@ main()
     if ((expect === 'view' || expect === 'app' || expect === 'log') && !checks.length) return;
     const ok = checks.length > 0 && checks.every((c) => c.ok);
     const blocked = typeof notes.blocked === 'string' ? notes.blocked : undefined;
-    (globalThis as any).__rnrResult = {
+    (globalThis as any).__rnrsResult = {
       ok,
       blocked,
       checks,
@@ -476,7 +476,7 @@ main()
           : 'default launch') + (blocked ? '; visible presentation unproven (BLOCKED)' : ''),
     };
     document.getElementById('out')!.textContent = JSON.stringify(
-      (globalThis as any).__rnrResult,
+      (globalThis as any).__rnrsResult,
       null,
       2,
     );

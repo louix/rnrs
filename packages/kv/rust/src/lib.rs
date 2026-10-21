@@ -20,8 +20,8 @@ use std::time::Duration;
 
 use rnrs_core::{CancelToken, Native};
 
-pub mod rnr_interface;
-use rnr_interface as spec;
+pub mod rnrs_interface;
+use rnrs_interface as spec;
 pub use spec::KvDiagnostics;
 
 pub const MAX_KEYS: f64 = 10_000.0;
@@ -101,9 +101,9 @@ fn release(shared: Arc<Shared>) {
     let sender = CLOSER.get_or_init(|| {
         let (tx, rx) = mpsc::channel::<Arc<Shared>>();
         std::thread::Builder::new()
-            .name("rnr-kv-closer".into())
+            .name("rnrs-kv-closer".into())
             .spawn(move || rx.into_iter().for_each(drop))
-            .expect("spawn the rnr-kv closer thread");
+            .expect("spawn the rnrs-kv closer thread");
         Mutex::new(tx)
     });
     if let Err(mpsc::SendError(shared)) = lock(sender).send(shared) {

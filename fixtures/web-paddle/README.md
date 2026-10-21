@@ -10,7 +10,7 @@ From the repository root, with the pinned local Rust toolchain/wasm target alrea
 npm ci --ignore-scripts --no-audit --no-fund
 nix develop .#web
 source scripts/rust-env.sh
-RNR_OFFLINE=0 node fixtures/web-paddle/build.mjs --test
+RNRS_OFFLINE=0 node fixtures/web-paddle/build.mjs --test
 # Cached Rust dependencies:
 node fixtures/web-paddle/build.mjs --test
 ```
@@ -30,9 +30,9 @@ A successful backend identity change invalidates the runtime's framework-owned m
 Normal application setup can use the optional public seam:
 
 ```ts
-import {initRnr} from '@rnrs/runtime/web';
+import {initRnrs} from '@rnrs/runtime/web';
 import {createSurfaceBootstrap} from '@rnrs/surface/browser';
-await initRnr(bundle, undefined, {bootstrap: createSurfaceBootstrap});
+await initRnrs(bundle, undefined, {bootstrap: createSurfaceBootstrap});
 // Render the ordinary App with React DOM; its @rnrs/surface import selects the browser entry.
 ```
 

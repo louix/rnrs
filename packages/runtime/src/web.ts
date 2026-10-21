@@ -1,44 +1,44 @@
 // Browser entry of @rnrs/runtime. Headless use has no surface dependency.
-import { installWebBackend, type RnrWasm, type WebBootstrapFactory } from './web-backend';
+import { installWebBackend, type RnrsWasm, type WebBootstrapFactory } from './web-backend';
 import { setMissingBackendMessage } from './runtime';
 export * from './runtime';
 export { installWebBackend } from './web-backend';
-export type { RnrWasm, WebBootstrap, WebBootstrapFactory } from './web-backend';
+export type { RnrsWasm, WebBootstrap, WebBootstrapFactory } from './web-backend';
 
 setMissingBackendMessage(
-  "@rnrs/runtime: call `await initRnr(bundle)` (from '@rnrs/runtime/web', with the app's generated " +
-    "Wasm bundle: import * as bundle from '<app>/.rnr/web/pkg/rnr_bundle.js') before using Rust modules",
+  "@rnrs/runtime: call `await initRnrs(bundle)` (from '@rnrs/runtime/web', with the app's generated " +
+    "Wasm bundle: import * as bundle from '<app>/.rnrs/web/pkg/rnrs_bundle.js') before using Rust modules",
 );
 
-export interface RnrBundle extends RnrWasm {
+export interface RnrsBundle extends RnrsWasm {
   default(input?: { module_or_path: unknown } | unknown): Promise<unknown>;
 }
-export interface InitRnrOptions {
+export interface InitRnrsOptions {
   bootstrap?: WebBootstrapFactory;
 }
 let initialized: Promise<void> | undefined;
-let initializedBundle: RnrBundle | undefined;
+let initializedBundle: RnrsBundle | undefined;
 let initializedBootstrap: WebBootstrapFactory | undefined;
 
 /** Loads one bundle per app. Same-bundle/bootstrap calls share initialization; failed
  * loads or bootstrap creation can retry. The optional framework bootstrap receives the
  * exact generated bundle, without adding a surface dependency to headless applications.
  * Low-level installWebBackend replaces the one active backend in this JS realm; do not
- * mix that testing/framework replacement API with memoized application initRnr calls. */
-export function initRnr(
-  bundle: RnrBundle,
+ * mix that testing/framework replacement API with memoized application initRnrs calls. */
+export function initRnrs(
+  bundle: RnrsBundle,
   wasm?: unknown,
-  options: InitRnrOptions = {},
+  options: InitRnrsOptions = {},
 ): Promise<void> {
   if (initialized && initializedBundle !== bundle)
     return Promise.reject(
       new Error(
-        '@rnrs/runtime: initRnr was already called with another bundle; an app has one Wasm bundle',
+        '@rnrs/runtime: initRnrs was already called with another bundle; an app has one Wasm bundle',
       ),
     );
   if (initialized && initializedBootstrap !== options.bootstrap)
     return Promise.reject(
-      new Error('@rnrs/runtime: initRnr was already called with another bootstrap'),
+      new Error('@rnrs/runtime: initRnrs was already called with another bootstrap'),
     );
   if (!initialized) {
     initializedBundle = bundle;

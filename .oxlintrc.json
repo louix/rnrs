@@ -13,19 +13,14 @@
       "rules": { "react/immutability": "off" }
     },
     {
-      "files": [
-        "fixtures/surface-s3/App.tsx",
-        "fixtures/surface-s3/variants/control-surface-nofetch.tsx",
-        "fixtures/surface-s3/variants/s3-instrumented.tsx",
-        "fixtures/surface-s3/variants/s3-no-unmount-post.tsx"
-      ],
+      "files": ["fixtures/surface-s3/App.tsx"],
       "rules": { "react/set-state-in-effect": "off" }
     }
   ],
   "ignorePatterns": [
     "**/node_modules/**",
     "**/.generated/**",
-    "**/.rnr/**",
+    "**/.rnrs/**",
     "**/generator/**",
     "**/build/**",
     "**/dist/**",
@@ -39,10 +34,10 @@
     "docs/research/**",
     "react-native/**",
     "**/*.min.js",
-    "packages/*/rnr/**",
-    "packages/fixtures/*/rnr/**",
-    "web/rnr/**",
-    "fixtures/*/rnr/**",
+    "packages/*/rnrs/**",
+    "packages/fixtures/*/rnrs/**",
+    "web/rnrs/**",
+    "fixtures/*/rnrs/**",
     "**/package-lock.json",
     "**/Cargo.lock",
     "**/*.Cargo.lock"

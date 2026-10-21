@@ -7,7 +7,7 @@
 // Offline, so it needs a warm registry cache in CARGO_HOME (the framework's own dependencies,
 // e.g. tokio for rnrs-core's native backend, come from crates.io): `cargo fetch` of the repository
 // workspace warms it. The lock assertions are the proof; no surface or GPU crate is ever needed.
-// Without cargo the test is skipped, unless RNR_REQUIRE_CARGO=1, which makes that a failure and
+// Without cargo the test is skipped, unless RNRS_REQUIRE_CARGO=1, which makes that a failure and
 // requires CARGO_HOME to be set, so the warm-up and the test use the same cache. The strict
 // command (inside `nix develop`, from the repository root):
 //   source scripts/rust-env.sh && npm run test:rnrs-offline
@@ -27,7 +27,7 @@ import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import { ROOT } from '../cli.mjs';
 
-const strict = process.env.RNR_REQUIRE_CARGO === '1';
+const strict = process.env.RNRS_REQUIRE_CARGO === '1';
 const local = path.join(ROOT, '.generated');
 // Non-strict runs use the repository's isolated cache when present; strict runs only CARGO_HOME.
 if (!strict && !process.env.CARGO_HOME && existsSync(path.join(local, 'cargo'))) {
@@ -35,10 +35,10 @@ if (!strict && !process.env.CARGO_HOME && existsSync(path.join(local, 'cargo')))
   process.env.RUSTUP_HOME ??= path.join(local, 'rustup');
   process.env.RUSTUP_TOOLCHAIN ??= '1.90.0';
 }
-const cargoOk = spawnSync(process.env.RNR_CARGO ?? 'cargo', ['--version']).status === 0;
+const cargoOk = spawnSync(process.env.RNRS_CARGO ?? 'cargo', ['--version']).status === 0;
 // Strict: never skip (a missing cargo or cache location fails below).
 const skip =
-  strict || cargoOk ? false : 'cargo is not available (RNR_REQUIRE_CARGO=1 makes this a failure)';
+  strict || cargoOk ? false : 'cargo is not available (RNRS_REQUIRE_CARGO=1 makes this a failure)';
 
 /** Packages cargo resolved, by name, from a Cargo.lock: name -> source (null for paths). */
 const lockPackages = (lock) =>
@@ -57,10 +57,10 @@ test(
   { skip, timeout: 600_000 },
   () => {
     if (strict) {
-      assert.ok(cargoOk, 'RNR_REQUIRE_CARGO=1: cargo is not available');
+      assert.ok(cargoOk, 'RNRS_REQUIRE_CARGO=1: cargo is not available');
       assert.ok(
         process.env.CARGO_HOME,
-        'RNR_REQUIRE_CARGO=1: set CARGO_HOME (source scripts/rust-env.sh) to the cache warmed by cargo fetch',
+        'RNRS_REQUIRE_CARGO=1: set CARGO_HOME (source scripts/rust-env.sh) to the cache warmed by cargo fetch',
       );
     }
     const work = mkdtempSync(path.join(tmpdir(), 'rnrs-offline-'));
@@ -69,7 +69,7 @@ test(
       const packed = spawnSync('node', [path.join(ROOT, 'scripts/pack.mjs')], {
         cwd: ROOT,
         encoding: 'utf8',
-        env: { ...process.env, RNR_PACK_OUT: packDir },
+        env: { ...process.env, RNRS_PACK_OUT: packDir },
       });
       assert.equal(packed.status, 0, packed.stderr);
       const app = path.join(work, 'app');
@@ -131,7 +131,7 @@ test(
       );
       r = rnrs('generate', mod);
       assert.equal(r.code, 0, r.out);
-      const iface = readFileSync(path.join(mod, 'rust/src/rnr_interface.rs'), 'utf8');
+      const iface = readFileSync(path.join(mod, 'rust/src/rnrs_interface.rs'), 'utf8');
       assert.match(iface, /^use fw::core::bind::\{MaybeSend, NativeObject\};$/m);
       // Compiles and runs the scaffold's test against the packed framework copies, offline.
       r = rnrs('test', mod);
@@ -151,7 +151,7 @@ test(
       for (const target of ['android', 'web']) {
         r = rnrs('lock', '--target', target, '--app', app, '--offline');
         assert.equal(r.code, 0, r.out);
-        const lock = readFileSync(path.join(app, `rnr-${target}.Cargo.lock`), 'utf8');
+        const lock = readFileSync(path.join(app, `rnrs-${target}.Cargo.lock`), 'utf8');
         const pkgs = lockPackages(lock);
         for (const name of ['rnrs', 'rnrs-core', 'demo-headless'])
           assert.equal(pkgs.get(name), null, `${target}: ${name} resolved from its installed path`);
@@ -183,7 +183,7 @@ test(
       npm(path.join(packDir, 'rnrs-surface-0.1.0.tgz'));
       r = rnrs('lock', '--target', 'android', '--app', app, '--offline');
       assert.equal(r.code, 0, r.out);
-      const pkgs = lockPackages(readFileSync(path.join(app, 'rnr-android.Cargo.lock'), 'utf8'));
+      const pkgs = lockPackages(readFileSync(path.join(app, 'rnrs-android.Cargo.lock'), 'utf8'));
       assert.equal(pkgs.get('rnrs-surface'), null, 'from the installed package path');
       assert.deepEqual(
         [...pkgs.keys()].filter((n) => /^(wgpu.*|naga|pollster|ash)$/.test(n)),
@@ -200,7 +200,7 @@ test(
       );
       r = rnrs('lock', '--target', 'android', '--app', app, '--offline');
       assert.equal(r.code, 0, r.out);
-      const gpuLock = readFileSync(path.join(app, 'rnr-android.Cargo.lock'), 'utf8');
+      const gpuLock = readFileSync(path.join(app, 'rnrs-android.Cargo.lock'), 'utf8');
       assert.match(
         gpuLock,
         /\[\[package\]\]\nname = "wgpu"\nversion = "30\.0\.1"\nsource = "registry\+/,

@@ -1,5 +1,5 @@
-//! Lab diagnostics: a bounded ring of submit and present events with monotonic timestamps
-//! (docs/research/js-contention-plan.md). Off unless the renderer is created with
+//! Lab diagnostics: a bounded ring of submit and present events with monotonic timestamps.
+//! Off unless the renderer is created with
 //! `timingRecords > 0`; disabled, it records and allocates nothing.
 //!
 //! Records carry a sequence number, so a consumer only computes intervals between consecutive

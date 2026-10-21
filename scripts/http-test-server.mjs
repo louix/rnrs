@@ -26,7 +26,7 @@ export function startServer(port = 8787, host = '127.0.0.1') {
   let nextId = 1;
   let connections = new Map();
   const server = http.createServer((req, res) => {
-    const conn = connections.get(req.socket.rnrId);
+    const conn = connections.get(req.socket.rnrsId);
     const url = new URL(req.url, 'http://x');
     const path = url.pathname;
     if (!path.startsWith('/__')) conn?.requests.push(`${req.method} ${path}${url.search}`);
@@ -109,7 +109,7 @@ export function startServer(port = 8787, host = '127.0.0.1') {
   });
   server.on('connection', (socket) => {
     const id = nextId++;
-    socket.rnrId = id;
+    socket.rnrsId = id;
     const record = { id, requests: [], open: true, closedByClient: false };
     connections.set(id, record);
     socket.on('end', () => {

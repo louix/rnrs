@@ -1,5 +1,5 @@
 {
-  "name": "rnr-web-bevy-fixture",
+  "name": "rnrs-web-bevy-fixture",
   "version": "0.0.0",
   "private": true,
   "description": "Browser runtime dependencies of the web Bevy fixture (React DOM and React Native Web, as fixtures/web-paddle pins them). The Rust bundle's app manifest is bundle/package.json.",

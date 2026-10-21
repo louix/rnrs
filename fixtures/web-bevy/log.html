@@ -3,8 +3,8 @@
 <p>Static page: reads localStorage only. It loads no Wasm and makes no WebGPU calls.</p>
 <button id="copy">Copy</button><pre id="out"></pre>
 <script>
-const text = JSON.stringify({bevyView: JSON.parse(localStorage.getItem('rnr-web-bevy-log') ?? 'null'),
-  teardownProbe: JSON.parse(localStorage.getItem('rnr-teardown-probe-log') ?? 'null'), at: new Date().toISOString()}, null, 2);
+const text = JSON.stringify({bevyView: JSON.parse(localStorage.getItem('rnrs-web-bevy-log') ?? 'null'),
+  teardownProbe: JSON.parse(localStorage.getItem('rnrs-teardown-probe-log') ?? 'null'), at: new Date().toISOString()}, null, 2);
 document.getElementById('out').textContent = text;
 document.getElementById('copy').onclick = () => navigator.clipboard.writeText(text);
 </script>

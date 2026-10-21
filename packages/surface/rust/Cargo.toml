@@ -11,9 +11,9 @@ description = "Framework rendering surfaces for @rnrs/surface: opaque surface ke
 # Metal (iOS), the browser's WebGPU (wasm32; no WebGL, no fallback).
 [features]
 wgpu = ["dep:wgpu", "dep:rnrs-core", "dep:pollster", "dep:web-sys", "dep:wasm-bindgen-futures"]
-# Lab only: the browser test hooks of the adapter (rnr_surface_hold_gpu_setups_for_testing).
+# Lab only: the browser test hooks of the adapter (rnrs_surface_hold_gpu_setups_for_testing).
 # Never enabled by a package; fixtures/web-webgpu enables it with
-# RNR_BUNDLE_FEATURES=rnrs-surface/lab-hooks. Without it no such export exists.
+# RNRS_BUNDLE_FEATURES=rnrs-surface/lab-hooks. Without it no such export exists.
 lab-hooks = ["wgpu"]
 
 [dependencies]

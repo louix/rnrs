@@ -29,7 +29,7 @@ fn log_slot_occupied_is_a_partial_install_that_keeps_their_logger_and_level() {
     assert_eq!(warning[0].level, tracing::Level::WARN);
     assert!(warning[0].text.starts_with("partially installed:"), "{}", warning[0].text);
 
-    // tracing events use rnr's filter and sink; log records go to their logger.
+    // tracing events use rnrs's filter and sink; log records go to their logger.
     tracing::info!("ours");
     tracing::debug!("filtered");
     log::error!("theirs");

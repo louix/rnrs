@@ -1,5 +1,5 @@
 // Bounded run of the quiet view in the system Firefox with a NEW temporary profile (never the
-// user's), driven over WebDriver BiDi. Steps call the view's opt-in actions (rnrActions) one at a
+// user's), driven over WebDriver BiDi. Steps call the view's opt-in actions (rnrsActions) one at a
 // time; diagnostics are sampled every second. Records Firefox stderr, the effective environment,
 // crash state (process exit, minidumps) and, after a crash, the persisted phase log from a second
 // launch of the same temporary profile.
@@ -19,10 +19,10 @@ mkdirSync(out, { recursive: true });
 const stamp = new Date().toISOString().replace(/[:.]/g, '');
 const profile = path.join(root, '.generated/tmp', 'firefox-profile-' + stamp);
 mkdirSync(profile, { recursive: true });
-// Opt-in prefs for this throwaway profile only, recorded in run.json. RNR_FIREFOX_WEBGPU_PREF=1 sets
+// Opt-in prefs for this throwaway profile only, recorded in run.json. RNRS_FIREFOX_WEBGPU_PREF=1 sets
 // dom.webgpu.enabled (WebGPU is not on by default in Linux release builds; gpuweb implementation
 // status wiki). No blocklist or force overrides.
-const prefs = process.env.RNR_FIREFOX_WEBGPU_PREF === '1' ? { 'dom.webgpu.enabled': true } : {};
+const prefs = process.env.RNRS_FIREFOX_WEBGPU_PREF === '1' ? { 'dom.webgpu.enabled': true } : {};
 writeFileSync(
   path.join(profile, 'user.js'),
   Object.entries(prefs)
@@ -39,10 +39,10 @@ const env = { ...process.env };
 delete env.LD_LIBRARY_PATH;
 const guix = process.env.GUIX_ENVIRONMENT;
 if (guix && existsSync(path.join(guix, 'lib'))) env.LD_LIBRARY_PATH = path.join(guix, 'lib');
-// Explicit substitute when GUIX_ENVIRONMENT is unset (recorded): RNR_FIREFOX_LIB_DIR=<existing dir>.
-const libDir = process.env.RNR_FIREFOX_LIB_DIR;
+// Explicit substitute when GUIX_ENVIRONMENT is unset (recorded): RNRS_FIREFOX_LIB_DIR=<existing dir>.
+const libDir = process.env.RNRS_FIREFOX_LIB_DIR;
 if (!env.LD_LIBRARY_PATH && libDir) {
-  if (!existsSync(libDir)) throw new Error('RNR_FIREFOX_LIB_DIR does not exist: ' + libDir);
+  if (!existsSync(libDir)) throw new Error('RNRS_FIREFOX_LIB_DIR does not exist: ' + libDir);
   env.LD_LIBRARY_PATH = libDir;
 }
 const runtime = `/run/user/${process.getuid()}`;
@@ -65,7 +65,7 @@ const record = {
   environment: {
     LD_LIBRARY_PATH: env.LD_LIBRARY_PATH ?? null,
     GUIX_ENVIRONMENT: guix ?? null,
-    RNR_FIREFOX_LIB_DIR: libDir ?? null,
+    RNRS_FIREFOX_LIB_DIR: libDir ?? null,
     WAYLAND_DISPLAY: env.WAYLAND_DISPLAY ?? null,
     DISPLAY: env.DISPLAY ?? null,
     XDG_RUNTIME_DIR: env.XDG_RUNTIME_DIR ?? null,
@@ -78,12 +78,12 @@ const note = (event, detail) => {
   console.log(event, detail ?? '');
 };
 
-// RNR_FIREFOX_GSC=<manifest>: run Firefox the way the user's `ff` alias does, inside their Guix
+// RNRS_FIREFOX_GSC=<manifest>: run Firefox the way the user's `ff` alias does, inside their Guix
 // GUI container helper (~/.scripts/gsc: --gpu shares /dev/dri and sysfs; the Wayland socket is
 // shared) with the Firefox manifest and LD_LIBRARY_PATH=/lib inside the container. Unlike the
 // alias, only this run's throwaway profile is shared (never ~/.mozilla or Downloads), and there
 // is no audio, camera or session bus.
-const gscManifest = process.env.RNR_FIREFOX_GSC;
+const gscManifest = process.env.RNRS_FIREFOX_GSC;
 const firefoxArgs = [
   '--new-instance',
   '--no-remote',
@@ -211,7 +211,7 @@ await session('run', async ({ send, context, evaluate, alive }) => {
   await send('browsingContext.navigate', { context, url, wait: 'complete' });
   note('navigated', url);
   const sample = async () => {
-    const d = await evaluate('globalThis.rnrDiagnostics ? rnrDiagnostics() : null');
+    const d = await evaluate('globalThis.rnrsDiagnostics ? rnrsDiagnostics() : null');
     if (typeof d === 'string') {
       const j = JSON.parse(d);
       record.samples.push({
@@ -240,7 +240,7 @@ await session('run', async ({ send, context, evaluate, alive }) => {
         writeFileSync(file, Buffer.from(shot.data, 'base64'));
         note('screenshot', path.basename(file));
       } else {
-        await evaluate(`rnrActions.${name}()`);
+        await evaluate(`rnrsActions.${name}()`);
         await sample();
       }
     } catch (error) {
@@ -262,7 +262,7 @@ if (
       url: url.replace(/\?.*/, '') + '?expect=log',
       wait: 'complete',
     });
-    record.persistedLog = await evaluate("localStorage.getItem('rnr-web-bevy-log')");
+    record.persistedLog = await evaluate("localStorage.getItem('rnrs-web-bevy-log')");
   });
 }
 writeFileSync(path.join(out, 'run.json'), JSON.stringify(record, null, 2));

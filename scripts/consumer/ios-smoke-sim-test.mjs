@@ -1,7 +1,7 @@
 // Runs a smoke app on a booted iOS simulator: the fresh Expo consumer (scripts/consumer/expo-app.sh)
-// or the template consumer built with RNR_IOS_FIXTURE=smoke (scripts/consumer/ios-app.sh). Installs
+// or the template consumer built with RNRS_IOS_FIXTURE=smoke (scripts/consumer/ios-app.sh). Installs
 // the Release app, launches it with its console attached (OS_ACTIVITY_DT_MODE mirrors os_log,
-// where release builds forward console.error), waits for the app's report (`RNR_SMOKE <i>/<n>
+// where release builds forward console.error), waits for the app's report (`RNRS_SMOKE <i>/<n>
 // <chunk>` lines: os_log truncates long messages),
 // repeats the cold launch (--launches, default 2), and uninstalls it. Simulator evidence only.
 // Usage (on the Mac): node scripts/consumer/ios-smoke-sim-test.mjs --device <simulator udid>
@@ -90,9 +90,9 @@ function launch() {
       while ((nl = buffer.indexOf('\n')) >= 0) {
         const text = buffer.slice(0, nl).replace(/\r$/, '');
         buffer = buffer.slice(nl + 1);
-        if (/rror|rash|xception/.test(text) && !text.includes('RNR_SMOKE'))
+        if (/rror|rash|xception/.test(text) && !text.includes('RNRS_SMOKE'))
           errors.push(text.slice(0, 400));
-        const m = text.match(/RNR_SMOKE (\d+)\/(\d+) (.*)$/);
+        const m = text.match(/RNRS_SMOKE (\d+)\/(\d+) (.*)$/);
         if (m) {
           chunks.set(Number(m[1]), m[3]);
           const n = Number(m[2]);
@@ -123,7 +123,7 @@ try {
 const checks = launches.map((l, i) => ({
   name: `cold launch ${i + 1}: smoke report ok`,
   ok: l.report?.ok === true,
-  detail: JSON.stringify(l.report?.checks ?? l.report ?? 'no RNR_SMOKE report'),
+  detail: JSON.stringify(l.report?.checks ?? l.report ?? 'no RNRS_SMOKE report'),
 }));
 const result = {
   evidence: 'iOS simulator (not a physical device)',

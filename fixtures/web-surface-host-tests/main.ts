@@ -580,14 +580,14 @@ test('one second of successful presentation resets the retry window', (h) => {
   );
 });
 
-(globalThis as any).__rnrResult = {
+(globalThis as any).__rnrsResult = {
   ok: checks.every((c) => c.ok),
   checks,
   limitation:
     'Real Canvas; deterministic scheduler and fake bridge. Not generated Wasm lifecycle evidence.',
 };
 document.querySelector('#out')!.textContent = JSON.stringify(
-  (globalThis as any).__rnrResult,
+  (globalThis as any).__rnrsResult,
   null,
   2,
 );

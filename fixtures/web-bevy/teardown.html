@@ -6,7 +6,7 @@
      each call, so after a crash /log.html shows the last step reached. One variant per page load. -->
 <div id="buttons"></div><div id="box"></div><pre id="out"></pre>
 <script>
-const KEY = 'rnr-teardown-probe-log';
+const KEY = 'rnrs-teardown-probe-log';
 // Structured record: steps, GPU errors, and whether a device loss was expected (after our own
 // destroy()) or premature (before it: the run is then inconclusive, never "survived").
 const log = {startedAt: new Date().toISOString(), userAgent: navigator.userAgent, probeSha256: null,
@@ -125,7 +125,7 @@ if (auto) {
     const errors = [...log.gpuErrors.map(e => e.message), ...log.steps.filter(s => / threw /.test(s))];
     const lostEarly = log.deviceLoss !== null && !log.deviceLoss.expected;
     const finished = log.steps.some(s => s.includes('survived'));
-    globalThis.__rnrResult = {ok: errors.length === 0 && finished && !lostEarly, blocked: lostEarly ? 'inconclusive: premature device loss before teardown' : undefined,
+    globalThis.__rnrsResult = {ok: errors.length === 0 && finished && !lostEarly, blocked: lostEarly ? 'inconclusive: premature device loss before teardown' : undefined,
       checks: [{name: 'teardown ' + auto, ok: errors.length === 0 && finished && !lostEarly, detail: JSON.stringify({gpuErrors: log.gpuErrors, deviceLoss: log.deviceLoss, steps: log.steps})}]};
   });
 }

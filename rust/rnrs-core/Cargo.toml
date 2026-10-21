@@ -7,7 +7,7 @@ description = "Prototype ownership/async core for Rust native modules: handles, 
 [features]
 tokio = ["dep:tokio"]
 smol = ["dep:async-executor"]
-# Attribution counters and a counting global allocator (docs/optimization.md); for
+# Attribution counters and a counting global allocator; for
 # diagnostics builds only, never for measurements.
 diagnostics = []
 

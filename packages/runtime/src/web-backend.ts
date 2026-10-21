@@ -11,8 +11,8 @@ import {
 } from './runtime';
 
 /** The wasm-bindgen module of the app's Wasm bundle (web/pkg/web_bundle.js). */
-export interface RnrWasm {
-  RnrWebAdapter: new (
+export interface RnrsWasm {
+  RnrsWebAdapter: new (
     name: string,
     hash: string,
     maxInFlight: number,
@@ -39,7 +39,7 @@ export interface RnrWasm {
     teardown(): void;
     stats(): AdapterStats;
   };
-  rnr_release_slot(slot: number, version: number): void;
+  rnrs_release_slot(slot: number, version: number): void;
 }
 
 /** The Wasm adapter must provide the entries this JS runtime calls; a bundle built by an older
@@ -82,7 +82,7 @@ export interface WebBootstrap {
   dispose(): void;
 }
 export type WebBootstrapFactory = (
-  sameBundle: RnrWasm,
+  sameBundle: RnrsWasm,
   onRollback: (cleanup: () => void) => void,
 ) => WebBootstrap;
 let disposeInstalled: (() => void) | undefined;
@@ -93,7 +93,7 @@ let installing = false;
  * Bootstrap factories register rollback actions before acquiring fallible resources; on
  * successful return their disposer owns cleanup. A failed install publishes no backend. */
 export function installWebBackend(
-  wasm: RnrWasm,
+  wasm: RnrsWasm,
   bootstrap?: WebBootstrapFactory,
 ): Backend & { dispose(): void } {
   if (installing) throw new Error('Web backend installation is already in progress');
@@ -151,7 +151,7 @@ export function installWebBackend(
     try {
       const handles = new WeakMap<object, [number, number]>();
       const registry = new FinalizationRegistry<[number, number]>(([slot, version]) =>
-        wasm.rnr_release_slot(slot, version),
+        wasm.rnrs_release_slot(slot, version),
       );
       // Captured now: later patches of WeakMap.prototype cannot change wrapper resolution.
       const weakGet = WeakMap.prototype.get,
@@ -179,7 +179,7 @@ export function installWebBackend(
           if (stopped) throw new Error('Web backend is disposed');
           let scheduled = false;
           // Called by Rust with its host lock held: only schedule, never re-enter.
-          const adapter = new wasm.RnrWebAdapter(
+          const adapter = new wasm.RnrsWebAdapter(
             name,
             hash,
             maxInFlight,

@@ -1,5 +1,5 @@
-/rnr
+/rnrs
 /dist
 /node_modules
 /.generated
-/bundle/.rnr
+/bundle/.rnrs

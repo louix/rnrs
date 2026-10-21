@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Worklets lab app (inside `nix develop`; docs/research/worklets-poc-plan.md). A throwaway RN
+# Worklets lab app (inside `nix develop`). A throwaway RN
 # 0.88.0 community-template app with JS-only changes (fixtures/worklets-lab: App.tsx,
 # GestureLab.tsx, smoke.ts, babel.config.js), the packed @rnrs/runtime and lab probe module, and the pinned
 # react-native-worklets 0.13.0, react-native-reanimated 4.7.1 and react-native-gesture-handler
 # 3.3.0 (exact versions, verified after install). Built with the native test hooks
-# (RNR_TEST_HOOKS=1). The app's android/ and ios/ trees must stay byte-identical to the
+# (RNRS_TEST_HOOKS=1). The app's android/ and ios/ trees must stay byte-identical to the
 # template's. @rnrs/runtime itself has no dependency on any of these packages.
 # Output: .generated/consumer/worklets-lab/android/app/build/outputs/apk/release/app-release.apk
 set -euo pipefail
@@ -49,15 +49,15 @@ export RUSTUP_TOOLCHAIN="${RUSTUP_TOOLCHAIN:-1.90.0}"
 export GRADLE_USER_HOME="${GRADLE_USER_HOME:-$ROOT/.generated/gradle}"
 # A fresh isolated toolchain lacks the Android target (idempotent when present).
 rustup target add aarch64-linux-android >/dev/null
-export RNR_TEST_HOOKS=1
+export RNRS_TEST_HOOKS=1
 (cd "$APP/android" && ./gradlew --no-daemon --init-script "$ROOT/scripts/consumer/nix-sdk.init.gradle" assembleRelease -PreactNativeArchitectures=arm64-v8a)
 
 echo "checking that the app's native trees equal the template's"
 for tree in android ios; do
   diff -r -q --exclude=build --exclude=.gradle --exclude=.cxx --exclude=.kotlin --exclude=local.properties "$REF/$tree" "$APP/$tree"
 done
-unzip -p "$APP/android/app/build/outputs/apk/release/app-release.apk" lib/arm64-v8a/librnr.so > "$C/librnr-$NAME.so"
-grep -a -q "routeProbeForTesting" "$C/librnr-$NAME.so" || { echo "librnr.so lacks the test hooks" >&2; exit 1; }
+unzip -p "$APP/android/app/build/outputs/apk/release/app-release.apk" lib/arm64-v8a/librnrs.so > "$C/librnrs-$NAME.so"
+grep -a -q "routeProbeForTesting" "$C/librnrs-$NAME.so" || { echo "librnrs.so lacks the test hooks" >&2; exit 1; }
 versions=$(cd "$APP" && node -p "JSON.stringify(Object.fromEntries(['react-native','react-native-worklets','react-native-reanimated','react-native-gesture-handler'].map(n=>[n,require('./node_modules/'+n+'/package.json').version])))")
 cat > "$C/$NAME.build.json" <<JSON
 {"template": "@react-native-community/template@0.88.0", "templateSha256": "$(sha256sum "$TEMPLATE" | cut -d' ' -f1)",
