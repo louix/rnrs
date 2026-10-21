@@ -197,7 +197,7 @@ In a fresh app directory, create a package manifest and install the web dependen
 npm init -y
 npm pkg set type=module
 npm install --save-exact @rnrs/runtime@0.1.0 @rnrs/surface@0.1.0 react@19.3.0 react-dom@19.3.0 react-native-web@0.21.4
-npm install --save-dev --save-exact vite@6.4.4 typescript@6.0.3 @types/react@19.3.0 @types/react-dom@19.3.0
+npm install --save-dev --save-exact vite@6.4.4 typescript@7.0.2 @types/react@19.3.0 @types/react-dom@19.3.0
 npm install /absolute/path/to/demo-triangle-0.1.0.tgz
 ```
 

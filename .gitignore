@@ -1,5 +1,6 @@
 /react-native/
 /node_modules/
+node_modules/
 /target/
 /.generated/
 /result

@@ -43,6 +43,8 @@ for (const [name, write] of [
       2,
     ),
   );
-  execFileSync(path.join(ROOT, 'node_modules/.bin/tsc'), ['-p', dir], { stdio: 'inherit' });
+  execFileSync('node', [path.join(ROOT, 'node_modules/typescript/bin/tsc'), '-p', dir], {
+    stdio: 'inherit',
+  });
 }
 console.log('ios fixtures: type check passed');

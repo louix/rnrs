@@ -220,7 +220,7 @@ Lifecycle details: [ownership](ownership.md).
 
 | Symptom | Fix |
 | --- | --- |
-| `Cannot find package 'typescript'` | Run `npm ci` (repo) or install `@rnrs/runtime`. |
+| `rnrs: the generator needs the TypeScript 6 compiler API` | Run `npm ci` (repo) or reinstall `@rnrs/cli`. |
 | Which commands exist? | `npx rnrs help`. |
 | `cargo`, `rustup` or `wasm-bindgen` not found inside the Nix shell | Use a non-login shell (not `bash -l`), then run the `rustup toolchain install` line (step 0). |
 | `npm install` changed a parent directory's `package.json` | Write the package's own `package.json` first (step 2). |

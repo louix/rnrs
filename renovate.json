@@ -21,6 +21,20 @@
       "matchManagers": ["npm"],
       "matchDepTypes": ["dependencies", "devDependencies", "optionalDependencies"],
       "rangeStrategy": "pin"
+    },
+    {
+      "description": "The generator needs the TypeScript 6 compiler API (TypeScript 7 has no stable JS API). Root typescript (tsc) tracks 7.",
+      "matchManagers": ["npm"],
+      "matchFileNames": ["packages/cli/package.json"],
+      "matchDepNames": ["typescript"],
+      "allowedVersions": "<7"
+    },
+    {
+      "description": "Root alias for the generator's TypeScript 6 compiler API (npm:typescript@6.x).",
+      "matchManagers": ["npm"],
+      "matchFileNames": ["package.json"],
+      "matchDepNames": ["typescript6"],
+      "allowedVersions": "<7"
     }
   ],
   "vulnerabilityAlerts": {

@@ -1,8 +1,45 @@
 // TS spec -> validated IR, using the TypeScript compiler API (syntax for shape, checker for
 // symbol resolution across imports). Every rejection carries file:line:col.
-import ts from 'typescript';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
+import { createRequire } from 'node:module';
+
+// TypeScript 7 (the native compiler, used for tsc) has no stable JS API, so the generator uses
+// the TypeScript 6 API. The published @rnrs/cli depends on plain typescript@6.0.3: npm nests it
+// under the CLI when the app has its own typescript, so the app's tsc is untouched. The repository
+// root, whose typescript is 7, adds 6.0.3 under the alias typescript6. Both resolve from this file;
+// the first one that is the supported major wins: the CLI's own typescript first, so an app's
+// typescript6 never replaces the CLI's pin.
+const TYPESCRIPT_API_MAJOR = 6;
+function loadTypeScriptApi() {
+  const require = createRequire(import.meta.url);
+  const found = [];
+  for (const name of ['typescript', 'typescript6']) {
+    let file;
+    try {
+      file = require.resolve(name);
+    } catch (e) {
+      if (e?.code === 'MODULE_NOT_FOUND') continue;
+      throw e;
+    }
+    const api = require(file);
+    if (
+      Number(String(api.version).split('.')[0]) === TYPESCRIPT_API_MAJOR &&
+      typeof api.createProgram === 'function'
+    )
+      return { ts: api, name, file };
+    found.push(`${name} ${api.version} (${file})`);
+  }
+  throw new Error(
+    `rnrs: the generator needs the TypeScript ${TYPESCRIPT_API_MAJOR} compiler API (typescript@6.0.3, a dependency of @rnrs/cli); ` +
+      (found.length ? `found only ${found.join(', ')}` : 'typescript is not installed') +
+      '. Reinstall @rnrs/cli (or run npm ci in the repository).',
+  );
+}
+const api = loadTypeScriptApi();
+const ts = api.ts;
+/** Where the generator's TypeScript compiler API came from (diagnostics and tests). */
+export const typescriptApi = { name: api.name, version: ts.version, file: api.file };
 
 export const IR_VERSION = 1;
 
