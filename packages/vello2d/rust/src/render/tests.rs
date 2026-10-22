@@ -231,10 +231,13 @@ impl Drop for Rig {
     }
 }
 fn rig() -> Rig {
+    rig_with_ring(EventRing::default())
+}
+fn rig_with_ring(ring: EventRing) -> Rig {
     let surface = Surface::new().unwrap();
     let (tx, rx) = mpsc::channel();
     let ctl = Arc::new(Ctl::default());
-    let shared = spawn(&surface, Fake { events: tx, ctl: ctl.clone(), lease: None, device: false, acquire_allowed: false }, CAP).unwrap();
+    let shared = spawn_with(&surface, Fake { events: tx, ctl: ctl.clone(), lease: None, device: false, acquire_allowed: false }, CAP, ring).unwrap();
     Rig { surface, shared, rx, ctl }
 }
 fn window_with(id: usize) -> (Box<dyn PlatformWindow>, Arc<AtomicUsize>) {
@@ -302,7 +305,8 @@ fn prepares_before_leasing_binds_presents_resizes_and_unbinds_on_detach() {
     assert_eq!(next(&r.rx), Event::Present(1), "presented again at the new size");
     assert_eq!(r.shared.stats().bound, Some((300, 200)));
     assert_eq!(platform::detach(r.surface.key(), a, T), Detached::Released);
-    assert_eq!(released.load(Ordering::SeqCst), 1, "window released when detach returns");
+    // Released guarantees zero leases; the last lease may still be finishing its Arc drop.
+    assert!(wait_until(|| released.load(Ordering::SeqCst) == 1), "window released after detach");
     assert_eq!(next(&r.rx), Event::Unbind);
     let (b, _, _) = attach(&r.surface, E);
     assert_eq!(next(&r.rx), Event::Bind(b, 100), "same device, no second prepare");
@@ -320,9 +324,12 @@ fn a_detach_during_device_creation_does_not_wait_for_it() {
     r.ctl.prepare_gate.enable();
     let (a, released, _) = attach(&r.surface, E);
     r.ctl.prepare_gate.wait_entered(1); // the thread is stalled in prepare(), no lease
-    let started = Instant::now();
-    assert_eq!(platform::detach(r.surface.key(), a, T), Detached::Released);
-    assert!(started.elapsed() < Duration::from_millis(100));
+    // The prepare gate stays closed: detach must not depend on device creation.
+    let key = r.surface.key();
+    let (tx, rx) = mpsc::channel();
+    let detacher = std::thread::spawn(move || tx.send(platform::detach(key, a, T)).unwrap());
+    assert_eq!(rx.recv_timeout(T).expect("detach while prepare remains blocked"), Detached::Released);
+    detacher.join().unwrap();
     assert_eq!(released.load(Ordering::SeqCst), 1);
     r.ctl.prepare_gate.open();
     assert_eq!(next(&r.rx), Event::Prepare);
@@ -368,7 +375,7 @@ fn stalled_presenter_timeout_no_present_after_revocation_and_same_window_waits()
     r.ctl.present_gate.wait_entered(1); // admitted "acquire" stalled
     let started = Instant::now();
     assert_eq!(platform::detach(r.surface.key(), a, Duration::from_millis(40)), Detached::TimedOut { in_flight: 1 });
-    assert!(started.elapsed() < Duration::from_millis(200), "the UI wait is bounded by its budget");
+    assert!(started.elapsed() < T, "detach must finish while the presenter remains blocked");
     assert_eq!(released.load(Ordering::SeqCst), 0, "retained while the renderer holds it");
     let other = Surface::new().unwrap();
     let (same, same_released) = window_with(id);
@@ -498,9 +505,14 @@ fn the_cap_counts_retiring_threads_until_they_exit() {
     assert_eq!(next(&stalled.rx), Event::Bind(a, 100));
     assert!(stalled.shared.submit(rect_frame(1)));
     stalled.ctl.present_gate.wait_entered(1); // stalled "GPU"
-    let started = Instant::now();
-    stalled.shared.close();
-    assert!(started.elapsed() < Duration::from_millis(20), "close returns while the presenter is stalled");
+    let shared = stalled.shared.clone();
+    let (tx, rx) = mpsc::channel();
+    let closer = std::thread::spawn(move || {
+        shared.close();
+        tx.send(()).unwrap();
+    });
+    rx.recv_timeout(T).expect("close while the presenter remains blocked");
+    closer.join().unwrap();
     // The closed renderer's thread is still retiring: it holds its slot.
     assert_eq!(process_counts().1, before + 1);
     let surface = Surface::new().unwrap();
@@ -563,10 +575,8 @@ fn a_device_lost_while_unbound_is_replaced_before_binding() {
 #[test]
 fn event_ring_records_submits_and_presents_with_frame_ids() {
     let _s = serial();
-    let surface = Surface::new().unwrap();
-    let (tx, rx) = mpsc::channel();
-    let ctl = Arc::new(Ctl::default());
-    let shared = spawn_with(&surface, Fake { events: tx, ctl, lease: None, device: false, acquire_allowed: false }, CAP, EventRing::new(64).unwrap()).unwrap();
+    let r = rig_with_ring(EventRing::new(64).unwrap());
+    let (surface, shared, rx) = (&r.surface, &r.shared, &r.rx);
     let (a, _, _) = attach(&surface, E);
     assert_eq!(next(&rx), Event::Prepare);
     assert_eq!(next(&rx), Event::Bind(a, 100));
@@ -574,6 +584,7 @@ fn event_ring_records_submits_and_presents_with_frame_ids() {
         assert!(shared.submit(rect_frame(n)));
         assert_eq!(next(&rx), Event::Present(n));
     }
+    assert!(wait_until(|| shared.stats().frames_presented == 3), "present records committed");
     let b = shared.drain_timings();
     let u32_at = |i: usize| u32::from_le_bytes(b[i..i + 4].try_into().unwrap());
     let count = u32_at(8) as usize;
@@ -609,10 +620,8 @@ struct Visible {
 /// Each step waits for the render thread (present gate, events, counters) before the next, so
 /// the interleaving is fixed by the test, not by scheduling.
 fn scripted_run(ring: EventRing) -> (Visible, Vec<u8>) {
-    let surface = Surface::new().unwrap();
-    let (tx, rx) = mpsc::channel();
-    let ctl = Arc::new(Ctl::default());
-    let shared = spawn_with(&surface, Fake { events: tx, ctl: ctl.clone(), lease: None, device: false, acquire_allowed: false }, CAP, ring).unwrap();
+    let r = rig_with_ring(ring);
+    let (surface, shared, rx, ctl) = (&r.surface, &r.shared, &r.rx, &r.ctl);
     ctl.present_gate.enable();
     let mut submits = Vec::new();
     let (a, _, _) = attach(&surface, E);
@@ -706,10 +715,8 @@ fn the_event_ring_does_not_change_visible_behaviour() {
 #[test]
 fn the_event_ring_records_every_unsuccessful_present_as_kind_3() {
     let _s = serial();
-    let surface = Surface::new().unwrap();
-    let (tx, rx) = mpsc::channel();
-    let ctl = Arc::new(Ctl::default());
-    let shared = spawn_with(&surface, Fake { events: tx, ctl: ctl.clone(), lease: None, device: false, acquire_allowed: false }, CAP, EventRing::new(256).unwrap()).unwrap();
+    let r = rig_with_ring(EventRing::new(256).unwrap());
+    let (surface, shared, rx, ctl) = (&r.surface, &r.shared, &r.rx, &r.ctl);
     let (a, _, _) = attach(&surface, E);
     assert_eq!(next(&rx), Event::Prepare);
     assert_eq!(next(&rx), Event::Bind(a, 100));

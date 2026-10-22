@@ -236,6 +236,15 @@ struct Harness {
     thread: Option<JoinHandle<()>>,
 }
 
+impl Drop for Harness {
+    fn drop(&mut self) {
+        // Also stop after a failed assertion. Do not join here: an unwinding test may
+        // still hold a gate the hook needs, released after this harness is dropped.
+        self.shared.close();
+        self.surface.close();
+    }
+}
+
 impl Harness {
     fn start(next: Next, fail_draw: bool, on_draw: Option<Hook>) -> Self {
         Self::start_with(next, fail_draw, on_draw, RealClock, Duration::from_millis(1))
@@ -301,14 +310,22 @@ fn a_revocation_between_acquire_and_present_drops_the_frame_unpresented() {
     let _r = crate::tests::RETIREMENT.lock().unwrap_or_else(|e| e.into_inner());
     let key = Arc::new(Mutex::new((0u64, 0u64)));
     let k = key.clone();
+    let (entered_tx, entered) = std::sync::mpsc::channel();
     let hook: Hook = Box::new(move |_| {
+        entered_tx.send(()).unwrap();
         let (key, attachment) = *k.lock().unwrap();
         // From inside draw (no lock held): an iOS-style asynchronous revocation.
         assert_eq!(platform::revoke_async(key, attachment), Revoked::Retiring { in_flight: 0 });
     });
     let mut h = Harness::start(Next::Wait, false, Some(hook));
+    // Attaching wakes the render thread immediately. Publish the returned attachment
+    // while holding the same lock the hook reads, never exposing the initial (0, 0).
+    let mut published = key.lock().unwrap();
     let a = attach(&h.surface, E);
-    *key.lock().unwrap() = (h.surface.key(), a);
+    // Force the previously failing schedule: draw starts before publication finishes.
+    entered.recv_timeout(LONG).unwrap();
+    *published = (h.surface.key(), a);
+    drop(published);
     until("revoked and released", || count(&h.log, "drop target") == 1);
     assert_eq!(count(&h.log, "dropped unpresented"), 1);
     assert_eq!(count(&h.log, "present"), 0);
@@ -379,6 +396,7 @@ fn a_lost_device_is_dropped_after_resources_and_swapchain_and_replaced_on_the_ne
     h.script.lock().unwrap().fault = Some((1, "device lost (Unknown): gone".into(), true));
     h.shared.set_state(2);
     until("reset", || h.status().gpu == GpuState::Failed);
+    until("lost device dropped", || count(&h.log, "drop device 1") == 1);
     let e = events(&h.log);
     let last = |w: &str| e.iter().rposition(|x| x == w).unwrap();
     assert!(last("drop resources") < last("drop target") && last("drop target") < last("drop device 1"), "{e:?}");
@@ -423,15 +441,15 @@ fn close_and_drop_from_other_threads_never_wait_for_a_busy_render_thread() {
     let mut h = Harness::start(Next::Wait, false, Some(hook));
     attach(&h.surface, E);
     entered.recv_timeout(LONG).unwrap();
-    let started = Instant::now();
     let (s, sf) = (h.shared.clone(), h.surface.clone());
-    thread::spawn(move || {
+    let (closed_tx, closed) = std::sync::mpsc::channel();
+    let closer = thread::spawn(move || {
         s.close();
         sf.close();
-    })
-    .join()
-    .unwrap();
-    assert!(started.elapsed() < Duration::from_millis(200), "close returned while the thread was busy");
+        closed_tx.send(()).unwrap();
+    });
+    closed.recv_timeout(LONG).expect("close must finish while the render hook remains blocked");
+    closer.join().unwrap();
     assert!(!h.shared.set_state(1));
     drop(held);
     h.thread.take().unwrap().join().unwrap();
@@ -449,6 +467,7 @@ fn touch_is_delivered_on_every_wake_also_after_detach() {
     let before = events(&h.log).iter().filter(|e| e.starts_with("touch ")).count();
     assert_eq!(platform::detach(h.surface.key(), a, LONG), Detached::Released);
     until("reset delivered while detached", || events(&h.log).iter().filter(|e| e.starts_with("touch ")).count() > before);
+    until("detach status committed", || h.status().state == SurfaceState::Detached);
     assert_eq!(h.status().state, SurfaceState::Detached);
     h.close_and_join();
 }
