@@ -50,7 +50,13 @@ jobs:
       - run: npm run fmt:check
       - run: npm run lint
       - run: npm run typecheck
-      - run: npm test
+      - name: Prepare offline test dependencies and run tests
+        run: |
+          node scripts/prepare-test-cache.mjs
+          source scripts/rust-env.sh
+          rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal
+          cargo fetch --locked
+          npm test
       - run: npm run rnrs:check
       - name: Release check (pack, metadata, versions)
         run: node scripts/release.mjs check --dir .generated/release
@@ -78,6 +84,8 @@ jobs:
           source scripts/rust-env.sh
           rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal
           cargo test --workspace --locked --features rnrs-core/tokio,rnrs-core/smol
+      - name: Prepare npm metadata for offline consumer installs
+        run: node scripts/prepare-test-cache.mjs
       - name: Packaged framework resolution, offline
         shell: nix develop .#host --command bash -euo pipefail {0}
         run: source scripts/rust-env.sh && npm run test:rnrs-offline
@@ -92,6 +100,9 @@ jobs:
         run: bash scripts/test-native.sh
 
   web:
+    env:
+      # Disposable hosted runner; Nix Chromium cannot use its setuid helper here.
+      RNRS_WEB_NO_SANDBOX: '1'
     name: Browser harness and clean web consumers
     runs-on: ubuntu-24.04
     timeout-minutes: 45

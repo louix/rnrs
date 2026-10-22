@@ -57,8 +57,9 @@ function moduleUsing(app, name, { crate, requirement, dependsOn }) {
   const dir = path.join(app, 'node_modules', name);
   cpSync(path.join(ROOT, 'packages/counter'), dir, {
     recursive: true,
+    // Only exclude the package's generated wrapper, not an ancestor checkout named rnrs.
     filter: (src) =>
-      !src.includes(`${path.sep}rnrs${path.sep}`) && !src.endsWith(`${path.sep}rnrs`),
+      path.relative(path.join(ROOT, 'packages/counter'), src).split(path.sep)[0] !== 'rnrs',
   });
   const manifest = JSON.parse(readFileSync(path.join(dir, 'package.json'), 'utf8'));
   manifest.name = name;

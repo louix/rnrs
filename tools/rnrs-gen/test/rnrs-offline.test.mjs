@@ -10,6 +10,7 @@
 // Without cargo the test is skipped, unless RNRS_REQUIRE_CARGO=1, which makes that a failure and
 // requires CARGO_HOME to be set, so the warm-up and the test use the same cache. The strict
 // command (inside `nix develop`, from the repository root):
+//   node scripts/prepare-test-cache.mjs
 //   source scripts/rust-env.sh && npm run test:rnrs-offline
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -75,8 +76,8 @@ test(
       const app = path.join(work, 'app');
       mkdirSync(app);
       writeFileSync(path.join(app, 'package.json'), JSON.stringify({ name: 'app', private: true }));
-      // A real npm install of the tarballs, offline from the npm cache (warmed by the repository's
-      // npm ci): the CLI's own dependencies (typescript, smol-toml) come from its package.json.
+      // A real npm install of the tarballs, offline after scripts/prepare-test-cache.mjs.
+      // The CLI's own dependencies (typescript, smol-toml) come from its package.json.
       // React Native peers are not needed for Rust commands (--legacy-peer-deps).
       const npm = (...args) => {
         const r = spawnSync(
@@ -95,7 +96,7 @@ test(
         assert.equal(
           r.status,
           0,
-          `npm install --offline ${args.join(' ')} failed (warm the npm cache: npm ci in the repository):\n${r.stderr}`,
+          `npm install --offline ${args.join(' ')} failed (prepare the npm cache: node scripts/prepare-test-cache.mjs):\n${r.stderr}`,
         );
       };
       npm(path.join(packDir, 'rnrs-cli-0.1.0.tgz'), path.join(packDir, 'rnrs-runtime-0.1.0.tgz'));

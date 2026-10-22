@@ -26,7 +26,7 @@ install the toolchain there. Shells are described in [setup](setup.md#nix-shells
 
 | Command | Shell | Needs |
 | --- | --- | --- |
-| `npm test` | any | Node. Lock-file tests skip without cargo; run `source scripts/rust-env.sh && cargo fetch --locked` first for the full set. |
+| `npm test` | any | Run `node scripts/prepare-test-cache.mjs` once for offline npm installs. Lock-file tests skip without cargo; run `source scripts/rust-env.sh && cargo fetch --locked` first for the full set. |
 | `npm run typecheck`, `npm run rnrs:check` | any | Node |
 | `node scripts/pack.mjs` | any | Node; writes `.generated/pack/` ([local packages](setup.md#local-framework-packages)) |
 | `node scripts/release.mjs check` | any | Node; packs and checks the publishable packages ([releasing](releasing.md)) |
@@ -44,6 +44,9 @@ install the toolchain there. Shells are described in [setup](setup.md#nix-shells
 The Android lab app runs the ownership and lifecycle suites on launch. Install its release APK, then
 run `node scripts/rnrs-device-test.mjs`. Native test hooks are compiled only with `RNRS_TEST_HOOKS`
 ([iOS](ios.md#build-integration)); the lab enables them in `apps/lab/android/gradle.properties`.
+
+On disposable CI runners without a working Chromium sandbox, set `RNRS_WEB_NO_SANDBOX=1`
+for browser harnesses. Local runs keep the sandbox enabled by default.
 
 ## JavaScript maintenance
 

@@ -1,7 +1,7 @@
 // The packed @rnrs/cli in an app that type-checks with TypeScript 7: the app's tsc stays 7 in
 // every install order, and the generator still gets the TypeScript 6 compiler API (its own
-// typescript@6.0.3 dependency, nested under the CLI). Offline from the npm cache warmed by the
-// repository's npm ci (typescript 7.0.2 and 6.0.3 are both in the repository lock).
+// typescript@6.0.3 dependency, nested under the CLI). Prepare the offline npm cache with
+// node scripts/prepare-test-cache.mjs (npm ci alone need not cache registry metadata).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';

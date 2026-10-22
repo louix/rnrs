@@ -57,6 +57,8 @@ const browser = spawn(
   process.env.CHROMIUM ?? 'chromium',
   [
     '--headless=new',
+    // Explicit opt-in for disposable CI runners without a working Chromium sandbox.
+    ...(process.env.RNRS_WEB_NO_SANDBOX === '1' ? ['--no-sandbox'] : []),
     '--no-first-run',
     '--no-default-browser-check',
     ...(process.env.RNRS_WEB_UNSAFE_WEBGPU === '1'
