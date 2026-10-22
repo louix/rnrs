@@ -104,33 +104,69 @@ fn async_hashing_retains_the_hasher_and_observes_cancellation() {
 
 #[test]
 fn concurrent_update_laters_through_the_glue_commit_whole_updates_only() {
+    whole_updates(false);
+    // A legal schedule: the first task finishes before the second starts.
+    whole_updates(true);
+}
+
+fn whole_updates(serial: bool) {
     let h = Harness::new(&blake3_glue::MODULE, 8);
     let mut env = h.env();
     let (a, b) = (input(4 << 20), vec![7u8; 1 << 20]);
     let hasher = h.call(&mut env, "hasher", NONE, vec![]).unwrap();
     h.call(&mut env, "Hasher.update", hasher.clone(), vec![V::buf(b"head")]).unwrap();
     let ia = h.call(&mut env, "Hasher.updateLater", hasher.clone(), vec![V::buf(&a)]).unwrap().num() as u64;
+    let mut settled = if serial { h.settle(&mut env, 1) } else { Vec::new() };
     let ib = h.call(&mut env, "Hasher.updateLater", hasher.clone(), vec![V::buf(&b)]).unwrap().num() as u64;
-    let settled = h.settle(&mut env, 2);
+    settled.extend(h.settle(&mut env, if serial { 1 } else { 2 }));
+    let mut ids: Vec<u64> = settled.iter().map(|s| s.0).collect();
+    ids.sort_unstable();
+    assert_eq!(ids, vec![ia, ib]);
     let ok: Vec<u64> = settled.iter().filter(|s| s.1 == Settled::Ok(String::new())).map(|s| s.0).collect();
-    assert_eq!(ok.len(), 1, "{settled:?}");
-    let failed = settled.iter().find(|s| s.0 != ok[0]).unwrap();
-    assert_eq!(failed.1, Settled::Failed(rnrs_blake3::BUSY.into()));
-    let winner = if ok[0] == ia { &a } else { assert_eq!(ok[0], ib); &b };
-    let mut expected = blake3::Hasher::new();
-    expected.update(b"head").update(winner);
-    assert_eq!(h.call(&mut env, "Hasher.finalize", hasher.clone(), vec![]).unwrap().bytes(), expected.finalize().as_bytes().to_vec());
-    // A sync update right after an updateLater is either ordered before it (the operation
-    // had not started) or fails busy; both leave whole updates. (Exact interleavings are
-    // covered deterministically by the crate's own tests.)
+    assert!(!ok.is_empty(), "{settled:?}");
+    if serial { assert_eq!(ok.len(), 2, "non-overlapping updates must both succeed"); }
+    for result in &settled {
+        assert!(result.0 == ia || result.0 == ib, "unexpected operation: {result:?}");
+        if !ok.contains(&result.0) {
+            assert_eq!(result.1, Settled::Failed(rnrs_blake3::BUSY.into()));
+        }
+    }
+    // Overlapping operations reject one as busy; non-overlapping operations may both
+    // succeed. In either case, only whole updates may appear in the committed digest.
+    let orders: Vec<Vec<&[u8]>> = if ok.len() == 2 {
+        vec![vec![&a, &b], vec![&b, &a]]
+    } else {
+        vec![vec![if ok[0] == ia { &a } else { &b }]]
+    };
+    let actual = h.call(&mut env, "Hasher.finalize", hasher.clone(), vec![]).unwrap().bytes();
+    let expected = orders.into_iter().map(|parts| {
+        let mut state = blake3::Hasher::new();
+        state.update(b"head");
+        for part in parts { state.update(part); }
+        state
+    }).find(|state| state.finalize().as_bytes().as_slice() == actual.as_slice())
+        .expect("digest must contain exactly the successful whole updates");
+    // A sync update may run before or after the async update, or fail busy during it.
+    // Exact overlapping interleavings are tested deterministically in the crate itself.
     let big = input(32 << 20);
     h.call(&mut env, "Hasher.updateLater", hasher.clone(), vec![V::buf(&big)]).unwrap();
     let sync = h.call(&mut env, "Hasher.update", hasher.clone(), vec![V::buf(b"x")]);
     assert_eq!(h.settle(&mut env, 1)[0].1, Settled::Ok(String::new()));
-    match sync {
-        Ok(_) => { expected.update(b"x"); }
-        Err(e) => assert_eq!(e, format!("Error: {}", rnrs_blake3::BUSY)),
-    }
-    expected.update(&big);
-    assert_eq!(h.call(&mut env, "Hasher.finalize", hasher, vec![]).unwrap().bytes(), expected.finalize().as_bytes().to_vec());
+    let mut after = expected.clone();
+    after.update(&big);
+    let valid = match sync {
+        Ok(_) => {
+            let mut before = expected;
+            before.update(b"x").update(&big);
+            after.update(b"x");
+            vec![before.finalize(), after.finalize()]
+        }
+        Err(e) => {
+            assert_eq!(e, format!("Error: {}", rnrs_blake3::BUSY));
+            vec![after.finalize()]
+        }
+    };
+    let actual = h.call(&mut env, "Hasher.finalize", hasher, vec![]).unwrap().bytes();
+    assert!(valid.iter().any(|hash| hash.as_bytes().as_slice() == actual.as_slice()),
+        "sync and async updates must commit in a valid serial order");
 }

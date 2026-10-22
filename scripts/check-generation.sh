@@ -17,9 +17,16 @@ rm -rf apps/lab/.rnrs/android/bundle
 node packages/cli/bin/rnrs.mjs bundle --target android --app apps/lab >/dev/null
 test -f apps/lab/.rnrs/android/bundle/src/lib.rs
 echo "4/4 concurrent bundle generators"
-for i in 1 2 3 4; do node packages/cli/bin/rnrs.mjs bundle --target android --app apps/lab >/dev/null & done
-wait
+pids=()
+for i in 1 2 3 4; do
+  node packages/cli/bin/rnrs.mjs bundle --target android --app apps/lab >/dev/null &
+  pids+=("$!")
+done
+failed=0
+for pid in "${pids[@]}"; do wait "$pid" || failed=1; done
+test "$failed" = 0
 ! find apps/lab/.rnrs/android/bundle -name '*.tmp-*' | grep -q .
-cargo test -p bind-tests -q 2>&1 | grep -E "test result" | head -3
+# Keep suite names and assertion diagnostics; a summary-only pipe hides failures.
+cargo test -p bind-tests
 node tools/rnrs-gen/cli.mjs generate >/dev/null  # restore the TS wrappers for tsc/Metro
 echo "generation checks passed"
