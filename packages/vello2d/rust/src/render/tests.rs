@@ -94,6 +94,8 @@ struct Ctl {
     prepare_gate: Gate,
     /// Blocks inside present after the first admission (an admitted acquire in flight).
     present_gate: Gate,
+    /// Blocks after the fake emits Present, before the render loop can update its stats.
+    return_gate: Gate,
     /// Device-lost flag, as the real device-lost callback sets it.
     lost: AtomicBool,
     /// Every present fails with this error (a persistent fault).
@@ -184,6 +186,7 @@ impl Presenter for Fake {
         if acquired && result == Err(PresentError::Revoked) {
             self.events.send(Event::PresentRevoked).unwrap();
         }
+        self.ctl.return_gate.pass();
         result.map(|()| Timings::default())
     }
     fn raster_size(&self, e: Extent) -> (u32, u32) {
@@ -211,6 +214,21 @@ struct Rig {
     shared: Arc<Shared>,
     rx: mpsc::Receiver<Event>,
     ctl: Arc<Ctl>,
+}
+impl Drop for Rig {
+    fn drop(&mut self) {
+        // Assertions must not strand a render thread and poison subsequent tests.
+        self.shared.close();
+        self.ctl.prepare_gate.open();
+        self.ctl.present_gate.open();
+        self.ctl.return_gate.open();
+        // Keep the receiver alive while the presenter finishes its teardown events.
+        // Cleanup must not panic during unwinding; tests still assert their own outcomes.
+        let deadline = Instant::now() + T;
+        while let Some(left) = deadline.checked_duration_since(Instant::now()) {
+            if self.rx.recv_timeout(left).is_err() { break; }
+        }
+    }
 }
 fn rig() -> Rig {
     let surface = Surface::new().unwrap();
@@ -247,6 +265,26 @@ fn wait_until(mut pred: impl FnMut() -> bool) -> bool {
         std::thread::sleep(Duration::from_millis(5));
     }
     pred()
+}
+
+#[test]
+fn a_panicking_test_releases_its_blocked_renderer() {
+    let _s = serial();
+    assert!(wait_until(|| process_counts().1 == 0));
+    let result = std::panic::catch_unwind(|| {
+        let r = rig();
+        r.ctl.return_gate.enable();
+        attach(&r.surface, E);
+        assert_eq!(next(&r.rx), Event::Prepare);
+        assert!(matches!(next(&r.rx), Event::Bind(_, _)));
+        assert!(r.shared.submit(rect_frame(1)));
+        assert_eq!(next(&r.rx), Event::Present(1));
+        r.ctl.return_gate.wait_entered(1);
+        panic!("simulate a failed test assertion while the presenter is blocked");
+    });
+    let panic = result.expect_err("the deliberate assertion must unwind the rig");
+    assert_eq!(panic.downcast_ref::<&str>(), Some(&"simulate a failed test assertion while the presenter is blocked"));
+    assert!(wait_until(|| process_counts().1 == 0), "unwinding must release the thread slot");
 }
 
 #[test]
@@ -366,15 +404,23 @@ fn device_loss_drops_everything_then_recovers_with_a_new_device() {
     let (a, _, _) = attach(&r.surface, E);
     assert_eq!(next(&r.rx), Event::Prepare);
     assert_eq!(next(&r.rx), Event::Bind(a, 100));
+    r.ctl.prepare_gate.enable(); // hold recovery until its intermediate state is inspected
     lock(&r.ctl.present_results).push_back(PresentError::DeviceLost("test".into()));
     assert!(r.shared.submit(rect_frame(1)));
     assert_eq!(next(&r.rx), Event::Unbind);
     assert_eq!(next(&r.rx), Event::ResetDevice, "old resources dropped before a new device");
     assert_eq!(r.shared.stats().gpu, GpuState::Recovering);
+    r.ctl.return_gate.enable();
     assert!(r.shared.submit(rect_frame(2)), "submit stays true while recovering");
+    r.ctl.prepare_gate.open();
     assert_eq!(next(&r.rx), Event::Prepare, "new device after the backoff");
     assert_eq!(next(&r.rx), Event::Bind(a, 100));
     assert_eq!(next(&r.rx), Event::Present(2));
+    // Present is emitted *inside* the presenter, not after the loop commits recovery.
+    r.ctl.return_gate.wait_entered(1);
+    assert_eq!(r.shared.stats().gpu, GpuState::Recovering);
+    r.ctl.return_gate.open();
+    assert!(wait_until(|| r.shared.stats().gpu == GpuState::Ready));
     let s = r.shared.stats();
     assert_eq!((s.gpu, s.device_losses), (GpuState::Ready, 1));
     assert!(s.last_error.unwrap().contains("device lost"));
@@ -418,7 +464,7 @@ fn repeated_bind_failures_back_off_then_fail_until_a_new_attachment() {
     let (b, _, _) = attach(&r.surface, E);
     assert_eq!(next(&r.rx), Event::Bind(b, 100), "a new attachment gets fresh attempts");
     assert_eq!(next(&r.rx), Event::Present(1));
-    assert_eq!(r.shared.stats().gpu, GpuState::Ready);
+    assert!(wait_until(|| r.shared.stats().gpu == GpuState::Ready));
     r.shared.close();
 }
 
@@ -793,6 +839,7 @@ fn a_failed_timeout_readback_refuses_acquires_and_recovers_by_rebinding() {
     assert_eq!(next(&r.rx), Event::Bind(a, 100), "rebinds (and reconfigures) after the backoff");
     assert!(unbound.elapsed() >= Duration::from_millis(90), "not a spin: waited {:?}", unbound.elapsed());
     assert_eq!(next(&r.rx), Event::Present(1));
+    assert!(wait_until(|| r.shared.stats().frames_presented == 1));
     let s = r.shared.stats();
     assert_eq!(s.recovery_attempts, 1);
     assert_eq!(s.frames_presented, 1);
