@@ -19,5 +19,5 @@ npx rnrs check                              # interface current, package usable 
 npm pack                                    # archive for apps to install
 ```
 
-Reference: [spec types](generator.md#spec-types), [runtime rules](ownership.md#rules),
+Reference: [type map](types.md), [runtime rules](ownership.md#rules),
 [platform support](support.md).

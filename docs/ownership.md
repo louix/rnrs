@@ -1,6 +1,6 @@
 # Ownership and lifecycle
 
-The [generator](generator.md) defines conversion semantics; [surface](surface.md) covers platform render resources.
+The [type map](types.md) defines conversion semantics; [surface](surface.md) covers platform render resources.
 
 ## Rules
 

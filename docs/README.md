@@ -10,7 +10,8 @@ Tutorials:
 Reference:
 
 - [Platform support](support.md) and example modules.
-- [Generator](generator.md): spec types, conversions and generated interfaces.
+- [Type map](types.md): TypeScript types, Rust equivalents and conversion rules.
+- [Generator](generator.md): spec rules, generated interfaces and async methods.
 - [Ownership](ownership.md): runtime rules, buffers, native objects, cancellation and teardown.
 - [Packaging](packaging.md): module packages, discovery, targets and lock files.
 - [Rendering surfaces](surface.md), [logging](logging.md) and [iOS integration](ios.md).
