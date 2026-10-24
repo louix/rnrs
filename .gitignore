@@ -17,6 +17,7 @@ node_modules/
 /apps/lab/web/rnrs/
 /packages/*/rnrs/
 /packages/fixtures/*/rnrs/
+/benchmarks/turbo-compare/rnrs-module/rnrs/
 /fixtures/*/node_modules/
 /packages/runtime/android/build/
 /packages/runtime/android/.cxx/

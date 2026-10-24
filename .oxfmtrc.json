@@ -26,6 +26,8 @@
     "packages/fixtures/*/rnrs/**",
     "apps/lab/web/rnrs/**",
     "fixtures/*/rnrs/**",
+    "benchmarks/*/rnrs-module/rnrs/**",
+    "**/*.generated.ts",
     "**/package-lock.json",
     "**/Cargo.lock",
     "**/*.Cargo.lock"

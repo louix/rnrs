@@ -1,0 +1,39 @@
+{
+  "name": "@rnrs/labs-turbo-compare",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Benchmark-only rnrs module for the C++ TurboModule comparison (benchmarks/turbo-compare). Not a product module.",
+  "license": "MIT",
+  "rustNative": {
+    "targets": [
+      "android",
+      "ios"
+    ],
+    "spec": "turbo-compare.spec.ts",
+    "rust": {
+      "crate": "rnrs-turbo-compare",
+      "path": "rust",
+      "module": "TurboCompare"
+    },
+    "maxInFlight": 8
+  },
+  "files": [
+    "turbo-compare.spec.ts",
+    "rust/Cargo.toml",
+    "rust/src",
+    "rnrs"
+  ],
+  "main": "rnrs/index.ts",
+  "types": "rnrs/index.ts",
+  "react-native": "rnrs/index.ts",
+  "exports": {
+    ".": {
+      "types": "./rnrs/index.ts",
+      "default": "./rnrs/index.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "peerDependencies": {
+    "@rnrs/runtime": "0.1.0"
+  }
+}

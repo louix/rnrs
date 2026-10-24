@@ -1556,6 +1556,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "rnrs-turbo-compare"
+version = "0.1.0"
+dependencies = [
+ "rnrs-core",
+]
+
+[[package]]
 name = "rnrs-vello2d"
 version = "0.1.0"
 dependencies = [
