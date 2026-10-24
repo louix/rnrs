@@ -22,7 +22,7 @@ node_modules/
 /packages/runtime/android/.cxx/
 
 # Persistent companion notes and recorded run outputs
-/.project-notes/
+/.project-notes
 /results/
 /fixtures/web-*/result*.json
 /fixtures/web-*/result*.jsonl
