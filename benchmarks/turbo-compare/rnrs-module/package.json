@@ -1,6 +1,6 @@
 {
   "name": "@rnrs/labs-turbo-compare",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Benchmark-only rnrs module for the C++ TurboModule comparison (benchmarks/turbo-compare). Not a product module.",
   "license": "MIT",
@@ -35,6 +35,6 @@
     "./package.json": "./package.json"
   },
   "peerDependencies": {
-    "@rnrs/runtime": "0.1.0"
+    "@rnrs/runtime": "0.2.0"
   }
 }

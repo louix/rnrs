@@ -59,7 +59,7 @@ class RnrsRuntimeModule(context: ReactApplicationContext) :
 
   companion object {
     const val NAME = "RnrsRuntime"
-    const val VERSION = "0.1.0"
+    const val VERSION = "0.2.0"
   }
 }
 

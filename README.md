@@ -21,7 +21,7 @@ impl rnrs_interface::XorModule for Module {
 xorModule().xor(bytes.buffer, 7);
 ```
 
-**Experimental:** APIs may change, and platform coverage is limited; see [platform support](docs/support.md).
+Headless modules support Android, iOS and web. Fabric surface integration is experimental; see [platform support](docs/support.md).
 
 - [Quickstart](docs/quickstart.md)
 - [Headless module tutorial](docs/headless.md) and [triangle tutorial](docs/triangle.md)

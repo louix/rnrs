@@ -7,10 +7,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 APP="$ROOT/.generated/consumer/kv-web"
 PACK="$ROOT/.generated/pack"
-[ -f "$PACK/rnrs-example-kv-0.1.0.tgz" ] || node "$ROOT/scripts/pack.mjs"
+[ -f "$PACK/rnrs-example-kv-0.2.0.tgz" ] || node "$ROOT/scripts/pack.mjs"
 rm -rf "$APP" && mkdir -p "$APP"
 printf '{"name": "kv-web", "version": "0.0.0", "private": true, "type": "module"}\n' > "$APP/package.json"
-(cd "$APP" && npm install --no-audit --no-fund "$PACK/rnrs-cli-0.1.0.tgz" "$PACK/rnrs-runtime-0.1.0.tgz" "$PACK/rnrs-example-kv-0.1.0.tgz" >/dev/null)
+(cd "$APP" && npm install --no-audit --no-fund "$PACK/rnrs-cli-0.2.0.tgz" "$PACK/rnrs-runtime-0.2.0.tgz" "$PACK/rnrs-example-kv-0.2.0.tgz" >/dev/null)
 if out=$(cd "$APP" && npx rnrs build --target web --app . 2>&1); then echo "web build of a kv app succeeded" >&2; exit 1; fi
 echo "$out" | grep -q 'kv-web -> @rnrs/example-kv: example-kv declares rustNative.targets \[android, ios\] and cannot be bundled for web'
 [ ! -d "$APP/.rnrs/web/target" ]

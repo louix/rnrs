@@ -4,7 +4,7 @@
 | --- | --- |
 | React Native | 0.88.0, New Architecture (bridgeless), Hermes. The packages accept later 0.88 patch releases, which are not individually tested. Older versions are not supported. |
 | Android | arm64 release builds. Native libraries are linked 16 KB page-aligned, but have only run on 4 KB-page devices. |
-| iOS | arm64 release builds, CocoaPods, React Native's prebuilt core. React Native 0.88.0 has run on the simulator only; physical-iPhone runs used 0.83.1. No `use_frameworks!` or Swift Package Manager. See [iOS](ios.md). |
+| iOS | arm64 release builds, CocoaPods, React Native's prebuilt core. React Native 0.88.0 has run on the simulator and an iPhone 12 Pro. No `use_frameworks!` or Swift Package Manager. See [iOS](ios.md). |
 | Browser | Wasm on the main thread, initialized with `initRnrs`. No workers, WASI or Node.js. |
 | Expo | SDK 58 with prebuild and a custom build. Expo Go cannot load custom native code. The iOS build has been run; the Android build has not. |
 | Rust | 1.90.0. The Bevy example needs 1.97.1 and Android API 26 ([Bevy](../packages/bevy3d/README.md)). |

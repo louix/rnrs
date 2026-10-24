@@ -4,6 +4,8 @@
   "private": true,
   "license": "MIT",
   "rustNative": {
-    "targets": ["android"]
+    "targets": [
+      "android"
+    ]
   }
 }

@@ -98,7 +98,7 @@ checksum = "3d52eff69cd5e647efe296129160853a42795992097e8af39800e1060caeea9b"
 
 [[package]]
 name = "counter"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "gloo-timers",
  "rnrs-core",
@@ -545,7 +545,7 @@ checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
 name = "meter"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "gloo-timers",
  "rnrs-core",
@@ -754,14 +754,14 @@ dependencies = [
 
 [[package]]
 name = "rnrs-bench"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "rnrs-core",
 ]
 
 [[package]]
 name = "rnrs-blake3"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "blake3",
  "rnrs-core",
@@ -784,11 +784,11 @@ dependencies = [
 
 [[package]]
 name = "rnrs-core"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "rnrs-http"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "futures-util",
  "gloo-timers",
@@ -799,7 +799,7 @@ dependencies = [
 
 [[package]]
 name = "rnrs-web"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "js-sys",
  "rnrs-core",
@@ -1161,7 +1161,7 @@ checksum = "b6c140620e7ffbb22c2dee59cafe6084a59b5ffc27a8859a5f0d494b5d52b6be"
 
 [[package]]
 name = "values"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "gloo-timers",
  "rnrs-core",

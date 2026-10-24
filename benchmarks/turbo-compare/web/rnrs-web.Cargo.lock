@@ -91,18 +91,18 @@ dependencies = [
 
 [[package]]
 name = "rnrs-core"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "rnrs-turbo-compare"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "rnrs-core",
 ]
 
 [[package]]
 name = "rnrs-web"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "js-sys",
  "rnrs-core",

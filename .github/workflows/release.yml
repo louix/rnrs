@@ -142,3 +142,36 @@ jobs:
           TAG: ${{ needs.build.outputs.tag }}
           NPM_CONFIG_PROVENANCE: 'true'
         run: node scripts/release.mjs stage --dir dist --tag "$TAG" --sha "$GITHUB_SHA"
+
+  github-release:
+    name: Create GitHub Release
+    needs: [build, stage]
+    if: ${{ github.ref_type == 'tag' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Create release with changelog and generated notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.build.outputs.tag }}
+        run: |
+          set -euo pipefail
+          # Keep an existing release and any manually edited notes on workflow retries.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists."
+            exit 0
+          fi
+          notes="$RUNNER_TEMP/rnrs-release-notes.md"
+          awk -v heading="## ${TAG#v}" '
+            /^## / { if (found) exit; if ($0 == heading) { found=1; next } }
+            found { print }
+          ' CHANGELOG.md > "$notes"
+          echo 'npm publication requires separate approval on npm with 2FA.' >> "$notes"
+          gh release create "$TAG" --verify-tag --title "$TAG" \
+            --generate-notes --notes-file "$notes"

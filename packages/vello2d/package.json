@@ -1,6 +1,6 @@
 {
   "name": "@rnrs/example-vello2d",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "2D renderer for @rnrs/surface on Android and iOS: Vello scene raster (vello_cpu) presented through wgpu (Vulkan on Android, Metal on iOS), fed by whole frames from TypeScript. Experimental.",
   "license": "MIT",
@@ -39,9 +39,9 @@
     "./package.json": "./package.json"
   },
   "dependencies": {
-    "@rnrs/surface": "0.1.0"
+    "@rnrs/surface": "0.2.0"
   },
   "peerDependencies": {
-    "@rnrs/runtime": "0.1.0"
+    "@rnrs/runtime": "0.2.0"
   }
 }

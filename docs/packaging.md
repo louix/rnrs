@@ -49,7 +49,7 @@ Public npm packages use `@rnrs/*`; Rust packages use `rnrs` or `rnrs-*`.
 
 ## Rust library packages
 
-A renderer crate depends on `rnrs-surface`, which ships in the `@rnrs/surface` npm package rather than on crates.io. Such a package declares `"rustNative": {"targets": [...], "library": {"crate": "rnrs-surface", "path": "rust"}}`. It is discovered and target-checked like a module, registers no module, and is patched into the bundle by crate name, so module crates depend on it by version (`rnrs-surface = "0.1"`, or through `rnrs`'s `surface` feature).
+A renderer crate depends on `rnrs-surface`, which ships in the `@rnrs/surface` npm package rather than on crates.io. Such a package declares `"rustNative": {"targets": [...], "library": {"crate": "rnrs-surface", "path": "rust"}}`. It is discovered and target-checked like a module, registers no module, and is patched into the bundle by crate name, so module crates depend on it by version (`rnrs-surface = "0.2"`, or through `rnrs`'s `surface` feature).
 
 - The crate name must equal the Cargo package name, and the path must stay inside the package.
 - `generate`, `check` and `pack-js` refuse library packages.

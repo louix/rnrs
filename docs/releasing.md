@@ -31,6 +31,8 @@ with the framework version.
 1. Merge to main and wait for CI. Tag that commit `vX.Y.Z` and push the tag.
 2. The release workflow runs CI (including iOS), builds and verifies the three packages, then
    stages those exact artifacts on npm with provenance. It cannot approve publication.
+   After staging succeeds, it creates a GitHub Release with the matching `CHANGELOG.md`
+   section and GitHub-generated change notes. Workflow retries preserve existing release notes.
 3. Review the staged packages on npm, checking their version and provenance against the release
    commit. Approve cli, runtime and surface with npm 2FA. Until all three are approved, the exact
    dependency versions can make the release temporarily uninstallable.

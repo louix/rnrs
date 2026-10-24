@@ -1,8 +1,8 @@
 [package]
 name = "rnrs-bench"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "Measurement-only module for the conversion pilot."
 
 [dependencies]
-rnrs-core = "0.1"
+rnrs-core = "0.2"

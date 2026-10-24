@@ -1,6 +1,6 @@
 {
   "name": "@rnrs/labs-meter",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Meter module: second generator fixture. Rust implementation in rust/meter.",
   "license": "MIT",
@@ -37,6 +37,6 @@
     "./package.json": "./package.json"
   },
   "peerDependencies": {
-    "@rnrs/runtime": "0.1.0"
+    "@rnrs/runtime": "0.2.0"
   }
 }

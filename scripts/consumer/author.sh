@@ -12,7 +12,7 @@ C="$ROOT/.generated/consumer"
 PKG="$C/author-xor"
 APP="$C/author-app"
 PACK="$ROOT/.generated/pack"
-[ -f "$PACK/rnrs-runtime-0.1.0.tgz" ] || node "$ROOT/scripts/pack.mjs"
+[ -f "$PACK/rnrs-runtime-0.2.0.tgz" ] || node "$ROOT/scripts/pack.mjs"
 export RUSTUP_HOME="${RUSTUP_HOME:-$ROOT/.generated/rustup}"
 export CARGO_HOME="${CARGO_HOME:-$ROOT/.generated/cargo}"
 export RUSTUP_TOOLCHAIN="${RUSTUP_TOOLCHAIN:-1.90.0}"
@@ -34,7 +34,7 @@ cat > "$PKG/package.json" <<'JSON'
   "types": "rnrs/index.ts",
   "browser": "rnrs/web.ts",
   "exports": {".": {"types": "./rnrs/index.ts", "browser": "./rnrs/web.ts", "default": "./rnrs/index.ts"}},
-  "peerDependencies": {"@rnrs/runtime": "0.1.0"},
+  "peerDependencies": {"@rnrs/runtime": "0.2.0"},
   "license": "UNLICENSED"
 }
 JSON
@@ -45,12 +45,12 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-rnrs-core = "0.1"
+rnrs-core = "0.2"
 TOML
 cp "$ROOT/fixtures/author/xor.spec.ts" "$PKG/"
 cp "$ROOT/fixtures/author/lib.rs" "$PKG/rust/src/lib.rs"
 cd "$PKG"
-npm install --no-audit --no-fund --save-dev "$PACK/rnrs-cli-0.1.0.tgz" "$PACK/rnrs-runtime-0.1.0.tgz"
+npm install --no-audit --no-fund --save-dev "$PACK/rnrs-cli-0.2.0.tgz" "$PACK/rnrs-runtime-0.2.0.tgz"
 npx rnrs generate .
 npx rnrs check .
 # rnrs-core is not on crates.io; resolve it to the installed framework copy for local builds.
@@ -64,7 +64,7 @@ cd "$APP"
 printf '{"name": "author-app", "version": "0.0.0", "private": true, "type": "module", "devDependencies": {"vite": "6.4.4"}}\n' > package.json
 printf '<!doctype html>\n<meta charset="utf-8">\n<script type="module" src="./main.ts"></script>\n' > index.html
 cp "$ROOT/fixtures/author/smoke.ts" main.ts
-npm install --no-audit --no-fund "$PACK/rnrs-cli-0.1.0.tgz" "$PACK/rnrs-runtime-0.1.0.tgz" "$tarball"
+npm install --no-audit --no-fund "$PACK/rnrs-cli-0.2.0.tgz" "$PACK/rnrs-runtime-0.2.0.tgz" "$tarball"
 npx rnrs build --target web --app .
 npx vite build --logLevel warn
 RNRS_WEB_ROOT="$APP/dist" node "$ROOT/scripts/web-test.mjs" $OUT_JSON

@@ -48,7 +48,7 @@ run(
     '--save-exact',
     ...pins,
     ...['rnrs-cli', 'rnrs-runtime', 'rnrs-surface', 'rnrs-example-bevy3d'].map((n) =>
-      path.join(root, '.generated/pack', n + '-0.1.0.tgz'),
+      path.join(root, '.generated/pack', n + '-0.2.0.tgz'),
     ),
   ],
   app,

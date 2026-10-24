@@ -13,7 +13,7 @@ as a direct dependency ([packaging](packaging.md#rust-library-packages)).
 
 ## The wgpu adapter (rnrs::gpu)
 
-With `rnrs = { version = "0.1", features = ["wgpu"] }`, a renderer writes only its pipeline and
+With `rnrs = { version = "0.2", features = ["wgpu"] }`, a renderer writes only its pipeline and
 draw commands. `rnrs::gpu` owns the surface, render loop, device, swapchain, window lease, teardown
 and failure handling on Android (Vulkan), iOS (Metal) and the browser (WebGPU). The API is
 documented in `packages/surface/rust/src/gpu/mod.rs`.

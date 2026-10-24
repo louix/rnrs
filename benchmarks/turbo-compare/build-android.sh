@@ -51,8 +51,8 @@ sed -i "s/^        applicationId \"com.helloworld\"$/        applicationId \"$AP
 diff -u "$OUT/build.gradle.template" "$GRADLE" > "$OUT/android-app-build.gradle.diff" || true
 
 P="$OUT/pack"
-(cd "$APP" && npm install --no-audit --no-fund "$P/rnrs-cli-0.1.0.tgz" "$P/rnrs-runtime-0.1.0.tgz" \
-  "$P/rnrs-labs-turbo-compare-0.1.0.tgz" "$P/rnrs-bench-cmp-cxx-0.1.0.tgz")
+(cd "$APP" && npm install --no-audit --no-fund "$P/rnrs-cli-0.2.0.tgz" "$P/rnrs-runtime-0.2.0.tgz" \
+  "$P/rnrs-labs-turbo-compare-0.2.0.tgz" "$P/rnrs-bench-cmp-cxx-0.1.0.tgz")
 # Nitro Modules core from the registry at the exact version its generated bindings come from.
 (cd "$APP" && npm install --no-audit --no-fund --save-exact "$P/rnrs-bench-cmp-nitro-0.1.0.tgz" \
   react-native-nitro-modules@0.37.1)

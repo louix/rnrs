@@ -78,7 +78,7 @@ checksum = "ac07cdecf99051d9a5238b80f35af32cdeba5b336e55d957b318b50137e18da5"
 
 [[package]]
 name = "bind-tests"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "blake3",
  "counter",
@@ -250,7 +250,7 @@ checksum = "3d52eff69cd5e647efe296129160853a42795992097e8af39800e1060caeea9b"
 
 [[package]]
 name = "counter"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "gloo-timers",
  "rnrs-core",
@@ -930,7 +930,7 @@ checksum = "f9f8bd3e56ce4dfc153cf470fffbfa98c7620958b312ca5c3a4b8d5181fd13c6"
 
 [[package]]
 name = "log-probe"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "log",
  "rnrs-core",
@@ -952,7 +952,7 @@ checksum = "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98"
 
 [[package]]
 name = "meter"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "gloo-timers",
  "rnrs-core",
@@ -1466,7 +1466,7 @@ dependencies = [
 
 [[package]]
 name = "rnrs"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "rnrs-core",
  "rnrs-surface",
@@ -1474,21 +1474,21 @@ dependencies = [
 
 [[package]]
 name = "rnrs-android"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "rnrs-core",
 ]
 
 [[package]]
 name = "rnrs-bench"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "rnrs-core",
 ]
 
 [[package]]
 name = "rnrs-blake3"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "blake3",
  "rnrs-core",
@@ -1496,11 +1496,11 @@ dependencies = [
 
 [[package]]
 name = "rnrs-build"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "rnrs-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "async-executor",
  "futures-lite",
@@ -1509,7 +1509,7 @@ dependencies = [
 
 [[package]]
 name = "rnrs-http"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "futures-util",
  "gloo-timers",
@@ -1520,7 +1520,7 @@ dependencies = [
 
 [[package]]
 name = "rnrs-kv"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "rnrs-core",
  "sled",
@@ -1529,7 +1529,7 @@ dependencies = [
 
 [[package]]
 name = "rnrs-log"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "cc",
  "log",
@@ -1542,7 +1542,7 @@ dependencies = [
 
 [[package]]
 name = "rnrs-surface"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "js-sys",
  "log",
@@ -1557,14 +1557,14 @@ dependencies = [
 
 [[package]]
 name = "rnrs-turbo-compare"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "rnrs-core",
 ]
 
 [[package]]
 name = "rnrs-vello2d"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "js-sys",
  "libc",
@@ -1580,7 +1580,7 @@ dependencies = [
 
 [[package]]
 name = "rnrs-web"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "js-sys",
  "rnrs-core",
@@ -1590,7 +1590,7 @@ dependencies = [
 
 [[package]]
 name = "rnrs-webgpu-triangle"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "rnrs",
 ]
@@ -1953,7 +1953,7 @@ dependencies = [
 
 [[package]]
 name = "touch-probe"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "raw-window-handle",
  "rnrs-core",
@@ -2097,7 +2097,7 @@ checksum = "ba73ea9cf16a25df0c8caa16c51acb937d5712a8429db78a3ee29d5dcacd3a65"
 
 [[package]]
 name = "values"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "gloo-timers",
  "rnrs-core",
@@ -2618,7 +2618,7 @@ checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
 
 [[package]]
 name = "worklets-probe"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "rnrs-core",
 ]

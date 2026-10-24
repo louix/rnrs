@@ -32,11 +32,11 @@ mkdir -p "$PKG"
 cd "$PKG"
 # A package.json first: npm would otherwise install into the nearest ancestor package.
 echo '{"name": "@demo/crc", "private": true}' > package.json
-npm exec --yes --package="$PACK/rnrs-cli-0.1.0.tgz" --package="$PACK/rnrs-runtime-0.1.0.tgz" -- rnrs init
+npm exec --yes --package="$PACK/rnrs-cli-0.2.0.tgz" --package="$PACK/rnrs-runtime-0.2.0.tgz" -- rnrs init
 node -e 'const d = require("./package.json").devDependencies; if (d["@rnrs/cli"] !== "0.1.0" || d["@rnrs/runtime"] !== "0.1.0") throw new Error("rnrs init did not write the devDependencies: " + JSON.stringify(d))'
 [ ! -e node_modules ] || { echo "rnrs init installed something" >&2; exit 1; }
 # Not published: the tarballs stand in for the registry versions init wrote.
-npm install --no-audit --no-fund --save-dev "$PACK/rnrs-cli-0.1.0.tgz" "$PACK/rnrs-runtime-0.1.0.tgz"
+npm install --no-audit --no-fund --save-dev "$PACK/rnrs-cli-0.2.0.tgz" "$PACK/rnrs-runtime-0.2.0.tgz"
 cp "$FIX/crc.spec.ts" crc.spec.ts
 cp "$FIX/lib.rs" rust/src/lib.rs
 printf 'crc32fast = "1"\n' >> rust/Cargo.toml
@@ -64,7 +64,7 @@ web)
   cp "$FIX/index.html" index.html
   cp "$FIX/web-main.ts" main.ts
   cp "$FIX/smoke.ts" smoke.ts
-  npm install --no-audit --no-fund "$PACK/rnrs-cli-0.1.0.tgz" "$PACK/rnrs-runtime-0.1.0.tgz" "$C/demo-crc-0.1.0.tgz"
+  npm install --no-audit --no-fund "$PACK/rnrs-cli-0.2.0.tgz" "$PACK/rnrs-runtime-0.2.0.tgz" "$C/demo-crc-0.1.0.tgz"
   npx rnrs build --target web --app .
   npx vite build --logLevel warn
   RNRS_WEB_ROOT="$APP/dist" node "$ROOT/scripts/web-test.mjs" $OUT_JSON

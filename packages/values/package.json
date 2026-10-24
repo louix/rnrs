@@ -1,6 +1,6 @@
 {
   "name": "@rnrs/labs-values",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Value-conversion fixture module (generator M2/M3). Rust implementation in rust/values.",
   "license": "MIT",
@@ -38,6 +38,6 @@
     "./package.json": "./package.json"
   },
   "peerDependencies": {
-    "@rnrs/runtime": "0.1.0"
+    "@rnrs/runtime": "0.2.0"
   }
 }

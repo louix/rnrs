@@ -1,11 +1,11 @@
 [package]
 name = "counter"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "Example module implementation: plain Rust, no JS or platform code."
 
 [dependencies]
-rnrs-core = "0.1"
+rnrs-core = "0.2"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { version = "1.47", default-features = false, features = ["time"] }
