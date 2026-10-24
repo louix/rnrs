@@ -485,8 +485,13 @@ jsi::Value makeError(jsi::Runtime& rt, uint32_t kind, const char* message) {
   return rt.global().getPropertyAsFunction(rt, ctor).callAsConstructor(rt, jsi::String::createFromUtf8(rt, message));
 }
 
-void requireOwnRuntime(jsi::Runtime& rt, const Adapter& adapter) {
-  if (!adapter.runtime->accepts(&rt)) throwForeignRuntime(rt, "rnrs: the " + adapter.name + " adapter");
+[[noreturn, gnu::noinline, gnu::cold]] void throwForeignAdapter(jsi::Runtime& rt, const Adapter& adapter) {
+  throwForeignRuntime(rt, "rnrs: the " + adapter.name + " adapter");
+}
+
+// Inline on every entry: a pointer compare and an acquire load; the message is built out of line.
+inline void requireOwnRuntime(jsi::Runtime& rt, const Adapter& adapter) {
+  if (!adapter.runtime->accepts(&rt)) [[unlikely]] throwForeignAdapter(rt, adapter);
 }
 
 WorkletAdapterRef workletRef(const std::shared_ptr<Adapter>& adapter) {
@@ -508,11 +513,12 @@ jsi::Value invokeAdapter(jsi::Runtime& rt, Adapter& adapter, CallCtx& c, uint32_
   }
 }
 
-// A generated scalar leaf with strictly typed primitive arguments `a[0..n)`. False when an
-// argument is missing or of another type: the caller then uses the generic reader, which
-// reports it (after the closed check). Reading primitives runs no JS.
-bool callScalar(jsi::Runtime& rt, Adapter& adapter, const RnrsScalarBinding& binding, const jsi::Value* a, size_t n,
-                jsi::Value& result) {
+// A generated scalar leaf with strictly typed primitive arguments `a[0..n)`: true with the leaf's
+// result in `out` (a number, or 0/1 for a boolean). False when an argument is missing or of another
+// type: the caller then uses the generic reader, which reports it (after the closed check). Reading
+// primitives runs no JS. Inlined into both entries; the caller builds the JS value in place.
+[[gnu::always_inline]] inline bool callScalar(jsi::Runtime& rt, Adapter& adapter, const RnrsScalarBinding& binding,
+                                              const jsi::Value* a, size_t n, double& out) {
   double inputs[4] = {};
   size_t i = 0;
   for (uint32_t types = binding.args; types; ++i, types >>= 2) {
@@ -526,14 +532,20 @@ bool callScalar(jsi::Runtime& rt, Adapter& adapter, const RnrsScalarBinding& bin
       inputs[i] = value.getBool() ? 1.0 : 0.0;
     }
   }
-  double out;
   uint32_t kind = 0;
   char error[512];
   error[0] = 0;
-  if (rnrs_scalar_call(adapter.rust, &binding, inputs, &out, &kind, error, sizeof error) != kCallOk)
+  if (rnrs_scalar_call(adapter.rust, &binding, inputs, &out, &kind, error, sizeof error) != kCallOk) [[unlikely]]
     throw jsi::JSError(rt, makeError(rt, kind, error));
-  result = binding.result == 1 ? jsi::Value(out) : binding.result == 2 ? jsi::Value(out != 0.0) : jsi::Value::undefined();
   return true;
+}
+
+// A scalar leaf's result as a JS value, returned as a prvalue (built in the caller's return slot,
+// with no out-of-line jsi::Value move or destructor).
+inline jsi::Value scalarValue(const RnrsScalarBinding& binding, double out) {
+  if (binding.result == 1) return jsi::Value(out);
+  if (binding.result == 2) return jsi::Value(out != 0.0);
+  return jsi::Value::undefined();
 }
 
 void settleTrampoline(void* raw, uint64_t id, uint32_t status, uint32_t value, const char* msg, size_t len) {
@@ -712,10 +724,10 @@ jsi::Object installModuleAdapter(
     const auto index = static_cast<uint32_t>(a[0].getNumber());
     // Invalid/missing inputs use the existing reader, including closed-before-type-error
     // priority and JS exceptions from cold kind classification.
-    jsi::Value result;
+    double out;
     if (index < adapter->scalars.size() && adapter->scalars[index].definition &&
-        callScalar(rt, *adapter, adapter->scalars[index], a + 2, n - 2, result))
-      return result;
+        callScalar(rt, *adapter, adapter->scalars[index], a + 2, n - 2, out))
+      return scalarValue(adapter->scalars[index], out);
     CallCtx c(rt, *adapter);
     c.helpersArg = &helpers;  // validated as an object above
     uint32_t self = c.push(jsi::Value(rt, a[1]));
@@ -742,8 +754,8 @@ jsi::Object installModuleAdapter(
     return jsi::Function::createFromHostFunction(rt, jsi::PropNameID::forAscii(rt, "m" + std::to_string(index)), arity,
         [adapter, index, binding](jsi::Runtime& rt, const jsi::Value& host, const jsi::Value* a, size_t n) -> jsi::Value {
           requireOwnRuntime(rt, *adapter);
-          jsi::Value result;
-          if (callScalar(rt, *adapter, binding, a, n, result)) return result;
+          double out;
+          if (callScalar(rt, *adapter, binding, a, n, out)) return scalarValue(binding, out);
           // Same generic reader as callh with the actual arguments (at most four are read,
           // extra ones ignored); helpers come from the host only if a helper is needed.
           CallCtx c(rt, *adapter);
