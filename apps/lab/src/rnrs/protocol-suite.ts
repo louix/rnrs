@@ -26,15 +26,16 @@ export function runProtocolSuite(
   );
   checks.push([
     'a wrapper for a newer call protocol is refused with an actionable error',
-    /FutureModule was generated for call protocol 3, but this @rnrs\/runtime implements up to 2/.test(
-      newer,
+    newer.includes(
+      `FutureModule was generated for call protocol ${RUNTIME_PROTOCOL + 1}, but this @rnrs/runtime implements up to ${RUNTIME_PROTOCOL}`,
     ),
     newer,
   ]);
   checks.push([
-    'older (array-only) and current wrappers are accepted',
+    'older (array-only, positional) and current wrappers are accepted',
     message(() => checkWrapperProtocol({ name: 'Old' })) === '' &&
-      message(() => checkWrapperProtocol({ name: 'Current', protocol: 2 })) === '',
+      message(() => checkWrapperProtocol({ name: 'Positional', protocol: 2 })) === '' &&
+      message(() => checkWrapperProtocol({ name: 'Current', protocol: 3 })) === '',
     '',
   ]);
   const old = message(() => checkAdapter(stale, 'StaleModule'));

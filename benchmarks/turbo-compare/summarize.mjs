@@ -16,7 +16,7 @@ import { describe, median } from './runner-lib.mjs';
 import { WORKLOADS, pairsFor } from './workloads.mjs';
 
 /** Correctness checks the harness runs (app/harness.ts correctness()). */
-export const EXPECTED_CHECKS = 104;
+export const EXPECTED_CHECKS = 144;
 const MAX_N = 1_000_000;
 const COLUMNS = ['phase', 'round', 'pos', 'workload', 'path', 'n', 'ms', 'gcs'];
 

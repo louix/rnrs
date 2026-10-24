@@ -558,12 +558,27 @@ pub struct NativeTypeDef {
     pub rust_type: fn() -> &'static str,
 }
 
+/// Private generated scalar leaf. Two bits per argument: 1 number, 2 boolean;
+/// result: 0 void, 1 number, 2 boolean. Booleans use 0/1 in fixed scalar slots.
+/// No JS values, callbacks, or dynamic conversion are permitted in this leaf.
+pub struct ScalarDef {
+    pub method: u32,
+    pub args: u32,
+    pub result: u32,
+    pub instance: fn(&AnyNative) -> *const (),
+    /// # Safety
+    /// Pointer is from this definition's instance function and its adapter is live.
+    /// Arguments have the declared types and boolean slots contain only 0/1.
+    pub call: unsafe fn(*const (), &[f64; 4]) -> Result<f64, String>,
+}
+
 /// Generated description of one module. `hash` identifies the IR it was generated from;
 /// platform entry points refuse to install a module whose JS wrapper has a different hash.
 pub struct ModuleDef {
     pub name: &'static str,
     pub hash: &'static str,
     pub methods: &'static [MethodDef],
+    pub scalars: &'static [ScalarDef],
     pub native_types: &'static [NativeTypeDef],
     /// Creates the module implementation for one adapter generation (`Native<Impl>`).
     pub instantiate: fn() -> Result<Box<AnyNative>, String>,
@@ -687,6 +702,16 @@ impl<N: Notify + MaybeSend + 'static> Adapter<N> {
 
     pub fn def(&self) -> &'static ModuleDef {
         self.def
+    }
+
+    /// Bind once; the returned pointer is borrowed from this adapter's instance.
+    /// It remains valid through teardown, until the adapter is dropped.
+    pub fn scalar_instance(&self, def: &ScalarDef) -> *const () {
+        (def.instance)(&*self.instance)
+    }
+
+    pub fn check_open(&self) -> Result<(), BindError> {
+        if self.host.is_open() { Ok(()) } else { Err(BindError::error("runtime adapter is closed")) }
     }
 
     pub fn generation(&self) -> u64 {

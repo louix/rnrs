@@ -352,6 +352,50 @@ function callArm(m, index) {
   return `    ${index} => {\n${lines.join('\n')}\n    }`;
 }
 
+/** Methods with a prepared scalar entry: sync module methods with at most four required
+ *  number/boolean parameters and a number, boolean or void result. The one rule for both the
+ *  Rust ScalarDef and the TS wrapper's direct entry call (emit-ts.mjs). */
+export function scalarEligible(m) {
+  return (
+    !m.owner &&
+    !m.async &&
+    m.params.length <= 4 &&
+    m.params.every((p) => !p.optional && ['number', 'boolean'].includes(p.type.k)) &&
+    ['number', 'boolean', 'void'].includes(m.returns.k)
+  );
+}
+
+function scalarDef(m, index) {
+  if (!scalarEligible(m)) return '';
+  const args = m.params.reduce(
+    (bits, p, i) => bits | ((p.type.k === 'number' ? 1 : 2) << (2 * i)),
+    0,
+  );
+  const result = { void: 0, number: 1, boolean: 2 }[m.returns.k];
+  const inputs = m.params
+    .map((p, i) => (p.type.k === 'number' ? `args[${i}]` : `args[${i}] != 0.0`))
+    .join(', ');
+  const output =
+    m.returns.k === 'void'
+      ? '0.0'
+      : m.returns.k === 'boolean'
+        ? 'if result { 1.0 } else { 0.0 }'
+        : 'result';
+  return `    ScalarDef {
+        method: ${index}, args: ${args}, result: ${result},
+        instance: |instance| {
+            let native = instance.downcast_ref::<Native<Module>>().expect("module instance type matches its ModuleDef");
+            &**native as *const Module as *const ()
+        },
+        call: |instance, args| {
+            // Adapter owns the module through this synchronous call; no JS conversion.
+            let receiver = unsafe { &*instance.cast::<Module>() };
+            let result = receiver.${ident(m.name)}(${inputs})?;
+            Ok(${output})
+        },
+    },`;
+}
+
 export function emitGlue(ir, { crate, moduleType }) {
   const traits = [ir.module, ...ir.objects.map((o) => o.name)]
     .map((n) => `spec::${n} as _`)
@@ -383,11 +427,15 @@ use {${traits}};
 type Module = ${crate}::${moduleType};
 ${aliases}
 
+#[allow(unused_variables)]
 pub static MODULE: ModuleDef = ModuleDef {
     name: ${JSON.stringify(ir.module)},
     hash: ${JSON.stringify(ir.hash)},
     methods: &[
 ${methods}
+    ],
+    scalars: &[
+${ir.methods.map(scalarDef).filter(Boolean).join('\n')}
     ],
     native_types: &[
 ${natives}

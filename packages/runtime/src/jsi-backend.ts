@@ -6,7 +6,7 @@
 // than an import side effect: Metro inlines requires).
 import { TurboModuleRegistry } from 'react-native';
 import {
-  bindThisAndFirst,
+  bindThis,
   conversionHelpers,
   setBackend,
   type AdapterStats,
@@ -63,8 +63,11 @@ export interface LifecycleStats {
 interface RawAdapter {
   readonly generation: number;
   call(helpers: object, index: number, receiver: object | undefined, args: unknown[]): unknown;
-  /** The same with 0 to 4 positional arguments (no argument array). */
-  callp(helpers: object, index: number, receiver: object | undefined, ...args: unknown[]): unknown;
+  /** The same with 0 to 4 positional arguments (no argument array), helpers as `this`. */
+  callh(this: object, index: number, receiver: object | undefined, ...args: unknown[]): unknown;
+  /** The prepared host function of a generated scalar method, or undefined if the native
+   *  library has none for that index. */
+  entry(index: number): ((...args: any[]) => unknown) | undefined;
   cancel(id: number): boolean;
   dispose(handle: object): void;
   teardown(): void;
@@ -115,8 +118,11 @@ export function registeredModuleCount(): number {
 
 /** The native adapter must provide the entries this JS runtime calls; a native library from an
  *  older @rnrs/runtime lacks the positional entry. Throws an actionable error. */
-export function checkNativeAdapter(raw: { callp?: unknown; call?: unknown }, name: string): void {
-  for (const entry of ['call', 'callp'] as const) {
+export function checkNativeAdapter(
+  raw: { callh?: unknown; call?: unknown; entry?: unknown },
+  name: string,
+): void {
+  for (const entry of ['call', 'callh', 'entry'] as const) {
     if (typeof raw[entry] !== 'function')
       throw new Error(
         `@rnrs/runtime: the app's native library does not match this JS runtime: module ${name} has no "${entry}" entry. Rebuild the native app (Android: librnrs.so; iOS: pod install) so it comes from the installed @rnrs/runtime.`,
@@ -157,18 +163,29 @@ function jsiBackend(platform: JsiPlatform): Backend {
         Object.defineProperty(entry, 'helpers', { value: conversionHelpers });
         global.__rnrsSettle = entry;
       }
-      const callp = bindThisAndFirst(raw.callp, raw, conversionHelpers);
+      const callh = bindThis(raw.callh, conversionHelpers);
       const adapter: NativeAdapter = {
         generation: raw.generation,
         call: (index, receiver, args) => raw.call(conversionHelpers, index, receiver, args),
-        // Fixed arities: callp bound to the helpers (captured bind), so a generated wrapper
-        // calls the host function with its explicit parameters directly (no spread or rest,
-        // no forwarding frame). The callers pass exactly index, receiver and their arguments.
-        call0: callp as NativeAdapter['call0'],
-        call1: callp as NativeAdapter['call1'],
-        call2: callp as NativeAdapter['call2'],
-        call3: callp as NativeAdapter['call3'],
-        call4: callp as NativeAdapter['call4'],
+        // Fixed arities: callh bound to the helpers as `this` (captured bind), so a generated
+        // wrapper calls the host function with its explicit parameters directly (no spread or
+        // rest, no forwarding frame, no extra helpers argument). The callers pass exactly
+        // index, receiver and their arguments.
+        call0: callh as NativeAdapter['call0'],
+        call1: callh as NativeAdapter['call1'],
+        call2: callh as NativeAdapter['call2'],
+        call3: callh as NativeAdapter['call3'],
+        call4: callh as NativeAdapter['call4'],
+        // Generated wrapper and native library come from the same spec and generator; a
+        // missing entry means mismatched builds, refused before the first call.
+        entry: (index) => {
+          const f = raw.entry(index);
+          if (typeof f !== 'function')
+            throw new Error(
+              `@rnrs/runtime: the app's native library does not match this module: ${name} has no prepared entry for method ${index}. Rebuild the native app (Android: librnrs.so; iOS: pod install) from the installed module package.`,
+            );
+          return f;
+        },
         cancel: (id) => raw.cancel(id),
         dispose: (handle) => raw.dispose(handle),
         teardown: () => raw.teardown(),

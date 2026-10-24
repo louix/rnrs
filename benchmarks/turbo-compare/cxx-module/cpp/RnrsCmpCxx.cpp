@@ -2,6 +2,7 @@
 #include <cmath>
 #include <algorithm>
 #include <cstdlib>
+#include <atomic>
 
 #ifdef __APPLE__
 extern "C" int rnrsCmpThermalState(void);  // ios/RnrsCmpCxxProvider.mm
@@ -107,6 +108,85 @@ double RnrsCmpCxx::pointSumBatch(jsi::Runtime&, std::vector<CmpPoint8> ps) {
 
 bool RnrsCmpCxx::installHarness(jsi::Runtime& rt) {
   jsi::Object o(rt);
+  // Independent control state: equivalent hot guards, not an rnrs adapter. The
+  // runtime-data holder marks destruction even if a captured function survives it.
+  struct State {
+    jsi::Runtime* runtime;
+    std::atomic<bool> destroyed{false}, open{true};
+    explicit State(jsi::Runtime* r) : runtime(r) {}
+    void check(jsi::Runtime& r) const {
+      if (&r != runtime || destroyed.load(std::memory_order_acquire))
+        throw jsi::JSError(r, "ERR_RNRS_FOREIGN_RUNTIME");
+      if (!open.load(std::memory_order_acquire))
+        throw jsi::JSError(r, "runtime adapter is closed");
+    }
+  };
+  struct Holder {
+    std::shared_ptr<State> state;
+    explicit Holder(std::shared_ptr<State> s) : state(std::move(s)) {}
+    ~Holder() { state->destroyed.store(true, std::memory_order_release); }
+  };
+  auto state = std::make_shared<State>(&rt);
+  const jsi::UUID key(0x93bc2157, 0x380d, 0x471a, 0x8914, 0x52601a7b490cULL);
+  rt.setRuntimeData(key, std::make_shared<Holder>(state));
+  jsi::Object guarded(rt);
+  guarded.setProperty(rt, "nop", hostFunction(rt, "nop", 0,
+      [state](jsi::Runtime& r, const jsi::Value&, const jsi::Value*, size_t) {
+        state->check(r);
+        return jsi::Value::undefined();
+      }));
+  guarded.setProperty(rt, "add", hostFunction(rt, "add", 2,
+      [state](jsi::Runtime& r, const jsi::Value&, const jsi::Value* a, size_t n) {
+        state->check(r);
+        if (n < 2 || !a[0].isNumber() || !a[1].isNumber())
+          throw jsi::JSError(r, "add expects two numbers");
+        return jsi::Value(a[0].getNumber() + a[1].getNumber());
+      }));
+  guarded.setProperty(rt, "flip", hostFunction(rt, "flip", 1,
+      [state](jsi::Runtime& r, const jsi::Value&, const jsi::Value* a, size_t n) {
+        state->check(r);
+        if (n < 1 || !a[0].isBool()) throw jsi::JSError(r, "flip expects a boolean");
+        return jsi::Value(!a[0].getBool());
+      }));
+  guarded.setProperty(rt, "close", hostFunction(rt, "close", 0,
+      [state](jsi::Runtime& r, const jsi::Value&, const jsi::Value*, size_t) {
+        state->check(r);
+        state->open.store(false, std::memory_order_release);
+        return jsi::Value::undefined();
+      }));
+  // Shape controls: the guarded C++ leaves behind rnrs's positional calling shape
+  // (index, receiver, ...arguments, index 0 nop / 1 add / 2 flip), with rnrs's index
+  // validation. callp also takes a leading helpers object; callpThis takes it as `this`.
+  // They separate JS/JSI calling-shape cost from the Rust side; no rnrs state involved.
+  auto shaped = [state](jsi::Runtime& r, const jsi::Value* a, size_t n) -> jsi::Value {
+    state->check(r);
+    if (n < 2 || n > 6 || !a[0].isNumber() || a[0].getNumber() < 0 ||
+        std::floor(a[0].getNumber()) != a[0].getNumber() || a[0].getNumber() > UINT32_MAX)
+      throw jsi::JSError(r, "callp needs a method index");
+    switch (static_cast<uint32_t>(a[0].getNumber())) {
+      case 0:
+        return jsi::Value::undefined();
+      case 1:
+        if (n < 4 || !a[2].isNumber() || !a[3].isNumber()) throw jsi::JSError(r, "add expects two numbers");
+        return jsi::Value(a[2].getNumber() + a[3].getNumber());
+      case 2:
+        if (n < 3 || !a[2].isBool()) throw jsi::JSError(r, "flip expects a boolean");
+        return jsi::Value(!a[2].getBool());
+      default:
+        throw jsi::JSError(r, "unknown method");
+    }
+  };
+  guarded.setProperty(rt, "callp", hostFunction(rt, "callp", 7,
+      [shaped](jsi::Runtime& r, const jsi::Value&, const jsi::Value* a, size_t n) {
+        if (n < 1 || !a[0].isObject()) throw jsi::JSError(r, "callp needs helpers");
+        return shaped(r, a + 1, n - 1);
+      }));
+  guarded.setProperty(rt, "callpThis", hostFunction(rt, "callpThis", 6,
+      [shaped](jsi::Runtime& r, const jsi::Value& self, const jsi::Value* a, size_t n) {
+        if (!self.isObject()) throw jsi::JSError(r, "callpThis needs helpers as this");
+        return shaped(r, a, n);
+      }));
+  o.setProperty(rt, "guarded", std::move(guarded));
   o.setProperty(rt, "nop", hostFunction(rt, "nop", 0, [](jsi::Runtime&, const jsi::Value&, const jsi::Value*, size_t) {
     return jsi::Value::undefined();
   }));

@@ -38,6 +38,61 @@ export function makeCases(r: Receivers, fx: Fixtures): Case[] {
       })(r.jsi),
     },
     {
+      workload: 'nop',
+      path: 'jsi-guarded',
+      expect: (n: number) => n,
+      run: ((M) => (n: number): number => {
+        for (let i = 0; i < n; i++) {
+          M.nop();
+        }
+        return n;
+      })(r.guarded),
+    },
+    {
+      workload: 'nop',
+      path: 'jsi-wrapped',
+      expect: (n: number) => n,
+      run: ((M) => (n: number): number => {
+        for (let i = 0; i < n; i++) {
+          M.nop();
+        }
+        return n;
+      })(r.wrapped),
+    },
+    {
+      workload: 'nop',
+      path: 'jsi-shaped',
+      expect: (n: number) => n,
+      run: ((M) => (n: number): number => {
+        for (let i = 0; i < n; i++) {
+          M.nop();
+        }
+        return n;
+      })(r.shaped),
+    },
+    {
+      workload: 'nop',
+      path: 'jsi-shaped-this',
+      expect: (n: number) => n,
+      run: ((M) => (n: number): number => {
+        for (let i = 0; i < n; i++) {
+          M.nop();
+        }
+        return n;
+      })(r.shapedThis),
+    },
+    {
+      workload: 'nop',
+      path: 'jsi-shaped-unbound',
+      expect: (n: number) => n,
+      run: ((M) => (n: number): number => {
+        for (let i = 0; i < n; i++) {
+          M.nop();
+        }
+        return n;
+      })(r.shapedUnbound),
+    },
+    {
       workload: 'add',
       path: 'rnrs',
       expect: (n: number) => n,
@@ -74,6 +129,66 @@ export function makeCases(r: Receivers, fx: Fixtures): Case[] {
       })(r.jsi),
     },
     {
+      workload: 'add',
+      path: 'jsi-guarded',
+      expect: (n: number) => n,
+      run: ((M) => (n: number): number => {
+        let acc = 0;
+        for (let i = 0; i < n; i++) {
+          acc = M.add(acc, 1);
+        }
+        return acc;
+      })(r.guarded),
+    },
+    {
+      workload: 'add',
+      path: 'jsi-wrapped',
+      expect: (n: number) => n,
+      run: ((M) => (n: number): number => {
+        let acc = 0;
+        for (let i = 0; i < n; i++) {
+          acc = M.add(acc, 1);
+        }
+        return acc;
+      })(r.wrapped),
+    },
+    {
+      workload: 'add',
+      path: 'jsi-shaped',
+      expect: (n: number) => n,
+      run: ((M) => (n: number): number => {
+        let acc = 0;
+        for (let i = 0; i < n; i++) {
+          acc = M.add(acc, 1);
+        }
+        return acc;
+      })(r.shaped),
+    },
+    {
+      workload: 'add',
+      path: 'jsi-shaped-this',
+      expect: (n: number) => n,
+      run: ((M) => (n: number): number => {
+        let acc = 0;
+        for (let i = 0; i < n; i++) {
+          acc = M.add(acc, 1);
+        }
+        return acc;
+      })(r.shapedThis),
+    },
+    {
+      workload: 'add',
+      path: 'jsi-shaped-unbound',
+      expect: (n: number) => n,
+      run: ((M) => (n: number): number => {
+        let acc = 0;
+        for (let i = 0; i < n; i++) {
+          acc = M.add(acc, 1);
+        }
+        return acc;
+      })(r.shapedUnbound),
+    },
+    {
       workload: 'flip',
       path: 'rnrs',
       expect: (n: number) => n % 2,
@@ -108,6 +223,66 @@ export function makeCases(r: Receivers, fx: Fixtures): Case[] {
         }
         return b ? 1 : 0;
       })(r.jsi),
+    },
+    {
+      workload: 'flip',
+      path: 'jsi-guarded',
+      expect: (n: number) => n % 2,
+      run: ((M) => (n: number): number => {
+        let b = false;
+        for (let i = 0; i < n; i++) {
+          b = M.flip(b);
+        }
+        return b ? 1 : 0;
+      })(r.guarded),
+    },
+    {
+      workload: 'flip',
+      path: 'jsi-wrapped',
+      expect: (n: number) => n % 2,
+      run: ((M) => (n: number): number => {
+        let b = false;
+        for (let i = 0; i < n; i++) {
+          b = M.flip(b);
+        }
+        return b ? 1 : 0;
+      })(r.wrapped),
+    },
+    {
+      workload: 'flip',
+      path: 'jsi-shaped',
+      expect: (n: number) => n % 2,
+      run: ((M) => (n: number): number => {
+        let b = false;
+        for (let i = 0; i < n; i++) {
+          b = M.flip(b);
+        }
+        return b ? 1 : 0;
+      })(r.shaped),
+    },
+    {
+      workload: 'flip',
+      path: 'jsi-shaped-this',
+      expect: (n: number) => n % 2,
+      run: ((M) => (n: number): number => {
+        let b = false;
+        for (let i = 0; i < n; i++) {
+          b = M.flip(b);
+        }
+        return b ? 1 : 0;
+      })(r.shapedThis),
+    },
+    {
+      workload: 'flip',
+      path: 'jsi-shaped-unbound',
+      expect: (n: number) => n % 2,
+      run: ((M) => (n: number): number => {
+        let b = false;
+        for (let i = 0; i < n; i++) {
+          b = M.flip(b);
+        }
+        return b ? 1 : 0;
+      })(r.shapedUnbound),
     },
     {
       workload: 'strIn-ascii-16',

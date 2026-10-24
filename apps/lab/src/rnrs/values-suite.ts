@@ -11,6 +11,7 @@ import {
   type Shape,
   type Tagged,
 } from '../../../../.generated/rnrs/values';
+import { createModuleForTesting } from '../../../../packages/runtime/src/runtime';
 import type { CheckResult } from './conformance';
 
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
@@ -80,6 +81,121 @@ export async function runValuesSuite(env: ValuesEnv): Promise<CheckResult[]> {
       'TypeError: x must be a number, got an unsupported value',
     );
   });
+
+  await check('scalar wrappers preserve receivers, arity, errors and closed admission', () => {
+    const other = createValuesModuleForTesting(4);
+    const echo = other.echoNumber;
+    expect(echo.call(v, 7) === 7, 'borrowed receiver selects receiving module');
+    let detachedThrew = false;
+    try {
+      echo(7);
+    } catch {
+      detachedThrew = true;
+    }
+    expect(detachedThrew, 'detached method still fails');
+    throws(() => (v.echoNumber as any)(), 'TypeError: x must be a number, got undefined');
+    expect((v.echoNumber as any)(-0, 'extra') === 0, 'extra arguments ignored');
+    const revoked = Proxy.revocable([], {});
+    revoked.revoke();
+    let before: unknown;
+    try {
+      v.echoNumber(revoked.proxy as any);
+    } catch (e) {
+      before = e;
+    }
+    expect(before instanceof Error, 'invalid proxy follows error path');
+    other.teardown();
+    throws(() => other.echoNumber(1), 'Error: runtime adapter is closed');
+    throws(() => other.echoNumber('bad' as any), 'Error: runtime adapter is closed');
+    throws(() => (other.echoNumber as any)(), 'Error: runtime adapter is closed');
+    throws(() => other.echoNumber(revoked.proxy as any), 'Error: runtime adapter is closed');
+    expect(echo.call(v, 9) === 9, 'borrowed method from closed module uses live receiver');
+  });
+
+  await check('prepared scalar entries: subclasses, object arguments, fabricated hosts', () => {
+    // Subclass instances route through their own host like any module instance.
+    const Values = v.constructor as new (host: unknown) => typeof v;
+    class Sub extends Values {}
+    const sub = new Sub((v as any).host);
+    expect(sub.echoNumber(3) === 3 && sub.echoBool(true) === true, 'subclass instance');
+    // Object arguments take the error path, whose kind check reads the host's helpers.
+    throws(() => v.echoNumber({} as any), 'TypeError: x must be a number, got an object');
+    throws(() => v.echoNumber([] as any), 'TypeError: x must be a number, got an array');
+    throws(
+      () => v.echoBool(new Proxy({}, {}) as any),
+      'TypeError: b must be a boolean, got an object',
+    );
+    // A fabricated (unsupported) host: the valid path never reads it; on the error path its
+    // traps may throw, re-enter or tear the module down, and the call still only throws.
+    // JSI entries are host functions reading the helpers from `this`; the browser's entries
+    // are bound Wasm calls that never read the host.
+    const jsi = (globalThis as any).__rnrsRuntime !== undefined;
+    const t = createValuesModuleForTesting(4);
+    let mode: 'throw' | 'reenter' | 'teardown' = 'throw';
+    const reads = { throw: 0, reenter: 0, teardown: 0 };
+    let reentered = false;
+    let nested = '';
+    const host = new Proxy((t as any).host, {
+      get(target, key) {
+        if (key === 'rnrs:helpers') {
+          reads[mode]++;
+          if (mode === 'throw') throw new Error('trap');
+          if (mode === 'reenter') {
+            reentered = v.echoNumber(2) === 2 && t.echoNumber(5) === 5;
+            // A nested error-path call (its own generic reader) inside this one's.
+            try {
+              t.echoNumber({} as any);
+            } catch (error) {
+              nested = String(error);
+            }
+          }
+          if (mode === 'teardown') t.teardown();
+        }
+        return Reflect.get(target, key);
+      },
+    });
+    const echo = (Object.getPrototypeOf(v) as typeof v).echoNumber;
+    const fake = { host } as unknown as typeof v;
+    expect(echo.call(fake, 4) === 4, 'valid call through a fabricated host');
+    for (mode of ['throw', 'reenter', 'teardown'] as const)
+      throws(() => echo.call(fake, {} as any), /^TypeError: x must be a number, got /);
+    const counts = JSON.stringify(reads);
+    if (jsi) {
+      // Each mode reads at least once; a throwing read is retried when the error text is built.
+      expect(reads.throw >= 1 && reads.reenter >= 1 && reads.teardown >= 1, `reads ${counts}`);
+      expect(reentered, 'calls re-entered from the error path succeed');
+      expect(
+        nested === 'TypeError: x must be a number, got an object',
+        `nested error-path call: ${nested}`,
+      );
+    } else {
+      expect(counts === '{"throw":0,"reenter":0,"teardown":0}', `browser entries read ${counts}`);
+      t.teardown();
+    }
+    throws(() => t.echoNumber(1), 'Error: runtime adapter is closed');
+    throws(() => echo.call(fake, {} as any), 'Error: runtime adapter is closed');
+    expect(v.echoNumber(6) === 6, 'other modules unaffected');
+  });
+
+  await check(
+    'a wrapper expecting a prepared entry the backend lacks is refused at install',
+    () => {
+      const jsi = (globalThis as any).__rnrsRuntime !== undefined;
+      const Values = v.constructor as any;
+      class Mismatched extends Values {
+        static readonly descriptor = { ...Values.descriptor, direct: [[100000, jsi ? 1 : 9]] };
+      }
+      throws(
+        () => createModuleForTesting(Mismatched as any, 4),
+        jsi
+          ? /does not match this module: ValuesModule has no prepared entry for method 100000\. Rebuild/
+          : /ValuesModule: no entry of arity 9/,
+      );
+      const after = createValuesModuleForTesting(4);
+      expect(after.echoNumber(8) === 8, 'install still works after a refusal');
+      after.teardown();
+    },
+  );
 
   await check('strings: UTF-8 round trip, lone surrogates become U+FFFD', () => {
     for (const s of ['', 'plain', 'é ü 漢字', 'emoji 🦀', 'nul \u0000 inside'])

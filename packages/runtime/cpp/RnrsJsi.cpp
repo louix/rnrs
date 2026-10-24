@@ -77,6 +77,7 @@ struct Adapter {
   uint32_t module = 0;  // bundle index: wrappers of other modules are a type mismatch
   uint64_t generation = 0;
   std::string name;
+  std::vector<RnrsScalarBinding> scalars;
   std::shared_ptr<RuntimeScope> scope;
   // The runtime this adapter was installed in. Every host function checks it first, so a
   // copy of one in another runtime (a worklet capture) is refused before it touches
@@ -120,6 +121,9 @@ struct HandleState : jsi::NativeState {
   }
 };
 
+// ModuleHost's own, non-writable property holding the helpers (runtime.ts HOST_HELPERS_KEY).
+constexpr const char* kHostHelpers = "rnrs:helpers";
+
 // One host-function call (or drain) on the JS thread.
 struct CallCtx {
   jsi::Runtime& rt;
@@ -129,10 +133,14 @@ struct CallCtx {
   std::optional<jsi::JSError> thrown;
   std::optional<jsi::Function> settle;
   std::optional<jsi::Object> helpers;
-  // The helpers argument of the host call in progress: turned into `helpers` only when a
-  // helper is first needed (scalar and string calls need none). Valid for the whole call,
-  // which this context never outlives.
+  // Where the host call in progress carries the helpers, read only when a helper is first
+  // needed (scalar and string calls need none): `helpersArg` is the helpers object itself (the
+  // `call` argument or callh's bound `this`); `helpersHost` is a prepared scalar entry's `this`,
+  // the module's ModuleHost, holding them under kHostHelpers. Both are valid for the whole
+  // call, which this context never outlives. Reading `helpersHost` may run JS (a getter or
+  // proxy on a non-genuine host); helpers are only used inside guarded or try/catch callbacks.
   const jsi::Value* helpersArg = nullptr;
+  const jsi::Value* helpersHost = nullptr;
   std::optional<jsi::Function> define, isArray, bufferKind, allocBuffer;
   // The array most recently read by `length` or index (its arena index), so elements are read
   // without a handle clone each; arena values never change during the call, so the index
@@ -159,6 +167,10 @@ struct CallCtx {
     if (!slot) {
       RNRS_DIAG(gDiagHelperLookups);
       if (!helpers && helpersArg) helpers = helpersArg->getObject(rt);
+      if (!helpers && helpersHost && helpersHost->isObject()) {
+        auto held = helpersHost->getObject(rt).getProperty(rt, kHostHelpers);
+        if (held.isObject()) helpers = held.getObject(rt);
+      }
       if (!helpers) throw jsi::JSError(rt, "rnrs: conversion helpers missing");
       slot = helpers->getPropertyAsFunction(rt, name);
     }
@@ -496,6 +508,34 @@ jsi::Value invokeAdapter(jsi::Runtime& rt, Adapter& adapter, CallCtx& c, uint32_
   }
 }
 
+// A generated scalar leaf with strictly typed primitive arguments `a[0..n)`. False when an
+// argument is missing or of another type: the caller then uses the generic reader, which
+// reports it (after the closed check). Reading primitives runs no JS.
+bool callScalar(jsi::Runtime& rt, Adapter& adapter, const RnrsScalarBinding& binding, const jsi::Value* a, size_t n,
+                jsi::Value& result) {
+  double inputs[4] = {};
+  size_t i = 0;
+  for (uint32_t types = binding.args; types; ++i, types >>= 2) {
+    if (i >= n) return false;
+    const auto& value = a[i];
+    if ((types & 3) == 1) {
+      if (!value.isNumber()) return false;
+      inputs[i] = value.getNumber();
+    } else {
+      if (!value.isBool()) return false;
+      inputs[i] = value.getBool() ? 1.0 : 0.0;
+    }
+  }
+  double out;
+  uint32_t kind = 0;
+  char error[512];
+  error[0] = 0;
+  if (rnrs_scalar_call(adapter.rust, &binding, inputs, &out, &kind, error, sizeof error) != kCallOk)
+    throw jsi::JSError(rt, makeError(rt, kind, error));
+  result = binding.result == 1 ? jsi::Value(out) : binding.result == 2 ? jsi::Value(out != 0.0) : jsi::Value::undefined();
+  return true;
+}
+
 void settleTrampoline(void* raw, uint64_t id, uint32_t status, uint32_t value, const char* msg, size_t len) {
   auto& c = C(raw);
   if (!c.settle) return;
@@ -620,6 +660,15 @@ jsi::Object installModuleAdapter(
     throw jsi::JSError(rt, makeError(rt, 2, "runtime is being torn down"));
   }
 
+  // Bind generated scalar leaves once, before publishing any host function.
+  for (size_t i = 0;; ++i) {
+    uint32_t method;
+    RnrsScalarBinding binding;
+    if (!rnrs_adapter_scalar(adapter->rust, i, &method, &binding)) break;
+    if (adapter->scalars.size() <= method) adapter->scalars.resize(static_cast<size_t>(method) + 1);
+    adapter->scalars[method] = binding;
+  }
+
   jsi::Object api(rt);
   auto bind = [&](const char* fn, unsigned arity, jsi::HostFunctionType f) {
     api.setProperty(rt, fn, jsi::Function::createFromHostFunction(rt, jsi::PropNameID::forAscii(rt, fn), arity, std::move(f)));
@@ -650,21 +699,61 @@ jsi::Object installModuleAdapter(
     for (size_t i = 0; i < count; i++) args[i] = c.push(list.getValueAtIndex(rt, i));
     return invokeAdapter(rt, *adapter, c, static_cast<uint32_t>(a[1].getNumber()), self, args, count);
   });
-  // callp(helpers, index, receiver, a0..a3): the same call with up to four positional
-  // arguments (generated wrappers of sync methods with at most four parameters), so no
-  // argument array is built or read. Positional parameters involve no Array at all.
-  bind("callp", 7, [adapter](jsi::Runtime& rt, const jsi::Value&, const jsi::Value* a, size_t n) -> jsi::Value {
+  // callh(index, receiver, a0..a3) with the helpers as `this`: the same call with up to four
+  // positional arguments (generated wrappers of sync methods with at most four parameters),
+  // so no argument array is built or read. Positional parameters involve no Array at all.
+  // The framework binds `this` once. A host function receives a converted `this` on every
+  // call regardless, so carrying the helpers there costs no extra object argument.
+  bind("callh", 6, [adapter](jsi::Runtime& rt, const jsi::Value& helpers, const jsi::Value* a, size_t n) -> jsi::Value {
     requireOwnRuntime(rt, *adapter);
-    if (n < 3 || n > 7 || !a[0].isObject() || !a[1].isNumber() || a[1].getNumber() < 0 ||
-        std::floor(a[1].getNumber()) != a[1].getNumber() || a[1].getNumber() > UINT32_MAX)
-      throw jsi::JSError(rt, makeError(rt, 0, "callp(helpers, index, receiver, ...up to 4 arguments) needs helpers and a method index"));
+    if (n < 2 || n > 6 || !helpers.isObject() || !a[0].isNumber() || a[0].getNumber() < 0 ||
+        std::floor(a[0].getNumber()) != a[0].getNumber() || a[0].getNumber() > UINT32_MAX)
+      throw jsi::JSError(rt, makeError(rt, 0, "callh(index, receiver, ...up to 4 arguments) needs the helpers as this and a method index"));
+    const auto index = static_cast<uint32_t>(a[0].getNumber());
+    // Invalid/missing inputs use the existing reader, including closed-before-type-error
+    // priority and JS exceptions from cold kind classification.
+    jsi::Value result;
+    if (index < adapter->scalars.size() && adapter->scalars[index].definition &&
+        callScalar(rt, *adapter, adapter->scalars[index], a + 2, n - 2, result))
+      return result;
     CallCtx c(rt, *adapter);
-    c.helpersArg = &a[0];  // validated as an object above
-    uint32_t self = c.push(jsi::Value(rt, a[2]));
+    c.helpersArg = &helpers;  // validated as an object above
+    uint32_t self = c.push(jsi::Value(rt, a[1]));
     uint32_t args[4];
-    size_t count = n - 3;
-    for (size_t i = 0; i < count; i++) args[i] = c.push(jsi::Value(rt, a[3 + i]));
-    return invokeAdapter(rt, *adapter, c, static_cast<uint32_t>(a[1].getNumber()), self, args, count);
+    size_t count = n - 2;
+    for (size_t i = 0; i < count; i++) args[i] = c.push(jsi::Value(rt, a[2 + i]));
+    return invokeAdapter(rt, *adapter, c, index, self, args, count);
+  });
+  // entry(index): the prepared host function of generated scalar method `index` (protocol 3
+  // wrappers call it as this.host.m<index>(...arguments), the host as `this`), or undefined.
+  // It captures the adapter owner and the immutable binding: no index, receiver or helpers
+  // argument per call. Module methods only, so the receiver is undefined.
+  bind("entry", 1, [adapter](jsi::Runtime& rt, const jsi::Value&, const jsi::Value* a, size_t n) -> jsi::Value {
+    requireOwnRuntime(rt, *adapter);
+    if (n < 1 || !a[0].isNumber() || a[0].getNumber() < 0 || std::floor(a[0].getNumber()) != a[0].getNumber() ||
+        a[0].getNumber() >= static_cast<double>(adapter->scalars.size()))
+      return jsi::Value::undefined();
+    const auto index = static_cast<uint32_t>(a[0].getNumber());
+    const RnrsScalarBinding binding = adapter->scalars[index];
+    if (!binding.definition) return jsi::Value::undefined();
+    unsigned arity = 0;
+    for (uint32_t types = binding.args; types; types >>= 2) arity++;
+    // Named like its host property (m<index>), so stacks and `.name` identify the method.
+    return jsi::Function::createFromHostFunction(rt, jsi::PropNameID::forAscii(rt, "m" + std::to_string(index)), arity,
+        [adapter, index, binding](jsi::Runtime& rt, const jsi::Value& host, const jsi::Value* a, size_t n) -> jsi::Value {
+          requireOwnRuntime(rt, *adapter);
+          jsi::Value result;
+          if (callScalar(rt, *adapter, binding, a, n, result)) return result;
+          // Same generic reader as callh with the actual arguments (at most four are read,
+          // extra ones ignored); helpers come from the host only if a helper is needed.
+          CallCtx c(rt, *adapter);
+          c.helpersHost = &host;
+          uint32_t self = c.push(jsi::Value::undefined());
+          uint32_t args[4];
+          size_t count = std::min<size_t>(n, 4);
+          for (size_t i = 0; i < count; i++) args[i] = c.push(jsi::Value(rt, a[i]));
+          return invokeAdapter(rt, *adapter, c, index, self, args, count);
+        });
   });
   bind("dispose", 1, [adapter](jsi::Runtime& rt, const jsi::Value&, const jsi::Value* a, size_t n) -> jsi::Value {
     requireOwnRuntime(rt, *adapter);  // HandleState::native is JS-thread state of this runtime

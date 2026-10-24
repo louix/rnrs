@@ -1,6 +1,8 @@
 // IR -> TS wrapper (hidden build output). Classes over the framework runtime
 // (packages/runtime/src/runtime.ts); value types mirror the spec.
 
+import { scalarEligible } from './emit-rust.mjs';
+
 function tsType(t) {
   switch (t.k) {
     case 'number':
@@ -64,9 +66,12 @@ function method(m, index, receiver) {
   const args = `[${m.params.map((p) => toNative(p.type, p.name)).join(', ')}]`;
   if (!m.async) {
     const ret = tsType(m.returns);
-    // Up to four parameters: positional (host.callN, no argument array); more: one array.
-    const call =
-      m.params.length <= 4
+    // Scalar methods: the host's prepared entry for this method (`m<index>`, own property of
+    // the host, no index or receiver argument). Up to four parameters: positional (host.callN,
+    // no argument array); more: one array.
+    const call = scalarEligible(m)
+      ? `this.host.m${index}(${m.params.map((p) => p.name).join(', ')})`
+      : m.params.length <= 4
         ? `this.host.call${m.params.length}(${[index, receiver, ...m.params.map((p) => toNative(p.type, p.name))].join(', ')})`
         : `this.host.call(${index}, ${receiver}, ${args})`;
     const body =
@@ -117,8 +122,13 @@ export function emitTs(ir, { runtimeImport, maxInFlight }) {
   const moduleMethods = indexed
     .filter(({ m }) => !m.owner)
     .map(({ m, i }) => method(m, i, 'undefined'));
+  // Protocol 3: the runtime installs `m<index>` entries for `direct` ([index, arity] pairs).
+  const direct = indexed
+    .filter(({ m }) => scalarEligible(m))
+    .map(({ m, i }) => `[${i}, ${m.params.length}]`);
+  const descriptor = direct.length ? `protocol: 3, direct: [${direct.join(', ')}]` : 'protocol: 2';
   out.push(`export class ${ir.module} extends ModuleBase {
-  static readonly descriptor = {name: ${JSON.stringify(ir.module)}, hash: ${JSON.stringify(ir.hash)}, defaultMaxInFlight: ${maxInFlight}, protocol: 2};
+  static readonly descriptor = {name: ${JSON.stringify(ir.module)}, hash: ${JSON.stringify(ir.hash)}, defaultMaxInFlight: ${maxInFlight}, ${descriptor}};
 ${moduleMethods.length ? '\n' + moduleMethods.join('\n\n') + '\n' : ''}}`);
   const accessor = ir.module[0].toLowerCase() + ir.module.slice(1);
   out.push(`/** This runtime's framework-owned ${ir.module}: created on first use, torn down with the runtime. */

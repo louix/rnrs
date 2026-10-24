@@ -22,17 +22,25 @@ const three = (body) => ({
   tm: { receiver: 'tm', body },
   jsi: { receiver: 'jsi', body },
 });
+const scalar = (body) => ({
+  ...three(body),
+  'jsi-guarded': { receiver: 'guarded', body },
+  'jsi-wrapped': { receiver: 'wrapped', body },
+  'jsi-shaped': { receiver: 'shaped', body },
+  'jsi-shaped-this': { receiver: 'shapedThis', body },
+  'jsi-shaped-unbound': { receiver: 'shapedUnbound', body },
+});
 const two = (body) => ({ rnrs: { receiver: 'rnrs', body }, tm: { receiver: 'tm', body } });
 const sumTo = (n, offset) => `(${n} * (${n} - 1) / 2 + ${offset} * ${n})`;
 
 export const WORKLOADS = [
-  { id: 'nop', group: 'scalar', paths: three('$M.nop();'), ret: 'n', expect: 'n' },
-  { id: 'add', group: 'scalar', paths: three('acc = $M.add(acc, 1);'), ret: 'acc', expect: 'n' },
+  { id: 'nop', group: 'scalar', paths: scalar('$M.nop();'), ret: 'n', expect: 'n' },
+  { id: 'add', group: 'scalar', paths: scalar('acc = $M.add(acc, 1);'), ret: 'acc', expect: 'n' },
   {
     id: 'flip',
     group: 'scalar',
     pre: 'let b = false;',
-    paths: three('b = $M.flip(b);'),
+    paths: scalar('b = $M.flip(b);'),
     ret: 'b ? 1 : 0',
     expect: 'n % 2',
   },
@@ -150,5 +158,14 @@ export function pairsFor(workload) {
     ];
   const pairs = [['rnrs', 'tm']];
   if (p.includes('jsi')) pairs.push(['tm', 'jsi'], ['rnrs', 'jsi']);
+  if (p.includes('jsi-guarded'))
+    pairs.push(['rnrs', 'jsi-guarded'], ['jsi-guarded', 'jsi'], ['jsi-wrapped', 'jsi-guarded']);
+  if (p.includes('jsi-shaped'))
+    pairs.push(
+      ['rnrs', 'jsi-shaped'],
+      ['jsi-shaped', 'jsi-shaped-this'],
+      ['jsi-shaped-this', 'jsi-shaped-unbound'],
+      ['jsi-shaped-unbound', 'jsi-wrapped'],
+    );
   return pairs;
 }

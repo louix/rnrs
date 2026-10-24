@@ -247,6 +247,11 @@ export interface NativeAdapter {
     a2: unknown,
     a3: unknown,
   ): unknown;
+  /** The prepared entry of a scalar method (protocol 3 wrappers call it as
+   *  `this.host.m<index>(...arguments)`, with the host as `this`). Throws if the backend
+   *  cannot provide it. Optional: backends without it still serve protocol 1/2 modules;
+   *  ModuleHost refuses protocol 3 modules on them. */
+  entry?(index: number, arity: number): (...args: any[]) => unknown;
   cancel(id: number): boolean;
   dispose(handle: object): void;
   teardown(): void;
@@ -305,6 +310,10 @@ function admitError(failure: AdmitFailure): RnrsError {
   }
 }
 
+/** Own property of every ModuleHost holding the conversion helpers, so a native scalar entry
+ *  called with the host as `this` finds them on its error path (RnrsJsi.cpp kHostHelpers). */
+export const HOST_HELPERS_KEY = 'rnrs:helpers';
+
 /** One installed adapter generation and its promise registry. */
 export class ModuleHost {
   private readonly pendingOps = new Map<number, PendingOperation>();
@@ -318,6 +327,7 @@ export class ModuleHost {
     hash: string,
     maxInFlight: number,
     readonly runtimeOwned: boolean,
+    direct: readonly (readonly number[])[] = [],
   ) {
     this.adapter = currentBackend().install(name, hash, maxInFlight, (id, status, value, message) =>
       this.settle(id, status, value, message),
@@ -328,6 +338,32 @@ export class ModuleHost {
     self.call2 = this.adapter.call2;
     self.call3 = this.adapter.call3;
     self.call4 = this.adapter.call4;
+    // Fixed, before any entry can be called: own, non-writable, non-configurable,
+    // non-enumerable (descriptor defaults).
+    defineProperty(this, HOST_HELPERS_KEY, {
+      __proto__: null,
+      value: conversionHelpers,
+    } as PropertyDescriptor);
+    // Indexed loop: no iterator protocol (Array.prototype could be patched by then). A
+    // backend that cannot provide an entry refuses the module; nothing stays installed.
+    try {
+      if (direct.length && typeof this.adapter.entry !== 'function')
+        throw new Error(
+          `@rnrs/runtime: the ${currentBackend().platform} backend has no prepared scalar entries, which ${name} (call protocol 3) needs; use a backend from this @rnrs/runtime`,
+        );
+      for (let i = 0; i < direct.length; i++) {
+        const index = direct[i][0];
+        self[`m${index}`] = this.adapter.entry!(index, direct[i][1]);
+      }
+    } catch (error) {
+      try {
+        this.adapter.teardown();
+      } catch {
+        /* reported error stays the refusal */
+      }
+      currentBackend().release?.(this.adapter);
+      throw error;
+    }
   }
 
   get generation(): number {
@@ -376,6 +412,8 @@ export class ModuleHost {
   readonly call2!: NativeAdapter['call2'];
   readonly call3!: NativeAdapter['call3'];
   readonly call4!: NativeAdapter['call4'];
+  /** Prepared scalar entries by method index (protocol 3; assigned in the constructor). */
+  readonly [entry: `m${number}`]: (...args: any[]) => unknown;
 
   /** Async call: admission, cancellation wiring and promise bookkeeping. */
   start(
@@ -482,17 +520,19 @@ export function handleOf(value: unknown): unknown {
 export interface ModuleClass<M extends ModuleBase> {
   new (host: ModuleHost): M;
   /** `protocol`: the wrapper/runtime call protocol the generated wrapper uses (1 or absent:
-   *  argument arrays only; 2: also positional host.call0..call4). */
+   *  argument arrays only; 2: also positional host.call0..call4; 3: also the prepared scalar
+   *  entries host.m<index> listed in `direct` as [index, arity]). */
   readonly descriptor: {
     name: string;
     hash: string;
     defaultMaxInFlight: number;
     protocol?: number;
+    direct?: readonly (readonly number[])[];
   };
 }
 
 /** The newest wrapper call protocol this runtime implements. */
-export const RUNTIME_PROTOCOL = 2;
+export const RUNTIME_PROTOCOL = 3;
 
 /** Refuses wrappers generated for a newer runtime, with an actionable message. */
 export function checkWrapperProtocol(descriptor: { name: string; protocol?: number }): void {
@@ -509,10 +549,10 @@ const runtimeModules = new Map<string, ModuleBase>();
 /** The runtime's framework-owned instance of a module (generated accessors call this). */
 export function runtimeModule<M extends ModuleBase>(cls: ModuleClass<M>): M {
   checkWrapperProtocol(cls.descriptor);
-  const { name, hash, defaultMaxInFlight } = cls.descriptor;
+  const { name, hash, defaultMaxInFlight, direct } = cls.descriptor;
   let module = runtimeModules.get(name);
   if (!module) {
-    module = new cls(new ModuleHost(name, hash, defaultMaxInFlight, true));
+    module = new cls(new ModuleHost(name, hash, defaultMaxInFlight, true, direct));
     runtimeModules.set(name, module);
   }
   return module as M;
@@ -524,6 +564,6 @@ export function createModuleForTesting<M extends ModuleBase>(
   maxInFlight: number,
 ): M {
   checkWrapperProtocol(cls.descriptor);
-  const { name, hash } = cls.descriptor;
-  return new cls(new ModuleHost(name, hash, maxInFlight, false));
+  const { name, hash, direct } = cls.descriptor;
+  return new cls(new ModuleHost(name, hash, maxInFlight, false, direct));
 }

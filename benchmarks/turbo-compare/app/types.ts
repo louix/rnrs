@@ -38,6 +38,12 @@ export interface CmpApi {
 
 /** The handwritten JSI control (scalars and numeric-array input) plus harness helpers, global.__rnrsCmpJsi. */
 export interface JsiControl {
+  guarded: Pick<CmpApi, 'nop' | 'add' | 'flip'> & {
+    close(): void;
+    /** rnrs calling-shape controls: (helpers, index, receiver, ...args) / this = helpers. */
+    callp(...args: unknown[]): unknown;
+    callpThis(...args: unknown[]): unknown;
+  };
   arrSum(xs: number[]): number;
   nop(): void;
   add(a: number, b: number): number;
@@ -51,6 +57,11 @@ export interface Receivers {
   rnrs: CmpApi;
   tm: CmpApi;
   jsi: JsiControl;
+  guarded: JsiControl['guarded'];
+  wrapped: Pick<CmpApi, 'nop' | 'add' | 'flip'>;
+  shaped: Pick<CmpApi, 'nop' | 'add' | 'flip'>;
+  shapedThis: Pick<CmpApi, 'nop' | 'add' | 'flip'>;
+  shapedUnbound: Pick<CmpApi, 'nop' | 'add' | 'flip'>;
 }
 
 export interface Fixtures {

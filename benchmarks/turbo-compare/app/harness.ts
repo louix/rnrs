@@ -110,6 +110,33 @@ interface Check {
   detail?: string;
 }
 
+// rnrs's calling shape around the guarded C++ leaves (measurement controls only): a
+// generated-style prototype method reads this.host.callN, an own property of a host
+// instance, and calls it with (index, undefined receiver, ...arguments).
+type Entry = (...args: unknown[]) => unknown;
+class ShapedHost {
+  readonly call0: Entry;
+  readonly call1: Entry;
+  readonly call2: Entry;
+  constructor(entry: Entry) {
+    this.call0 = entry;
+    this.call1 = entry;
+    this.call2 = entry;
+  }
+}
+class ShapedModule {
+  constructor(readonly host: ShapedHost) {}
+  nop(): void {
+    this.host.call0(0, undefined);
+  }
+  add(a: number, b: number): number {
+    return this.host.call2(1, undefined, a, b) as number;
+  }
+  flip(b: boolean): boolean {
+    return this.host.call1(2, undefined, b) as boolean;
+  }
+}
+
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
 function correctness(r: Receivers): Check[] {
@@ -146,6 +173,11 @@ function correctness(r: Receivers): Check[] {
     check(path, 'flip(1) throws', () => throws(() => m.flip(1 as any)));
   };
   scalar('jsi', r.jsi);
+  scalar('jsi-guarded', r.guarded);
+  scalar('jsi-wrapped', r.wrapped);
+  scalar('jsi-shaped', r.shaped);
+  scalar('jsi-shaped-this', r.shapedThis);
+  scalar('jsi-shaped-unbound', r.shapedUnbound);
   // rnrs and the handwritten control promise ordinary reads; codegen's indexed
   // reader has different proxy/length semantics and is intentionally excluded here.
   for (const path of ['rnrs', 'jsi'] as const) {
@@ -386,7 +418,35 @@ export async function runHarness(status: (text: string) => void): Promise<void> 
     if (env.dev) throw new Error('__DEV__ build: refusing to measure');
     if (env.rnrsDiagnosticsKeys.length)
       throw new Error('rnrs diagnostics build: refusing to measure');
-    const receivers: Receivers = { rnrs: turboCompareModule(), tm: tm as unknown as CmpApi, jsi };
+    // Isolates one dynamic-receiver JS wrapper frame; does not model rnrs's
+    // bound helper/index arguments, which remain part of its measured overhead.
+    const wrapped = {
+      host: jsi.guarded,
+      nop() {
+        this.host.nop();
+      },
+      add(a: number, b: number) {
+        return this.host.add(a, b);
+      },
+      flip(b: boolean) {
+        return this.host.flip(b);
+      },
+    };
+    // callp: bound to (object, helpers), rnrs's positional shape before 840d332; callpThis:
+    // helpers as `this` (callh since 840d332); unbound: the host function called directly
+    // with the host instance as `this` (the shape of protocol 3 prepared scalar entries).
+    const helpers = {};
+    const g = jsi.guarded;
+    const receivers: Receivers = {
+      rnrs: turboCompareModule(),
+      tm: tm as unknown as CmpApi,
+      jsi,
+      guarded: g,
+      wrapped,
+      shaped: new ShapedModule(new ShapedHost(g.callp.bind(g, helpers))),
+      shapedThis: new ShapedModule(new ShapedHost(g.callpThis.bind(helpers))),
+      shapedUnbound: new ShapedModule(new ShapedHost(g.callpThis)),
+    };
     const checks = correctness(receivers);
     const failed = checks.filter((c) => !c.ok);
     if (failed.length)

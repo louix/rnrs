@@ -10,6 +10,11 @@ import {
   type SettleFn,
 } from './runtime';
 
+// Captured at init, like runtime.ts's bind helpers.
+const reflectApply = Reflect.apply;
+const functionBind = Function.prototype.bind;
+const POSITIONAL = ['call0', 'call1', 'call2', 'call3', 'call4'] as const;
+
 /** The wasm-bindgen module of the app's Wasm bundle (web/pkg/web_bundle.js). */
 export interface RnrsWasm {
   RnrsWebAdapter: new (
@@ -212,6 +217,17 @@ export function installWebBackend(
             call2: bindThis(adapter.call2, adapter) as NativeAdapter['call2'],
             call3: bindThis(adapter.call3, adapter) as NativeAdapter['call3'],
             call4: bindThis(adapter.call4, adapter) as NativeAdapter['call4'],
+            // Scalar entry: the positional wasm method of that arity, bound to the adapter,
+            // the method index and the module receiver (undefined), so the wrapper passes only
+            // its arguments, as with the JSI backend's prepared host functions.
+            entry: (index, arity) => {
+              const call = POSITIONAL[arity];
+              if (call === undefined)
+                throw new Error(`@rnrs/runtime: ${name}: no entry of arity ${arity}`);
+              return reflectApply(functionBind, adapter[call], [adapter, index, undefined]) as (
+                ...args: any[]
+              ) => unknown;
+            },
             cancel: (id) => adapter.cancel(id),
             dispose: (handle) => adapter.dispose(handle),
             teardown: () => {

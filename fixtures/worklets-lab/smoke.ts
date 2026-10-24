@@ -112,14 +112,19 @@ export async function runWorkletsSmoke(): Promise<WorkletsResult> {
     const { name, hash } = WorkletsProbeModule.descriptor;
     const raw = bindings.install(name, hash, 4);
     const helpers = conversionHelpers;
-    const { callp, call, cancel, dispose, teardown, stats } = raw;
+    const { callh, call, cancel, dispose, teardown, stats } = raw;
+    const callp = (...args: unknown[]) => Reflect.apply(callh, helpers, args);
+    // Method 0 is a scalar method: its prepared entry is a host function of its own.
+    const direct = raw.entry(0);
+    check('W2: prepared scalar entry from the RN runtime', direct(2, 3) === 6);
     const install = bindings.install;
-    check('W2: RN runtime call through a test adapter', callp(helpers, 0, undefined, 2, 3) === 6);
-    const handle = callp(helpers, 6, undefined, 1);
+    check('W2: RN runtime call through a test adapter', callp(0, undefined, 2, 3) === 6);
+    const handle = callp(6, undefined, 1);
     const foreign = runOnUISync(() => {
       'worklet';
       const attempts: [string, () => unknown][] = [
-        ['callp', () => callp(helpers, 0, undefined, 2, 3)],
+        ['callh', () => callh.call(helpers, 0, undefined, 2, 3)],
+        ['entry', () => direct(2, 3)],
         ['call', () => call(helpers, 0, undefined, [2, 3])],
         ['cancel', () => cancel(1)],
         ['dispose', () => dispose(handle)],
@@ -150,7 +155,7 @@ export async function runWorkletsSmoke(): Promise<WorkletsResult> {
     // The adapter is untouched: same results, still open, the handle not disposed.
     check(
       'W2: RN runtime calls still work after the refused calls',
-      callp(helpers, 0, undefined, 4, 5) === 20 && callp(helpers, 11, handle, 2) === 3,
+      callp(0, undefined, 4, 5) === 20 && callp(11, handle, 2) === 3,
     );
     check('W2: adapter still open', stats(helpers).open === 1, stats(helpers));
     teardown();

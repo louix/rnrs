@@ -565,6 +565,55 @@ pub unsafe extern "C" fn rnrs_adapter_generation(adapter: *const RnrsAdapter) ->
     unsafe { &*adapter }.adapter.generation()
 }
 
+/// Private immutable binding borrowed by C++ for the owning adapter's lifetime.
+#[repr(C)]
+pub struct ScalarBinding {
+    args: u32,
+    result: u32,
+    definition: *const rnrs_core::bind::ScalarDef,
+    instance: *const (),
+}
+
+/// # Safety
+/// Adapter is live; out points to writable storage. Binding must not outlive adapter.
+#[no_mangle]
+pub unsafe extern "C" fn rnrs_adapter_scalar(adapter: *const RnrsAdapter, index: usize, method: *mut u32, out: *mut ScalarBinding) -> bool {
+    let adapter = &unsafe { &*adapter }.adapter;
+    let Some(def) = adapter.def().scalars.get(index) else { return false };
+    unsafe {
+        method.write(def.method);
+        out.write(ScalarBinding { args: def.args, result: def.result, definition: def, instance: adapter.scalar_instance(def) });
+    }
+    true
+}
+
+/// # Safety
+/// Binding belongs to live adapter; args contains four initialized scalar slots with
+/// validated types/boolean representations. No JS may run during this synchronous call.
+/// Output/error buffers are writable with the stated capacity, as in rnrs_adapter_call.
+#[no_mangle]
+pub unsafe extern "C" fn rnrs_scalar_call(adapter: *const RnrsAdapter, binding: *const ScalarBinding, args: *const [f64; 4], out: *mut f64,
+    error_kind: *mut u32, error: *mut u8, error_cap: usize) -> u32 {
+    let adapter = unsafe { &*adapter };
+    let binding = unsafe { &*binding };
+    #[cfg(feature = "diagnostics")]
+    rnrs_core::diagnostics::count(4);
+    let result = adapter.adapter.check_open().and_then(|()| {
+        // The captured C++ shared owner keeps adapter and its instance alive even
+        // if another thread retires its resources. Teardown never frees instance.
+        unsafe { ((*binding.definition).call)(binding.instance, &*args) }.map_err(BindError::error)
+    });
+    match result {
+        Ok(value) => { unsafe { out.write(value) }; RNRS_CALL_OK }
+        Err(BindError::Js { kind, message }) => {
+            unsafe { error_kind.write(match kind { ErrorKind::TypeError => 0, ErrorKind::RangeError => 1, ErrorKind::Error => 2 }) };
+            write_message(error, error_cap, &message);
+            RNRS_CALL_ERROR
+        }
+        Err(BindError::Thrown) => unreachable!("scalar leaf cannot run JS"),
+    }
+}
+
 /// Calls method `method` (IR order). On `RNRS_CALL_ERROR` writes the error kind (0 TypeError,
 /// 1 RangeError, 2 Error) and message; on `RNRS_CALL_THROWN` the context holds a JS exception.
 ///
@@ -765,7 +814,7 @@ mod tests {
         }
         static METHODS: [MethodDef; 0] = [];
         static TYPES: [NativeTypeDef; 0] = [];
-        static DEF: ModuleDef = ModuleDef { name: "TeardownHookProbe", hash: "test", methods: &METHODS, native_types: &TYPES, instantiate, call };
+        static DEF: ModuleDef = ModuleDef { name: "TeardownHookProbe", hash: "test", methods: &METHODS, scalars: &[], native_types: &TYPES, instantiate, call };
         static DEFS: [&ModuleDef; 1] = [&DEF];
 
         extern "C" fn noop(_: *mut c_void) {}
@@ -807,7 +856,7 @@ mod tests {
             *FAILING_RESOURCE.lock().unwrap() = Some(resource);
             Err("instantiate failed after registering".into())
         }
-        static FAILING: ModuleDef = ModuleDef { name: "TeardownHookFailing", hash: "test", methods: &METHODS, native_types: &TYPES, instantiate: instantiate_then_fail, call };
+        static FAILING: ModuleDef = ModuleDef { name: "TeardownHookFailing", hash: "test", methods: &METHODS, scalars: &[], native_types: &TYPES, instantiate: instantiate_then_fail, call };
 
         #[test]
         fn a_failed_instantiate_retires_what_it_registered() {
@@ -893,5 +942,61 @@ pub unsafe extern "C" fn rnrs_set_app_data_dir(ptr: *const u8, len: usize) -> bo
     match std::str::from_utf8(bytes) {
         Ok(path) if !path.is_empty() => rnrs_core::platform::set_app_data_dir(path.into()).is_ok(),
         _ => false,
+    }
+}
+
+#[cfg(test)]
+mod scalar_tests {
+    use super::*;
+    use rnrs_core::bind::{AnyNative, ScalarDef};
+    use std::sync::atomic::AtomicUsize;
+    static CALLS: AtomicUsize = AtomicUsize::new(0);
+    static DROPS: AtomicUsize = AtomicUsize::new(0);
+    struct Instance;
+    impl Drop for Instance { fn drop(&mut self) { DROPS.fetch_add(1, Ordering::SeqCst); } }
+    static DEF: ModuleDef = ModuleDef {
+        name: "ScalarProbe", hash: "test", methods: &[], native_types: &[],
+        instantiate: || Ok(Box::new(Instance)),
+        call: |_, _, _, _| unreachable!(),
+        scalars: &[ScalarDef {
+            method: 3, args: 1, result: 1,
+            instance: |v: &AnyNative| v.downcast_ref::<Instance>().unwrap() as *const Instance as *const (),
+            call: |p, args| {
+                let _instance = unsafe { &*p.cast::<Instance>() };
+                CALLS.fetch_add(1, Ordering::SeqCst);
+                if args[0] == 42.0 { Err("scalar failed".into()) } else { Ok(args[0]) }
+            },
+        }],
+    };
+    extern "C" fn noop(_: *mut c_void) {}
+    extern "C" fn delivery(_: *mut c_void) -> u8 { 0 }
+    #[test]
+    fn scalar_binding_preserves_values_errors_and_owner_until_drop() {
+        let notifier = Notifier { notify: noop, release: noop, delivery, ctx: std::ptr::null_mut() };
+        let adapter = RnrsAdapter::new(&DEF, 4, Budget::new(4), notifier).unwrap();
+        let mut binding = std::mem::MaybeUninit::uninit();
+        let mut method = 0;
+        assert!(unsafe { rnrs_adapter_scalar(&adapter, 0, &mut method, binding.as_mut_ptr()) });
+        assert_eq!(method, 3);
+        let binding = unsafe { binding.assume_init() };
+        let mut out = 0.0;
+        let mut kind = 0;
+        let mut error = [0u8; 512];
+        for value in [-0.0f64, f64::INFINITY, f64::NEG_INFINITY, f64::NAN] {
+            let args = [value, 0.0, 0.0, 0.0];
+            assert_eq!(unsafe { rnrs_scalar_call(&adapter, &binding, &args, &mut out, &mut kind, error.as_mut_ptr(), error.len()) }, RNRS_CALL_OK);
+            assert_eq!(out.to_bits(), value.to_bits());
+        }
+        let args = [42.0, 0.0, 0.0, 0.0];
+        assert_eq!(unsafe { rnrs_scalar_call(&adapter, &binding, &args, &mut out, &mut kind, error.as_mut_ptr(), error.len()) }, RNRS_CALL_ERROR);
+        assert_eq!(kind, 2);
+        assert_eq!(&error[..14], b"scalar failed\0");
+        adapter.teardown(0);
+        assert_eq!(DROPS.load(Ordering::SeqCst), 0);
+        assert_eq!(unsafe { rnrs_scalar_call(&adapter, &binding, &args, &mut out, &mut kind, error.as_mut_ptr(), error.len()) }, RNRS_CALL_ERROR);
+        assert_eq!(CALLS.load(Ordering::SeqCst), 5);
+        assert_eq!(&error[..26], b"runtime adapter is closed\0");
+        drop(adapter);
+        assert_eq!(DROPS.load(Ordering::SeqCst), 1);
     }
 }

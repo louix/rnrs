@@ -166,9 +166,9 @@ async function runStep(step: Step, update: (message: string) => void): Promise<b
         ...runProtocolSuite(
           'native',
           checkNativeAdapter,
-          { call: f, callp: f },
-          { call: f },
-          'callp',
+          { call: f, callh: f, entry: f },
+          { call: f, callh: f },
+          'entry',
         ),
       );
       await report({ type: 'conformance', ok: checks.every((c) => c.ok), checks });

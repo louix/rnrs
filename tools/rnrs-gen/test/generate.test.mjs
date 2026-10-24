@@ -4,6 +4,8 @@ import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { appPackages, main, plan, FRAMEWORK_SPEC, ROOT } from '../cli.mjs';
+import { emitGlue } from '../emit-rust.mjs';
+import { emitTs } from '../emit-ts.mjs';
 import { irHash, parseSpec } from '../parse.mjs';
 
 test('generation is deterministic', () => {
@@ -21,6 +23,65 @@ test('numeric input arrays select the fused reader while generic containers rema
   assert.match(generated, /env\.number_array\(/);
   assert.match(generated, /array_from_js_with\(/);
   assert.match(generated, /array_into_js_with\(/);
+});
+
+test('scalar entries select only required synchronous module primitives', () => {
+  const method = (name, params, returns = 'number', extra = {}) => ({
+    name,
+    params: params.map((k, i) => ({ name: `a${i}`, type: { k } })),
+    returns: { k: returns },
+    ...extra,
+  });
+  const ir = {
+    module: 'Test',
+    hash: 'test',
+    objects: [],
+    records: [],
+    unions: [],
+    methods: [
+      method('zero', [], 'void'),
+      method('one', ['boolean'], 'boolean'),
+      method('two', ['number', 'number']),
+      method('three', ['number', 'boolean', 'number']),
+      method('four', ['boolean', 'number', 'boolean', 'number']),
+      method('five', Array(5).fill('number')),
+      method('text', ['string']),
+      method('later', ['number'], 'number', { async: true }),
+      method('object', ['number'], 'number', { owner: 'Thing' }),
+      method('optional', [], 'number', {
+        params: [{ name: 'a', optional: true, type: { k: 'number' } }],
+      }),
+    ],
+  };
+  const glue = emitGlue(ir, { crate: 'test', moduleType: 'Test' });
+  const scalars = glue.slice(glue.indexOf('scalars: &['), glue.indexOf('native_types: &['));
+  assert.deepEqual(
+    [...scalars.matchAll(/method: (\d+),/g)].map((m) => Number(m[1])),
+    [0, 1, 2, 3, 4],
+  );
+  assert.match(
+    scalars,
+    /receiver\.four\(args\[0\] != 0.0, args\[1\], args\[2\] != 0.0, args\[3\]\)/,
+  );
+  assert.doesNotMatch(scalars, /Env|clone\(|from_js|into_js/);
+
+  // The TS wrapper calls the prepared entry for exactly the same methods (one shared rule).
+  const ts = emitTs(ir, { runtimeImport: '@rnrs/runtime', maxInFlight: 8 });
+  assert.match(ts, /protocol: 3, direct: \[\[0, 0\], \[1, 1\], \[2, 2\], \[3, 3\], \[4, 4\]\]\}/);
+  assert.match(ts, /zero\(\): void \{\n    this\.host\.m0\(\);/);
+  assert.match(ts, /return this\.host\.m2\(a0, a1\) as number;/);
+  assert.match(ts, /return this\.host\.m4\(a0, a1, a2, a3\) as number;/);
+  assert.match(ts, /this\.host\.call\(5, undefined, \[/);
+  assert.match(ts, /this\.host\.call1\(6, undefined, a0\)/);
+  assert.match(ts, /this\.host\.start\(7, undefined/);
+  assert.match(ts, /this\.host\.call1\(9, undefined, a\)/);
+  // A module without scalar methods keeps protocol 2 (older runtimes still accept it).
+  const plain = emitTs(
+    { ...ir, methods: ir.methods.filter((m) => m.name === 'text') },
+    { runtimeImport: '@rnrs/runtime', maxInFlight: 8 },
+  );
+  assert.match(plain, /protocol: 2\}/);
+  assert.doesNotMatch(plain, /direct|host\.m\d/);
 });
 
 test('committed interfaces are up to date (rnrs-gen check)', async () => {

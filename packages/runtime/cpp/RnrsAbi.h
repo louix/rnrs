@@ -52,6 +52,14 @@ typedef uint8_t (*RnrsDeliveryCallback)(void*);
 RnrsAdapter* rnrs_adapter_new(uint32_t module, uint32_t maxInFlight, RnrsCallback notify, RnrsDeliveryCallback delivery,
                             RnrsCallback release, void* ctx, char*, size_t);
 uint64_t rnrs_adapter_generation(const RnrsAdapter*);
+struct RnrsScalarBinding {
+  uint32_t args, result;
+  const void* definition;
+  const void* instance;
+};
+bool rnrs_adapter_scalar(const RnrsAdapter*, size_t index, uint32_t* method, RnrsScalarBinding*);
+uint32_t rnrs_scalar_call(const RnrsAdapter*, const RnrsScalarBinding*, const double* args,
+                          double* out, uint32_t* errorKind, char* error, size_t cap);
 uint32_t rnrs_adapter_call(const RnrsAdapter*, const JsiVTable*, void* ctx, uint32_t epoch, uint32_t method, uint32_t self,
                           const uint32_t* args, size_t nargs, uint32_t* out, uint32_t* errorKind, char* error, size_t cap);
 size_t rnrs_adapter_drain(const RnrsAdapter*, const JsiVTable*, void* ctx, uint32_t epoch, size_t max, RnrsSettle settle);
