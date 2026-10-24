@@ -33,7 +33,7 @@ cd "$PKG"
 # A package.json first: npm would otherwise install into the nearest ancestor package.
 echo '{"name": "@demo/crc", "private": true}' > package.json
 npm exec --yes --package="$PACK/rnrs-cli-0.2.0.tgz" --package="$PACK/rnrs-runtime-0.2.0.tgz" -- rnrs init
-node -e 'const d = require("./package.json").devDependencies; if (d["@rnrs/cli"] !== "0.1.0" || d["@rnrs/runtime"] !== "0.1.0") throw new Error("rnrs init did not write the devDependencies: " + JSON.stringify(d))'
+node -e 'const d = require("./package.json").devDependencies; const root = process.argv[1]; if (d["@rnrs/cli"] !== require(root + "/packages/cli/package.json").version || d["@rnrs/runtime"] !== require(root + "/packages/runtime/package.json").version) throw new Error("rnrs init did not write the devDependencies: " + JSON.stringify(d))' "$ROOT"
 [ ! -e node_modules ] || { echo "rnrs init installed something" >&2; exit 1; }
 # Not published: the tarballs stand in for the registry versions init wrote.
 npm install --no-audit --no-fund --save-dev "$PACK/rnrs-cli-0.2.0.tgz" "$PACK/rnrs-runtime-0.2.0.tgz"

@@ -88,7 +88,8 @@ rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal --target aarch64-
 # The generated Podfile chooses React Native's prebuilt core itself; the environment adds nothing.
 unset RCT_USE_RN_DEP RCT_USE_PREBUILT_RNCORE RNRS_TEST_HOOKS
 (cd "$APP/ios" && pod install > "$C/pod-install.log")
-grep -q "RnrsRuntime (0.1.0)" "$APP/ios/Podfile.lock" || { echo "RnrsRuntime pod not autolinked" >&2; exit 1; }
+RUNTIME_VERSION="$(node -p "require('$ROOT/packages/runtime/package.json').version")"
+grep -Fq "RnrsRuntime ($RUNTIME_VERSION)" "$APP/ios/Podfile.lock" || { echo "RnrsRuntime pod not autolinked" >&2; exit 1; }
 grep -E "^  - (RnrsRuntime|React-Core|ExpoModulesCore|hermes-engine) " "$APP/ios/Podfile.lock" | sort -u
 [ "${RNRS_EXPO_SKIP_IOS_BUILD:-0}" = 1 ] && exit 0
 

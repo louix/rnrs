@@ -308,11 +308,16 @@ function correctness(r: Receivers): Check[] {
       }
     });
     check(path, 'array inherited hole', () => {
-      const xs = [1, , 3];
+      const xs = [1, 2, 3];
+      delete xs[1];
       Object.setPrototypeOf(xs, Object.assign(Object.create(Array.prototype), { 1: 2 }));
       return m.arrSum(xs as number[]) === 6;
     });
-    check(path, 'array uncovered hole throws', () => throws(() => m.arrSum([1, , 3] as number[])));
+    check(path, 'array uncovered hole throws', () => {
+      const xs = [1, 2, 3];
+      delete xs[1];
+      return throws(() => m.arrSum(xs));
+    });
     check(path, 'array proxy reads one length in order', () => {
       const keys: string[] = [];
       const xs = new Proxy([1, 2, 3], {
