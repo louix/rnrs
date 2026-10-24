@@ -1,5 +1,6 @@
 #include "RnrsCmpCxx.h"
 #include <cmath>
+#include <algorithm>
 #include <cstdlib>
 
 #ifdef __APPLE__
@@ -116,6 +117,32 @@ bool RnrsCmpCxx::installHarness(jsi::Runtime& rt) {
   o.setProperty(rt, "flip", hostFunction(rt, "flip", 1, [](jsi::Runtime& rt, const jsi::Value&, const jsi::Value* args, size_t count) {
     if (count < 1) throw jsi::JSError(rt, "flip expects 1 argument");
     return jsi::Value(!args[0].asBool());
+  }));
+  // Owned conversion before the same left-to-right sum as the Rust module.
+  // No adapter lifetime/runtime-origin guards: this control owns no adapter.
+  o.setProperty(rt, "arrSum", hostFunction(rt, "arrSum", 1, [](jsi::Runtime& rt, const jsi::Value&, const jsi::Value* args, size_t count) {
+    auto typeError = [&](const std::string& message) {
+      throw jsi::JSError(rt, rt.global().getPropertyAsFunction(rt, "TypeError").callAsConstructor(rt, message));
+    };
+    if (count < 1 || !args[0].isObject()) typeError("xs must be an array");
+    auto array = args[0].getObject(rt);
+    if (!array.isArray(rt)) typeError("xs must be an array");
+    auto length = array.getProperty(rt, "length");
+    if (!length.isNumber() || !std::isfinite(length.getNumber()) ||
+        std::trunc(length.getNumber()) != length.getNumber() ||
+        length.getNumber() < 0 || length.getNumber() > UINT32_MAX)
+      throw jsi::JSError(rt, rt.global().getPropertyAsFunction(rt, "RangeError").callAsConstructor(rt, "invalid array length"));
+    const auto n = static_cast<uint32_t>(length.getNumber());
+    std::vector<double> xs;
+    xs.reserve(std::min<uint32_t>(n, 4096));
+    for (uint32_t i = 0; i < n; ++i) {
+      auto value = array.getProperty(rt, jsi::Value(static_cast<double>(i)));
+      if (!value.isNumber()) typeError("xs[" + std::to_string(i) + "] must be a number");
+      xs.push_back(value.getNumber());
+    }
+    double sum = 0;
+    for (double x : xs) sum += x;
+    return jsi::Value(sum);
   }));
   // Harness helpers (never timed): environment variables (iOS run config), the OS thermal
   // state (iOS ProcessInfo; -1 elsewhere) and how this library was compiled.

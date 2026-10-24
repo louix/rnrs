@@ -536,6 +536,19 @@ export function makeCases(r: Receivers, fx: Fixtures): Case[] {
       })(r.tm),
     },
     {
+      workload: 'arrIn-16',
+      path: 'jsi',
+      expect: (n: number) => n * fx.arrayTotals[16],
+      run: ((M) => (n: number): number => {
+        const xs = fx.arrays[16];
+        let acc = 0;
+        for (let i = 0; i < n; i++) {
+          acc += M.arrSum(xs);
+        }
+        return acc;
+      })(r.jsi),
+    },
+    {
       workload: 'arrIn-1024',
       path: 'rnrs',
       expect: (n: number) => n * fx.arrayTotals[1024],
@@ -560,6 +573,19 @@ export function makeCases(r: Receivers, fx: Fixtures): Case[] {
         }
         return acc;
       })(r.tm),
+    },
+    {
+      workload: 'arrIn-1024',
+      path: 'jsi',
+      expect: (n: number) => n * fx.arrayTotals[1024],
+      run: ((M) => (n: number): number => {
+        const xs = fx.arrays[1024];
+        let acc = 0;
+        for (let i = 0; i < n; i++) {
+          acc += M.arrSum(xs);
+        }
+        return acc;
+      })(r.jsi),
     },
     {
       workload: 'arrOut-16',

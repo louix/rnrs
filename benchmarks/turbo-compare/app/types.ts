@@ -36,8 +36,9 @@ export interface CmpApi {
   pointSumBatch(ps: Point8[]): number;
 }
 
-/** The handwritten JSI control (scalar only) plus harness helpers, global.__rnrsCmpJsi. */
+/** The handwritten JSI control (scalars and numeric-array input) plus harness helpers, global.__rnrsCmpJsi. */
 export interface JsiControl {
+  arrSum(xs: number[]): number;
   nop(): void;
   add(a: number, b: number): number;
   flip(b: boolean): boolean;

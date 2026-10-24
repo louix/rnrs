@@ -37,6 +37,12 @@ struct JsiVTable {
   // UTF-8 copy of a string straight into storage from alloc(allocCtx, len); returns the
   // bytes written.
   size_t (*toStringInto)(void*, uint32_t v, uint8_t* (*alloc)(void*, size_t), void* allocCtx);
+  // Array already brand/length checked. One ordinary read per index; stops at first
+  // invalid value. alloc owns/grows Rust storage, preserving initialized doubles;
+  // it runs no JS. Capacity requests start <=4096, grow only after a valid read.
+  // 0 success, 1 invalid (writes index/value), 2 exception retained in call context.
+  uint32_t (*numberArray)(void*, uint32_t, uint32_t,
+      double* (*alloc)(void*, size_t initialized, size_t capacity), void*, uint32_t*, uint32_t*);
 };
 void rnrs_bytes_free(uint8_t* ptr, size_t len, size_t cap);
 void rnrs_bundle_init();

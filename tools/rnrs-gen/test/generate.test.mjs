@@ -12,6 +12,17 @@ test('generation is deterministic', () => {
   assert.deepEqual(a, b);
 });
 
+test('numeric input arrays select the fused reader while generic containers remain', () => {
+  const pkg = appPackages().find((p) => p.crate === 'values');
+  assert.ok(pkg);
+  const generated = plan([pkg])
+    .map((o) => o.content)
+    .join('\n');
+  assert.match(generated, /env\.number_array\(/);
+  assert.match(generated, /array_from_js_with\(/);
+  assert.match(generated, /array_into_js_with\(/);
+});
+
 test('committed interfaces are up to date (rnrs-gen check)', async () => {
   assert.equal(await main(['check']), 0);
 });

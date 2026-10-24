@@ -262,6 +262,23 @@ pub trait Env {
     fn get_property(&mut self, object: Val, key: &str) -> Result<Val, BindError>;
     fn array_length(&mut self, array: Val) -> Result<u32, BindError>;
     fn get_index(&mut self, array: Val, index: u32) -> Result<Val, BindError>;
+    /// Owned numeric array conversion. Backends may fuse reads, but must preserve
+    /// ordinary reads, one length read, first-error ordering and IEEE numbers.
+    fn number_array(&mut self, v: Val, path: &Path<'_>) -> Result<Vec<f64>, BindError> {
+        if self.kind(v) != Kind::Array {
+            return Err(BindError::type_error(format!("{path} must be an array, got {}", kind_name(self.kind(v)))));
+        }
+        let length = self.array_length(v)?;
+        let mut out = Vec::with_capacity(length.min(4096) as usize);
+        for i in 0..length {
+            let element = self.get_index(v, i)?;
+            match self.number_value(element) {
+                Some(x) => out.push(x),
+                None => return Err(BindError::type_error(format!("{} must be a number, got {}", path.index(i), kind_name(self.kind(element))))),
+            }
+        }
+        Ok(out)
+    }
 
     fn undefined(&mut self) -> Val;
     fn null(&mut self) -> Val;

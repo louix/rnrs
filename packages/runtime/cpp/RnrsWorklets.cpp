@@ -192,6 +192,11 @@ const JsiVTable kWorkletVTable = {
       *out = W(raw).refuse();
     },
     [](void* raw, uint32_t, uint8_t* (*)(void*, size_t), void*) -> size_t { W(raw).refused = true; return 0; },
+    // Arrays remain unsupported on worklet endpoints (kind rejects them first).
+    [](void* raw, uint32_t, uint32_t, double* (*)(void*, size_t, size_t), void*, uint32_t*, uint32_t*) -> uint32_t {
+      W(raw).refused = true;
+      return 2;
+    },
 };
 
 jsi::Value invoke(jsi::Runtime& rt, const EndpointState& ep, const Method& m, const void* receiverNative, const jsi::Value* a, size_t n) {

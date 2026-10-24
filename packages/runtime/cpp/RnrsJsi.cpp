@@ -424,6 +424,32 @@ const JsiVTable kVTable = {
         return len;
       });
     },
+    [](void* raw, uint32_t a, uint32_t length,
+       double* (*alloc)(void*, size_t, size_t), void* allocCtx, uint32_t* badIndex, uint32_t* badValue) -> uint32_t {
+      auto& c = C(raw);
+      uint32_t status = 0;
+      if (!guarded(c, [&] {
+        // This call owns the handle. Reentrant host calls have separate CallCtxs.
+        auto array = c.objectAt(a);
+        size_t capacity = std::min<uint32_t>(length, 4096);
+        double* data = capacity ? alloc(allocCtx, 0, capacity) : nullptr;
+        for (uint32_t i = 0; i < length; ++i) {
+          auto value = array.getProperty(c.rt, jsi::Value(static_cast<double>(i)));
+          if (!value.isNumber()) {
+            *badIndex = i;
+            *badValue = c.push(std::move(value));
+            status = 1;
+            return;
+          }
+          if (i == capacity) {
+            capacity += std::min<size_t>(capacity, length - capacity);
+            data = alloc(allocCtx, i, capacity);
+          }
+          data[i] = value.getNumber();
+        }
+      })) return 2;
+      return status;
+    },
 };
 
 }  // namespace

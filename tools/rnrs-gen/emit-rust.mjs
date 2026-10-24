@@ -173,6 +173,7 @@ function readExpr(t, v, path) {
     case 'native':
       return `native_from_js::<${t.name}Impl>(env, ${v}, ${path}, ${JSON.stringify(t.name)})`;
     case 'array':
+      if (t.of.k === 'number') return `env.number_array(${v}, ${path})`;
       return `array_from_js_with(env, ${v}, ${path}, &mut |env, v, path| ${readExpr(t.of, 'v', 'path')})`;
     case 'nullable':
       return `nullable_from_js_with(env, ${v}, ${path}, &mut |env, v, path| ${readExpr(t.of, 'v', 'path')})`;

@@ -20,7 +20,7 @@ use std::ffi::c_void;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::OnceLock;
 
-use rnrs_core::bind::{valid_length, Adapter, BindError, BytesError, Env, ErrorKind, Kind, MethodKind, ModuleDef, NativeBox, Spawner, UnwrapError, Val};
+use rnrs_core::bind::{expected, Path, valid_length, Adapter, BindError, BytesError, Env, ErrorKind, Kind, MethodKind, ModuleDef, NativeBox, Spawner, UnwrapError, Val};
 use rnrs_core::exec::TokioSpawner;
 use rnrs_core::{Budget, Delivery, Notify};
 
@@ -225,10 +225,49 @@ pub struct JsiVTable {
     /// UTF-8 copy of a string straight into storage from `alloc(alloc_ctx, len)`; returns
     /// the bytes written (at most `len`).
     pub to_string_into: extern "C" fn(*mut c_void, u32, extern "C" fn(*mut c_void, usize) -> *mut u8, *mut c_void) -> usize,
+    /// Same layout/contract as RnrsAbi.h: 0 success, 1 invalid, 2 thrown.
+    pub number_array: extern "C" fn(*mut c_void, u32, u32, extern "C" fn(*mut c_void, usize, usize) -> *mut f64, *mut c_void, *mut u32, *mut u32) -> u32,
 }
 
 static BYTES_ADOPTED: AtomicU64 = AtomicU64::new(0);
 static BYTES_RELEASED: AtomicU64 = AtomicU64::new(0);
+
+// Only this callback borrows the vector while C++ is active; it runs no JS.
+// C++ relinquishes its old data pointer before requesting growth. Nested JS calls
+// have separate vectors and cannot access this stack-local destination.
+extern "C" fn alloc_numbers(ctx: *mut c_void, initialized: usize, capacity: usize) -> *mut f64 {
+    let out = unsafe { &mut *(ctx as *mut Vec<f64>) };
+    assert!(initialized <= out.capacity() && initialized <= capacity);
+    // SAFETY: the native loop initialized this prefix before requesting growth.
+    unsafe { out.set_len(initialized) };
+    out.reserve_exact(capacity - initialized);
+    out.as_mut_ptr()
+}
+
+#[cfg(test)]
+mod number_storage_tests {
+    use super::*;
+
+    #[test]
+    fn growth_preserves_initialized_ieee_values_and_partial_tail_can_be_freed() {
+        let mut out = Vec::<f64>::new();
+        let ctx = &raw mut out as *mut c_void;
+        let p = alloc_numbers(ctx, 0, 4096);
+        for i in 0..4096 {
+            unsafe { p.add(i).write(match i { 0 => -0.0, 1 => f64::NAN, 2 => f64::INFINITY, _ => i as f64 }) };
+        }
+        let p = alloc_numbers(ctx, 4096, 8192);
+        assert_eq!(out.len(), 4096);
+        assert_eq!(out[0].to_bits(), (-0.0f64).to_bits());
+        assert!(out[1].is_nan());
+        assert_eq!(out[2], f64::INFINITY);
+        assert_eq!(out[4095], 4095.0);
+        // Simulate a throwing getter after growth and one successful write: no
+        // set_len on the uncommitted tail, and no leaked allocation on drop.
+        unsafe { p.add(4096).write(42.0) };
+        drop(out);
+    }
+}
 
 /// Reserves exactly `len` bytes (uninitialized; the encoder writes them) in the empty
 /// `Vec<u8>` behind `ctx` and returns the storage. Allocation failure aborts, as for any
@@ -293,6 +332,33 @@ impl Env for JsiEnv<'_> {
     }
     fn to_number(&mut self, v: Val) -> f64 {
         (self.vt.to_number)(self.ctx, self.ix(v))
+    }
+    fn number_array(&mut self, v: Val, path: &Path<'_>) -> Result<Vec<f64>, BindError> {
+        if self.kind(v) != Kind::Array {
+            return Err(expected(self, v, path, "an array"));
+        }
+        let length = self.array_length(v)?;
+        let mut out = Vec::<f64>::new();
+        let mut bad_index = 0;
+        let mut bad_value = 0;
+        // Raw pointer only: no destination reference remains live across JS getters.
+        let status = (self.vt.number_array)(self.ctx, self.ix(v), length, alloc_numbers,
+            &raw mut out as *mut c_void, &mut bad_index, &mut bad_value);
+        match status {
+            0 => {
+                assert!(length as usize <= out.capacity());
+                // SAFETY: success guarantees all length doubles were initialized.
+                unsafe { out.set_len(length as usize) };
+                Ok(out)
+            }
+            1 => {
+                let value = self.val(bad_value);
+                Err(expected(self, value, &path.index(bad_index), "a number"))
+            }
+            _ => Err(BindError::Thrown),
+        }
+        // On failure Vec frees its allocation. Uncommitted tail values are f64
+        // (no destructors); no uninitialized value is ever read or dropped.
     }
     fn to_bool(&mut self, v: Val) -> bool {
         (self.vt.to_bool)(self.ctx, self.ix(v))

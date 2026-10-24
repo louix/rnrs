@@ -562,6 +562,51 @@ export async function runValuesSuite(env: ValuesEnv): Promise<CheckResult[]> {
     );
   });
 
+  await check('numeric array failures at and after growth stop and preserve exceptions', () => {
+    // 4096 fails before the first growth; 4097 fails after growth and one write.
+    // Repetition exercises freeing partially initialized destinations on both exits.
+    for (let repeat = 0; repeat < 16; repeat++) {
+      for (const index of [4096, 4097]) {
+        for (const throwing of [false, true]) {
+          const xs = Array.from({ length: 8193 }, () => 1);
+          const sentinel = new Error(`growth getter ${index}`);
+          let badReads = 0;
+          let nextReads = 0;
+          Object.defineProperty(xs, index, {
+            get() {
+              badReads++;
+              expect(v.sum([2, 3]) === 5, 'nested conversion at failure boundary');
+              if (throwing) throw sentinel;
+              return 'invalid';
+            },
+          });
+          Object.defineProperty(xs, index + 1, {
+            get() {
+              nextReads++;
+              return 1;
+            },
+          });
+          if (throwing) {
+            let caught: unknown;
+            try {
+              v.sum(xs);
+            } catch (error) {
+              caught = error;
+            }
+            expect(caught === sentinel, `original exception at ${index}`);
+          } else {
+            throws(() => v.sum(xs), `TypeError: xs[${index}] must be a number, got a string`);
+          }
+          expect(
+            badReads === 1 && nextReads === 0,
+            `stopped at ${index}: ${badReads}/${nextReads}`,
+          );
+        }
+      }
+    }
+    expect(v.sum(Array.from({ length: 8193 }, () => 1)) === 8193, 'usable after partial failures');
+  });
+
   await check('ordinary input reads: mutation and re-entrancy during array conversion', () => {
     // Length is read once. A getter that shrinks the array: later indices read through the
     // prototype chain (here polluted), exactly like xs[i].

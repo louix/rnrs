@@ -146,6 +146,100 @@ function correctness(r: Receivers): Check[] {
     check(path, 'flip(1) throws', () => throws(() => m.flip(1 as any)));
   };
   scalar('jsi', r.jsi);
+  // rnrs and the handwritten control promise ordinary reads; codegen's indexed
+  // reader has different proxy/length semantics and is intentionally excluded here.
+  for (const path of ['rnrs', 'jsi'] as const) {
+    const m = r[path];
+    check(
+      path,
+      'array fixtures and growth',
+      () =>
+        [16, 256, 1024].every((n) => m.arrSum(fx.arrays[n]) === fx.arrayTotals[n]) &&
+        m.arrSum(Array.from({ length: 8193 }, () => 1)) === 8193,
+    );
+    check(
+      path,
+      'array IEEE values',
+      () =>
+        Number.isNaN(m.arrSum([NaN])) &&
+        m.arrSum([Infinity]) === Infinity &&
+        m.arrSum([-Infinity]) === -Infinity &&
+        Object.is(m.arrSum([-0]), 0),
+    );
+    check(path, 'array wrong type stops before next getter', () => {
+      let next = false;
+      const xs = [1, 'bad', 3] as any;
+      Object.defineProperty(xs, 2, {
+        get() {
+          next = true;
+          return 3;
+        },
+      });
+      return throws(() => m.arrSum(xs)) === true && !next;
+    });
+    check(path, 'array exception identity', () => {
+      const sentinel = {};
+      const xs = [1, 2];
+      Object.defineProperty(xs, 1, {
+        get() {
+          throw sentinel;
+        },
+      });
+      try {
+        m.arrSum(xs);
+        return false;
+      } catch (e) {
+        return e === sentinel;
+      }
+    });
+    check(path, 'array inherited hole', () => {
+      const xs = [1, , 3];
+      Object.setPrototypeOf(xs, Object.assign(Object.create(Array.prototype), { 1: 2 }));
+      return m.arrSum(xs as number[]) === 6;
+    });
+    check(path, 'array uncovered hole throws', () => throws(() => m.arrSum([1, , 3] as number[])));
+    check(path, 'array proxy reads one length in order', () => {
+      const keys: string[] = [];
+      const xs = new Proxy([1, 2, 3], {
+        get(target, key, receiver) {
+          keys.push(String(key));
+          return Reflect.get(target, key, receiver);
+        },
+      });
+      return m.arrSum(xs) === 6 && same(keys, ['length', '0', '1', '2']);
+    });
+    check(path, 'array length mutation reads original extent', () => {
+      const xs = [1, 2, 3];
+      Object.setPrototypeOf(xs, Object.assign(Object.create(Array.prototype), { 1: 2, 2: 3 }));
+      Object.defineProperty(xs, 0, {
+        get() {
+          xs.length = 1;
+          return 1;
+        },
+      });
+      return m.arrSum(xs) === 6;
+    });
+    check(path, 'array reentrant getter', () => {
+      const xs = [1, 2];
+      Object.defineProperty(xs, 0, {
+        get() {
+          return m.arrSum([4, 5]);
+        },
+      });
+      return m.arrSum(xs) === 11;
+    });
+    check(path, 'array huge declared length fails immediately', () => {
+      let reads = 0;
+      const xs = new Proxy([], {
+        get(_target, key) {
+          if (key === 'length') return 0xffffffff;
+          reads++;
+          return undefined;
+        },
+      });
+      return throws(() => m.arrSum(xs)) === true && reads === 1;
+    });
+  }
   for (const path of ['rnrs', 'tm'] as const) {
     const m = r[path];
     scalar(path, m);

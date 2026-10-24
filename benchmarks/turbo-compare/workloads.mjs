@@ -85,7 +85,7 @@ export const WORKLOADS = [
     id: `arrIn-${len}`,
     group: 'array',
     pre: `const xs = fx.arrays[${len}];`,
-    paths: two('acc += $M.arrSum(xs);'),
+    paths: three('acc += $M.arrSum(xs);'),
     ret: 'acc',
     expect: `n * fx.arrayTotals[${len}]`,
   })),
