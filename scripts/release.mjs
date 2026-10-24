@@ -10,6 +10,8 @@
 //       Re-verifies DIR against release.json, the tag against the version and the source commit,
 //       then compares each package with the registry: absent (to publish), the identical
 //       tarball (skipped: a resumed release) or a different tarball (fails).
+//   node scripts/release.mjs stage --dir DIR --tag vX.Y.Z [--sha COMMIT] [--dry-run]
+//       Verifies with plan, then stages artifacts for separate npm approval with 2FA.
 //   node scripts/release.mjs publish --dir DIR --tag vX.Y.Z [--sha COMMIT] [--dry-run]
 //       plan, then `npm publish <tarball>` for each absent package in dependency order (cli,
 //       runtime, surface), confirming each upload's integrity on the registry.
@@ -422,6 +424,32 @@ async function plan(dir, tag, sha) {
   return { release, states };
 }
 
+// Called after plan verifies artifacts, source, tag and published integrity.
+export function stagePackages(dir, states, dryRun, run = spawnSync) {
+  for (const s of states.filter((s) => s.state === 'absent')) {
+    const npmArgs = [
+      'stage',
+      'publish',
+      path.join(dir, s.file),
+      '--access',
+      'public',
+      '--tag',
+      'latest',
+    ];
+    if (dryRun) npmArgs.push('--dry-run');
+    console.log(`npm ${npmArgs.join(' ')}`);
+    const r = run('npm', npmArgs, { stdio: 'inherit' });
+    if (r.status !== 0)
+      fail([
+        `Staging ${s.name} failed. Earlier packages may be staged; none were approved by this command. Inspect npm stage list, approve or reject pending stages with 2FA, then retry the same artifacts.`,
+      ]);
+  }
+  if (!dryRun)
+    console.log(
+      'Staging complete. Review pending packages on npm and approve with 2FA; this command does not publish them.',
+    );
+}
+
 async function publish(dir, tag, sha, dryRun) {
   const { release, states } = await plan(dir, tag, sha);
   const todo = states.filter((s) => s.state === 'absent');
@@ -453,15 +481,18 @@ async function main(argv) {
   const [cmd] = a._;
   if (cmd === 'check') {
     await check(dir);
-  } else if (cmd === 'plan' || cmd === 'publish') {
+  } else if (cmd === 'plan' || cmd === 'publish' || cmd === 'stage') {
     if (!a.tag) throw new ReleaseError(`${cmd} needs --tag vX.Y.Z`);
     if (!existsSync(path.join(dir, 'release.json')))
       throw new ReleaseError(`${dir}/release.json missing (run check)`);
     if (cmd === 'plan') await plan(dir, a.tag, a.sha);
-    else await publish(dir, a.tag, a.sha, a.dryRun);
+    else if (cmd === 'stage') {
+      const { states } = await plan(dir, a.tag, a.sha);
+      stagePackages(dir, states, a.dryRun);
+    } else await publish(dir, a.tag, a.sha, a.dryRun);
   } else {
     console.error(
-      'usage: release.mjs check [--dir DIR] | plan|publish --dir DIR --tag vX.Y.Z [--sha SHA] [--dry-run]',
+      'usage: release.mjs check [--dir DIR] | plan|stage|publish --dir DIR --tag vX.Y.Z [--sha SHA] [--dry-run]',
     );
     return 2;
   }

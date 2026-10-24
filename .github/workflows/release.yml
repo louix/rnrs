@@ -1,10 +1,5 @@
-# Publishes @rnrs/cli, @rnrs/runtime and @rnrs/surface to npm (docs/releasing.md).
-#   push of a v* tag on main            CI (iOS included), build, verify, publish
-#   manual run on a v* tag, publish     the same (e.g. to resume an interrupted release)
-#   manual run otherwise                CI, build, verify and `npm publish --dry-run`
-# The tarballs are built and verified once; the publish job uploads exactly those files. It is
-# the only job with id-token: write (npm trusted publishing, provenance) and runs in the `npm`
-# environment. The trusted publisher on npmjs.com names this file and that environment.
+# Stages verified artifacts with provenance. Publication requires npm approval with 2FA.
+# Configure the trusted publisher for stage-publish only.
 name: Release
 
 on:
@@ -12,8 +7,8 @@ on:
     tags: ['v*']
   workflow_dispatch:
     inputs:
-      publish:
-        description: Publish to npm (only from a v* tag; otherwise a dry run)
+      stage:
+        description: Stage on npm for 2FA approval (only from a v* tag; otherwise a dry run)
         type: boolean
         default: false
 
@@ -70,6 +65,8 @@ jobs:
           fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "release $tag from $GITHUB_SHA ($REF_TYPE $REF_NAME)"
+      - name: Install npm with staged publishing support
+        run: npm install --global npm@11.15.0 --ignore-scripts --no-audit --no-fund
       - run: npm ci --ignore-scripts
       - name: Pack and check
         run: node scripts/release.mjs check --dir .generated/release
@@ -90,9 +87,9 @@ jobs:
           retention-days: 90
 
   dry-run:
-    name: npm publish --dry-run
+    name: npm stage publish --dry-run
     needs: build
-    if: ${{ !(github.ref_type == 'tag' && (github.event_name == 'push' || inputs.publish)) }}
+    if: ${{ !(github.ref_type == 'tag' && (github.event_name == 'push' || inputs.stage)) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -105,18 +102,20 @@ jobs:
         with:
           node-version: '24.21.0'
           package-manager-cache: false
+      - name: Install npm with staged publishing support
+        run: npm install --global npm@11.15.0 --ignore-scripts --no-audit --no-fund
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: npm-packages
           path: dist
       - env:
           TAG: ${{ needs.build.outputs.tag }}
-        run: node scripts/release.mjs publish --dir dist --tag "$TAG" --sha "$GITHUB_SHA" --dry-run
+        run: node scripts/release.mjs stage --dir dist --tag "$TAG" --sha "$GITHUB_SHA" --dry-run
 
-  publish:
-    name: Publish to npm
+  stage:
+    name: Stage on npm (approval required)
     needs: build
-    if: ${{ github.ref_type == 'tag' && (github.event_name == 'push' || inputs.publish) }}
+    if: ${{ github.ref_type == 'tag' && (github.event_name == 'push' || inputs.stage) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment: npm
@@ -132,20 +131,14 @@ jobs:
           node-version: '24.21.0'
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
-      - name: npm supports trusted publishing (>= 11.5.1)
-        run: |
-          npm --version
-          node -e 'const [a, b, c] = process.argv[1].split(".").map(Number); process.exit(a > 11 || (a === 11 && (b > 5 || (b === 5 && c >= 1))) ? 0 : 1)' "$(npm --version)"
+      - name: Install npm with staged publishing support
+        run: npm install --global npm@11.15.0 --ignore-scripts --no-audit --no-fund
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: npm-packages
           path: dist
-      - name: Publish the verified tarballs (cli, runtime, surface)
+      - name: Stage the verified tarballs (cli, runtime, surface)
         env:
           TAG: ${{ needs.build.outputs.tag }}
           NPM_CONFIG_PROVENANCE: 'true'
-          # npm authenticates with OIDC (trusted publishing) first. Only for the first publish,
-          # before trusted publishers can exist, an `npm` environment secret may supply a
-          # short-lived granular token; delete it afterwards (docs/releasing.md).
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_BOOTSTRAP_TOKEN }}
-        run: node scripts/release.mjs publish --dir dist --tag "$TAG" --sha "$GITHUB_SHA"
+        run: node scripts/release.mjs stage --dir dist --tag "$TAG" --sha "$GITHUB_SHA"

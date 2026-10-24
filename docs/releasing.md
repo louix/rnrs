@@ -26,53 +26,67 @@ It writes `release.json` (sha256 and npm `dist.integrity` of each tarball, the s
 Change the version everywhere the check lists, then run it until it passes. Example packages move
 with the framework version.
 
-## Publishing
+## Releasing with npm approval
 
-1. Merge the release commit to `main` and wait for CI, including the iOS simulator job.
-2. Tag that commit `vX.Y.Z` and push the tag. The release workflow
-   (`.github/workflows/release.yml`):
-   - runs CI on the tag (iOS included);
-   - checks that the tag's commit is on `main`, packs once, verifies, and compares each package with
-     the registry: `absent` packages will be published, an `identical` tarball is skipped, and a
-     `different` tarball at the same version fails;
-   - waits for approval in the `npm` environment, then publishes the verified artifact in the order
-     cli, runtime, surface with OIDC trusted publishing (provenance included), confirming each
-     upload's integrity.
-3. A manual run of the workflow without `publish` (or from a branch) builds and verifies the same
-   way and runs `npm publish --dry-run`. That job has no `id-token` permission.
+1. Merge to main and wait for CI. Tag that commit `vX.Y.Z` and push the tag.
+2. The release workflow runs CI (including iOS), builds and verifies the three packages, then
+   stages those exact artifacts on npm with provenance. It cannot approve publication.
+3. Review the staged packages on npm, checking their version and provenance against the release
+   commit. Approve cli, runtime and surface with npm 2FA. Until all three are approved, the exact
+   dependency versions can make the release temporarily uninstallable.
 
-`@rnrs/runtime` requires the exact `@rnrs/cli` and the CLI peer-requires the exact runtime. npm
-publishes each package on its own, so an interrupted release leaves the version temporarily
-uninstallable. Re-run the failed publish job: it uses the same artifact and completes the release.
-Running the workflow on the tag with `publish` also works, but it rebuilds the tarballs, which
-match only with the same Node and npm (the release jobs pin Node exactly). Nothing is rolled back or unpublished. If
-a published tarball differs from the rebuilt one, the release stops: publish a new patch version
-instead.
+The workflow log contains each stage ID. You can also review from a logged-in terminal with
+npm 11.15.0 or newer:
 
-## One-time setup (maintainer)
+```bash
+npm stage list @rnrs/cli
+npm stage list @rnrs/runtime
+npm stage list @rnrs/surface
+npm stage view <stage-id>
+npm stage approve <stage-id>
+```
 
-- GitHub: a public `louix/rnrs` (provenance requires a public repository) and a ruleset that
-  restricts who can create `v*` tags. Create the `npm` environment with a required reviewer,
-  **Prevent self-review** when there is more than one maintainer, and deployment limited to `v*`
-  tags. An npm trusted publisher matches the repository, workflow file and environment, not the
-  ref, so these environment rules are what stop a branch with an edited `release.yml` from
-  publishing or reading the bootstrap secret.
-- npm: trusted publishers can only be configured for packages that exist
-  ([npm trust](https://docs.npmjs.com/cli/v11/commands/npm-trust): "The package you're configuring
-  must already exist on the npm registry"). The first version therefore needs one of:
-  - **Interactive publish of the verified artifact.** Pushing the tag starts a publishing run:
-    reject its `npm` deployment, download that run's `npm-packages` artifact, log in with 2FA
-    (`npm login`) and run
-    `node scripts/release.mjs publish --dir <artifact> --tag vX.Y.Z --sha <commit>`. npm generates
-    provenance only from cloud CI, so this version has none.
-  - **Bootstrap token in CI.** Add a short-lived granular token with publish rights to the `npm`
-    environment as `NPM_BOOTSTRAP_TOKEN` and run the release. npm falls back to it when OIDC
-    fails; `NPM_CONFIG_PROVENANCE` still attaches provenance. Delete the secret and revoke the
-    token afterwards.
-- Then, for each package:
-  `npm trust github <package> --repo louix/rnrs --file release.yml --env npm --allow-publish`
-  (npm ≥ 11.15, account 2FA). A new trusted publisher configuration must make its first
-  successful publish within 2 days, or it expires
-  ([trusted publishers](https://docs.npmjs.com/trusted-publishers#trusted-publisher-configuration-expiry)),
-  so configure it shortly before the next release. Afterwards set **Require two-factor
-  authentication and disallow tokens** for each package.
+To inspect the bytes, use `npm stage download <stage-id>` and compare the tarball with the
+workflow's `npm-packages` artifact and `SHA256SUMS`. Reject an unwanted stage with
+`npm stage reject <stage-id>` (also requires 2FA).
+
+Manual workflow runs default to a staging dry run. Select a version tag and enable `stage`
+only when you want to upload packages for approval. No command in the workflow approves them.
+
+### Interrupted releases
+
+A staged version reserves its version number. The workflow skips already-published identical
+packages and refuses published packages with different integrity, but cannot inspect pending
+stages using its OIDC credentials. If staging fails partway through, inspect the pending stages
+on npm. Approve the correct ones, or reject them before retrying. Re-run the failed staging job
+with the same artifact; rebuilding requires the same pinned Node and npm versions.
+Never replace a published version: use a new patch version if its contents must change.
+
+## One-time setup
+
+For each of `@rnrs/cli`, `@rnrs/runtime` and `@rnrs/surface`:
+
+1. Enable npm account 2FA. In package settings choose **Require two-factor authentication and
+   disallow tokens**. Revoke any bypass-2FA publishing tokens and remove the GitHub
+   `NPM_BOOTSTRAP_TOKEN` secret if it exists.
+2. Configure a GitHub trusted publisher for `louix/rnrs`, workflow `release.yml`, environment
+   `npm`, with **stage publishing only**. Direct publishing must be disabled. From the CLI:
+
+   ```bash
+   npm trust github <package> --repo louix/rnrs --file release.yml --env npm --allow-stage-publish
+   ```
+
+   If a trusted publisher already exists, inspect it with `npm trust list <package>`, revoke
+   it with `npm trust revoke --id <id> <package>`, then create the stage-only configuration.
+3. GitHub's `npm` environment must allow only `v*` tags. A GitHub required reviewer is optional;
+   the publication approval happens on npm. Restrict who can create release tags too.
+
+Trusted publishers require an existing npm package. If bootstrapping a new package, download
+and verify the release artifact, log in with `npm login`, then run
+`node scripts/release.mjs stage --dir <artifact> --tag vX.Y.Z --sha <commit>` and approve on npm.
+Local staging has no CI provenance. Configure the trusted publisher after the first publication.
+New trust configurations expire if unused for two days; configure them shortly before release.
+
+Provenance links an artifact to its CI source and build; npm's stage approval supplies the human
+2FA check. Both are used here. See [npm staging](https://docs.npmjs.com/staged-publishing/) and
+[trusted publishers](https://docs.npmjs.com/trusted-publishers/).

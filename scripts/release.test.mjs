@@ -15,6 +15,7 @@ import {
   integrity,
   readTarball,
   registryState,
+  stagePackages,
   verifyArtifacts,
   versionLiterals,
   writeArtifacts,
@@ -247,4 +248,51 @@ test('registry state compares the exact tarball integrity', async () => {
   );
   const older = await registryState(release, async () => ({ versions: { '1.2.2': {} } }));
   assert.ok(older.every((s) => s.state === 'absent'));
+});
+
+test('staging submits only absent artifacts and never approves or directly publishes', () => {
+  const states = PUBLIC.map(({ name }, i) => ({
+    name,
+    file: 'package-' + i + '.tgz',
+    state: i === 0 ? 'identical' : 'absent',
+  }));
+  const calls = [];
+  stagePackages('/artifacts', states, false, (command, args) => {
+    calls.push([command, ...args]);
+    return { status: 0 };
+  });
+  assert.deepEqual(
+    calls,
+    [1, 2].map((i) => [
+      'npm',
+      'stage',
+      'publish',
+      '/artifacts/package-' + i + '.tgz',
+      '--access',
+      'public',
+      '--tag',
+      'latest',
+    ]),
+  );
+});
+
+test('staging dry run and partial failures never proceed to approval', () => {
+  const states = PUBLIC.map(({ name }, i) => ({
+    name,
+    file: 'package-' + i + '.tgz',
+    state: 'absent',
+  }));
+  const calls = [];
+  stagePackages('/artifacts', states, true, (_, args) => {
+    calls.push(args);
+    return { status: 0 };
+  });
+  assert.equal(calls.length, 3);
+  assert.ok(calls.every((args) => args.at(-1) === '--dry-run'));
+  let attempts = 0;
+  assert.throws(
+    () => stagePackages('/artifacts', states, false, () => ({ status: ++attempts === 2 ? 1 : 0 })),
+    /Earlier packages may be staged/,
+  );
+  assert.equal(attempts, 2, 'stop at the first failed upload');
 });
