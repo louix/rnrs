@@ -1,8 +1,0 @@
-[package]
-name = "rnrs-turbo-compare"
-version = "0.2.0"
-edition = "2021"
-description = "Benchmark-only module for the rnrs vs C++ TurboModule comparison."
-
-[dependencies]
-rnrs-core = "0.2"

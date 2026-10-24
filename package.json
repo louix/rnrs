@@ -7,13 +7,13 @@
     "apps/lab"
   ],
   "scripts": {
-    "lint": "oxlint --deny-warnings apps packages scripts tools fixtures benchmarks",
+    "lint": "oxlint --deny-warnings apps packages scripts tools fixtures",
     "lint:fix": "npm run lint -- --fix",
-    "fmt": "oxfmt --write \"{apps,packages,scripts,tools,fixtures,benchmarks}/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}\" package.json apps/lab/package.json .oxfmtrc.json .oxlintrc.json renovate.json",
-    "fmt:check": "oxfmt --check \"{apps,packages,scripts,tools,fixtures,benchmarks}/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}\" package.json apps/lab/package.json .oxfmtrc.json .oxlintrc.json renovate.json",
+    "fmt": "oxfmt --write \"{apps,packages,scripts,tools,fixtures}/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}\" package.json apps/lab/package.json .oxfmtrc.json .oxlintrc.json renovate.json",
+    "fmt:check": "oxfmt --check \"{apps,packages,scripts,tools,fixtures}/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}\" package.json apps/lab/package.json .oxfmtrc.json .oxlintrc.json renovate.json",
     "start": "npm run start -w apps/lab --",
     "android": "npm run android -w apps/lab --",
-    "test": "node --test scripts/*.test.mjs tools/rnrs-gen/test/*.test.mjs packages/*/test/*.test.mjs benchmarks/*/*.test.mjs",
+    "test": "node --test scripts/*.test.mjs tools/rnrs-gen/test/*.test.mjs packages/*/test/*.test.mjs",
     "test:rnrs-offline": "cargo fetch --locked && RNRS_REQUIRE_CARGO=1 node --test tools/rnrs-gen/test/rnrs-offline.test.mjs",
     "typecheck": "node tools/rnrs-gen/cli.mjs generate && node node_modules/typescript/bin/tsc --noEmit && node scripts/typecheck-ios-fixture.mjs",
     "rnrs:gen": "node tools/rnrs-gen/cli.mjs generate",
