@@ -134,7 +134,7 @@ pub fn rnrs_diagnostics() -> Vec<f64> {
 
 // ---- Helpers -------------------------------------------------------------------------
 
-const HELPER_NAMES: [&str; 9] = ["readOwn", "define", "isArray", "length", "byteLength", "copyBuffer", "bytesFromMemory", "wrap", "unwrap"];
+const HELPER_NAMES: [&str; 9] = ["get", "define", "isArray", "length", "byteLength", "copyBuffer", "bytesFromMemory", "wrap", "unwrap"];
 
 /// The adapter's helpers object (the framework's frozen conversion helpers plus wrap/unwrap)
 /// and its functions, each resolved once, at first use, and kept for the adapter's lifetime
@@ -272,7 +272,8 @@ impl Env for WebEnv<'_> {
     fn get_property(&mut self, object: Val, key: &str) -> Result<Val, BindError> {
         let o = self.get(object).clone();
         diag(2);
-        let v = self.call_helper("readOwn", &[&o, &JsValue::from_str(key)])?;
+        // Ordinary read (`object[key]`, prototype-inclusive) through the captured Reflect.get.
+        let v = self.call_helper("get", &[&o, &JsValue::from_str(key)])?;
         Ok(self.put(v))
     }
     fn array_length(&mut self, array: Val) -> Result<u32, BindError> {
@@ -282,7 +283,7 @@ impl Env for WebEnv<'_> {
     }
     fn get_index(&mut self, array: Val, index: u32) -> Result<Val, BindError> {
         let a = self.get(array).clone();
-        let v = self.call_helper("readOwn", &[&a, &JsValue::from(index)])?;
+        let v = self.call_helper("get", &[&a, &JsValue::from(index)])?;
         Ok(self.put(v))
     }
     fn undefined(&mut self) -> Val {

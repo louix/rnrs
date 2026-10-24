@@ -420,17 +420,188 @@ export async function runValuesSuite(env: ValuesEnv): Promise<CheckResult[]> {
     }
   }
 
-  await check('own properties only: inherited values never fill fields or holes', () => {
+  await check('ordinary input reads: inherited values and getters fill fields and holes', () => {
     polluted(Object.prototype, 'note', { value: 'polluted', writable: true }, () => {
-      expect(v.describe(labeled()) === 'L|a,b|<none>|null|(1,2);(3,4)', 'inherited note ignored');
+      expect(
+        v.describe(labeled()) === 'L|a,b|polluted|null|(1,2);(3,4)',
+        'inherited optional field is read',
+      );
     });
     polluted(Object.prototype, 'y', { get: () => 99 }, () => {
-      throws(() => v.echoPoint({ x: 1 } as any), 'TypeError: p.y must be a number, got undefined');
+      expect(same(v.echoPoint({ x: 1 } as any), { x: 1, y: 99 }), 'inherited getter supplies y');
     });
     polluted(Array.prototype, 1, { value: 5, writable: true }, () => {
       // eslint-disable-next-line no-sparse-arrays
-      throws(() => v.sum([1, , 3] as any), 'TypeError: xs[1] must be a number, got undefined');
+      expect(v.sum([1, , 3] as any) === 9, 'inherited number fills the hole');
+      expect(v.sum([1, 2, 3]) === 6, 'an own element shadows the inherited one');
     });
+    const inherited = Object.create({ y: 7 }) as { x: number; y: number };
+    inherited.x = 1;
+    const out = v.echoPoint(inherited);
+    expect(same(out, { x: 1, y: 7 }), `inherited y read: ${JSON.stringify(out)}`);
+    expect(
+      Object.getOwnPropertyDescriptor(out, 'y')?.value === 7,
+      'the output is an own data property',
+    );
+  });
+
+  await check('ordinary input reads: absent or mistyped values still fail with their path', () => {
+    throws(() => v.echoPoint({ x: 1 } as any), 'TypeError: p.y must be a number, got undefined');
+    throws(
+      () => v.echoPoint(Object.create({ y: '2' }, { x: { value: 1, enumerable: true } })),
+      'TypeError: p.y must be a number, got a string',
+    );
+    // eslint-disable-next-line no-sparse-arrays
+    throws(() => v.sum([1, , 3] as any), 'TypeError: xs[1] must be a number, got undefined');
+    polluted(Array.prototype, 1, { value: 'five', writable: true }, () => {
+      let laterRead = false;
+      // eslint-disable-next-line no-sparse-arrays
+      const xs = [1, , 3] as any[];
+      Object.defineProperty(xs, 2, {
+        get() {
+          laterRead = true;
+          return 3;
+        },
+      });
+      throws(() => v.sum(xs), 'TypeError: xs[1] must be a number, got a string');
+      expect(!laterRead, 'the first bad value stops the conversion');
+    });
+  });
+
+  await check(
+    'ordinary input reads: prototype getters run in order and their exceptions propagate',
+    () => {
+      const order: string[] = [];
+      const proto = {
+        get x() {
+          order.push('proto x');
+          return 1;
+        },
+        get y() {
+          order.push('proto y');
+          return -1;
+        },
+      };
+      const p = Object.create(proto) as { x: number; y: number };
+      Object.defineProperty(p, 'y', {
+        get() {
+          order.push('own y');
+          return 2;
+        },
+      });
+      expect(
+        same(v.echoPoint(p), { x: 1, y: 2 }) && same(order, ['proto x', 'own y']),
+        `own y shadows the inherited getter; order ${order}`,
+      );
+      const boom = new RangeError('boom from a prototype getter');
+      let caught: unknown;
+      polluted(
+        Object.prototype,
+        'y',
+        {
+          get() {
+            throw boom;
+          },
+        },
+        () => {
+          try {
+            v.echoPoint({ x: 1 } as any);
+          } catch (error) {
+            caught = error;
+          }
+        },
+      );
+      expect(caught === boom, `original exception object propagated: ${caught}`);
+    },
+  );
+
+  await check('ordinary input reads: union tags may be inherited or getters', () => {
+    expect(
+      v.area(Object.create({ kind: 'circle' }, { radius: { value: 1, enumerable: true } })) ===
+        Math.PI,
+      'inherited tag',
+    );
+    expect(
+      v.area({
+        get kind() {
+          return 'rect' as const;
+        },
+        width: 2,
+        height: 3,
+      }) === 6,
+      'getter tag',
+    );
+    throws(
+      () => v.area(Object.create({ kind: 'hex' })),
+      /^TypeError: s\.kind: unknown Shape tag "hex"/,
+    );
+  });
+
+  await check('ordinary input reads do not call a patched global Reflect.get', () => {
+    // Conversions before patching, so the result does not depend on whether a backend has
+    // already resolved its helpers (the web backend resolves them on first use).
+    // Same shapes as below (array, record, proxy of an array), so every helper is resolved.
+    v.sum([1]);
+    v.echoPoint({ x: 0, y: 0 });
+    v.sum(new Proxy([1], {}));
+    const original = Reflect.get;
+    let calls = 0;
+    (Reflect as any).get = function (...args: any[]) {
+      calls++;
+      return (original as any).apply(this, args);
+    };
+    let results: number[];
+    try {
+      results = [v.sum([1, 2, 3]), v.echoPoint({ x: 1, y: 2 }).y, v.sum(new Proxy([4, 5], {}))];
+    } finally {
+      (Reflect as any).get = original;
+    }
+    expect(
+      same(results, [6, 2, 9]) && calls === 0,
+      `results ${results}, Reflect.get calls ${calls}`,
+    );
+  });
+
+  await check('ordinary input reads: mutation and re-entrancy during array conversion', () => {
+    // Length is read once. A getter that shrinks the array: later indices read through the
+    // prototype chain (here polluted), exactly like xs[i].
+    polluted(Array.prototype, 1, { value: 5, writable: true }, () => {
+      polluted(Array.prototype, 2, { value: 6, writable: true }, () => {
+        const xs: number[] = [0, 2, 3];
+        Object.defineProperty(xs, 0, {
+          get() {
+            xs.length = 1;
+            return 1;
+          },
+        });
+        expect(v.sum(xs) === 12, 'shrunk array reads inherited 5 and 6');
+      });
+    });
+    const grows: number[] = [0, 2];
+    Object.defineProperty(grows, 0, {
+      get() {
+        grows.push(100);
+        return 1;
+      },
+    });
+    expect(v.sum(grows) === 3, 'elements added during conversion are not read');
+    const outer: number[] = [0, 2];
+    Object.defineProperty(outer, 0, {
+      get() {
+        expect(v.sum([10, 20]) === 30, 're-entrant call');
+        return 1;
+      },
+    });
+    expect(v.sum(outer) === 3, 'outer conversion continues after a re-entrant call');
+    const tm = createValuesModuleForTesting(4);
+    const tearing: number[] = [0, 2];
+    Object.defineProperty(tearing, 0, {
+      get() {
+        tm.teardown();
+        return 1;
+      },
+    });
+    throws(() => tm.sum(tearing), 'Error: runtime adapter is closed');
   });
 
   await check(
@@ -504,7 +675,27 @@ export async function runValuesSuite(env: ValuesEnv): Promise<CheckResult[]> {
         },
       );
       v.echoPoint(recorded);
-      expect(same(traps, ['own:x', 'get:x', 'own:y', 'get:y']), `trap order ${traps}`);
+      expect(same(traps, ['get:x', 'get:y']), `ordinary reads: get traps only, in order: ${traps}`);
+      const arrayTraps: string[] = [];
+      const recordedArray = new Proxy([1, 2, 3], {
+        has(t, k) {
+          arrayTraps.push(`has:${String(k)}`);
+          return Reflect.has(t, k);
+        },
+        getOwnPropertyDescriptor(t, k) {
+          arrayTraps.push(`own:${String(k)}`);
+          return Reflect.getOwnPropertyDescriptor(t, k);
+        },
+        get(t, k) {
+          arrayTraps.push(`get:${String(k)}`);
+          return (t as any)[k];
+        },
+      });
+      expect(v.sum(recordedArray) === 6, 'proxy of an array sums');
+      expect(
+        same(arrayTraps, ['get:length', 'get:0', 'get:1', 'get:2']),
+        `array proxy: length once, then each index once: ${arrayTraps}`,
+      );
       const boom = new Error('length trap');
       let caught: unknown;
       try {

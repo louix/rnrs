@@ -220,20 +220,20 @@ pub enum UnwrapError {
 
 /// One JS call (or settlement turn) on the JS thread. Implemented by platform backends.
 ///
-/// Semantics shared by every backend (implemented with framework helpers captured when the
-/// JS runtime module initializes; these resist inherited data/setter pollution, not
-/// arbitrary replacement of built-ins used by the browser's wasm-bindgen glue):
-/// - `get_property` / `get_index` read **own** properties only (`hasOwnProperty`, then a
-///   read that runs own getters and proxy traps). Inherited properties read as `undefined`.
+/// Semantics shared by every backend:
+/// - `get_property` / `get_index` are ordinary reads (`object[key]`): prototype-inclusive, so
+///   inherited values and getters count and array holes fall through to the prototype chain.
+///   Getters and proxy traps run once, and their exceptions propagate (`BindError::Thrown`).
 /// - `set_property` / `set_index` **define** own data properties (`Object.defineProperty`
-///   with a null-prototype descriptor), so inherited setters never intercept output.
+///   with a null-prototype descriptor, through a framework helper captured when the JS runtime
+///   module initializes), so inherited setters never intercept output.
 /// - `kind` reports `Array` per `Array.isArray` (proxies of arrays included); an exception
 ///   there (a revoked proxy) reads as `Other`.
 /// - `array_length` reads `length` (proxy traps run) and fails unless it is an integer in
 ///   `0..=u32::MAX`.
 ///
-/// Scope of that protection: it resists inherited data properties and inherited setters
-/// (prototype pollution) on records, arrays and outputs. It is not a sandbox: functions the
+/// Scope: outputs resist inherited setters and descriptor-shaped prototype properties (prototype
+/// pollution); inputs deliberately follow ordinary JS reads. It is not a sandbox: functions the
 /// backends look up when called (wasm-bindgen's `Array.of`, `Function.prototype.call`,
 /// `Reflect.get` imports on the web, or the writable `__rnrsSettle` global on Android) can
 /// still be monkey-patched by code running in the same JS realm.
@@ -368,8 +368,9 @@ impl IntoJs for String {
     }
 }
 
-/// Arrays convert element by element into an owned `Vec`; holes and sparse entries read as
-/// `undefined` and are rejected by the element conversion unless it accepts `undefined`.
+/// Arrays convert element by element into an owned `Vec` with ordinary reads: holes and sparse
+/// entries read through the prototype chain (normally `undefined`, rejected by the element
+/// conversion unless it accepts `undefined`).
 impl<T: FromJs> FromJs for Vec<T> {
     fn from_js(env: &mut dyn Env, v: Val, path: &Path<'_>) -> Result<Self, BindError> {
         if env.kind(v) != Kind::Array {

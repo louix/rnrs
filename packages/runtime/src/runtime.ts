@@ -78,13 +78,20 @@ function bufferStatus(value: unknown): number {
   return 0;
 }
 
-/** Property semantics for native conversions (both backends call these):
- *  - readOwn: own properties only; inherited ones read as undefined. Own getters and proxy
- *    traps run, and their exceptions propagate.
+/** Property semantics for native conversions:
+ *  - Input reads (record fields, union tags, array elements, `length`) are ordinary reads,
+ *    prototype-inclusive: getters and proxy traps run and their exceptions propagate. The JSI
+ *    backend reads natively; the web backend calls `get` (and `length`).
  *  - define: creates an own data property (null-prototype descriptor), so inherited setters
  *    or descriptor-shaped prototype properties cannot intercept output.
- *  - isArray / length: Array.isArray and a plain `length` read (proxy traps run). */
+ *  - isArray: Array.isArray (proxies of arrays are arrays). */
 export const conversionHelpers = Object.freeze({
+  /** Ordinary read `object[key]` (Reflect.get captured at init). */
+  get(object: object, key: string | number): unknown {
+    return reflectGet(object, key);
+  },
+  /** Own-property read (inherited ones read as undefined). No longer used by framework input
+   *  conversions, which read ordinarily; kept so the 0.1.0 export surface does not shrink. */
   readOwn(object: object, key: string | number): unknown {
     return reflectApply(hasOwn, object, [key]) ? (object as any)[key] : undefined;
   },

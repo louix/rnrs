@@ -5,9 +5,12 @@
 // - Generated module glue converts values through the vtable below, during one host-function
 //   call (or one drain). Values live in that call's arena and are addressed by index; Rust
 //   rejects indices from another call (epoch check). Nothing JSI-related outlives the call.
-// - Property semantics come from framework JS helpers (packages/runtime/src/runtime.ts, captured when that
-//   module initializes) passed with every call: own-property reads, own data-property
-//   definitions, Array.isArray and `length`. JSI alone has no own-property read or define.
+// - Input reads are ordinary JS reads through native JSI (record fields, union tags, array
+//   elements and `length`: prototype-inclusive [[Get]], getters and proxy traps run). Output and
+//   Array.isArray semantics come from framework JS helpers (packages/runtime/src/runtime.ts,
+//   captured when that module initializes) passed with every call: own data-property definitions
+//   (JSI alone has no define) and Array.isArray (whether JSI's isArray accepts proxies of arrays
+//   is engine-dependent: Hermes does; the helper keeps Array.isArray semantics on any engine).
 // - JS promise state lives in JS (packages/runtime/src/runtime.ts). Drains settle by calling the global
 //   __rnrsSettle on the JS thread, so no jsi::Value is retained natively.
 // - A native object's JS wrapper owns one Rust `NativeBox` via NativeState; GC finalization
@@ -130,7 +133,12 @@ struct CallCtx {
   // helper is first needed (scalar and string calls need none). Valid for the whole call,
   // which this context never outlives.
   const jsi::Value* helpersArg = nullptr;
-  std::optional<jsi::Function> readOwn, define, isArray, length, bufferKind, allocBuffer;
+  std::optional<jsi::Function> define, isArray, bufferKind, allocBuffer;
+  // The array most recently read by `length` or index (its arena index), so elements are read
+  // without a handle clone each; arena values never change during the call, so the index
+  // identifies the value.
+  uint32_t cachedIndex = UINT32_MAX;
+  std::optional<jsi::Object> cachedArray;
   CallCtx(jsi::Runtime& r, Adapter& a) : rt(r), adapter(a) {
     RNRS_DIAG(gDiagContexts);
     if (!adapter.arenaPool.empty()) {
@@ -164,6 +172,21 @@ struct CallCtx {
   jsi::Value& at(uint32_t i) { return arena.at(i); }
   jsi::PropNameID key(const char* p, size_t n) {
     return jsi::PropNameID::forUtf8(rt, reinterpret_cast<const uint8_t*>(p), n);
+  }
+  // An object operand of a property or index read. Rust reads properties only after a record
+  // (object) or array kind check, so anything else is an internal error, not UB.
+  jsi::Object objectAt(uint32_t v) {
+    auto& x = at(v);
+    if (!x.isObject()) throw jsi::JSError(rt, "rnrs: property read on a non-object");
+    return x.getObject(rt);
+  }
+  jsi::Object& arrayAt(uint32_t a) {
+    if (cachedIndex != a) {
+      cachedIndex = UINT32_MAX;
+      cachedArray.emplace(objectAt(a));
+      cachedIndex = a;
+    }
+    return *cachedArray;
   }
 };
 
@@ -231,23 +254,33 @@ const JsiVTable kVTable = {
     },
     [](void* raw, uint32_t v) -> double { return noUnwind("toNumber", [&] { return C(raw).at(v).getNumber(); }); },
     [](void* raw, uint32_t v) -> bool { return noUnwind("toBool", [&] { return C(raw).at(v).getBool(); }); },
+    // Ordinary property read (record fields, union tags): `object[key]`, prototype-inclusive;
+    // getters and proxy traps run and their exceptions propagate.
     [](void* raw, uint32_t o, const char* k, size_t n, uint32_t* out) -> bool {
       auto& c = C(raw);
       return guarded(c, [&] {
+        auto object = c.objectAt(o);
         auto key = jsi::String::createFromUtf8(c.rt, reinterpret_cast<const uint8_t*>(k), n);
-        *out = c.push(c.helper(c.readOwn, "readOwn").call(c.rt, jsi::Value(c.rt, c.at(o)), std::move(key)));
+        *out = c.push(object.getProperty(c.rt, key));
       });
     },
+    // `length`, read once per conversion with an ordinary read (a proxy's trap runs once). Not
+    // jsi::Array::size(): Hermes's JSI isArray also accepts proxies of arrays, and size() would
+    // return a converted size_t instead of the JS value the integer check needs.
     [](void* raw, uint32_t a, double* out) -> bool {
       auto& c = C(raw);
       return guarded(c, [&] {
-        auto v = c.helper(c.length, "length").call(c.rt, jsi::Value(c.rt, c.at(a)));
+        auto v = c.arrayAt(a).getProperty(c.rt, "length");
         *out = v.isNumber() ? v.getNumber() : std::nan("");  // Rust rejects non-integers
       });
     },
+    // Ordinary element read `array[i]` with a number key: holes and indices past a length that
+    // shrank during conversion fall through to the prototype chain; getters and proxy traps run
+    // once. Not getValueAtIndex: it checks the bound with another `length` read (observable on
+    // proxies) and throws past the end instead of reading through the prototype chain.
     [](void* raw, uint32_t a, uint32_t i, uint32_t* out) -> bool {
       auto& c = C(raw);
-      return guarded(c, [&] { *out = c.push(c.helper(c.readOwn, "readOwn").call(c.rt, jsi::Value(c.rt, c.at(a)), static_cast<double>(i))); });
+      return guarded(c, [&] { *out = c.push(c.arrayAt(a).getProperty(c.rt, jsi::Value(static_cast<double>(i)))); });
     },
     [](void* raw) -> uint32_t { return noUnwind("undefined", [&] { return C(raw).push(jsi::Value::undefined()); }); },
     [](void* raw) -> uint32_t { return noUnwind("null", [&] { return C(raw).push(jsi::Value::null()); }); },

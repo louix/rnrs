@@ -1,7 +1,9 @@
 //! A deterministic, single-threaded model of a JS engine for testing generated glue:
-//! values, plain objects with optional throwing or side-effecting getters, arrays (with
-//! holes), UTF-16 strings (lone surrogates allowed), and unforgeable native wrappers tied
-//! to an adapter generation. `MockEnv` implements `rnrs_core::bind::Env` like a backend.
+//! values, plain objects with optional throwing or side-effecting getters and an optional
+//! prototype, arrays (with holes that fall through to `MockEnv::array_proto`), UTF-16 strings
+//! (lone surrogates allowed), and unforgeable native wrappers tied to an adapter generation.
+//! `MockEnv` implements `rnrs_core::bind::Env` like a backend: input reads are ordinary
+//! (prototype-inclusive) reads.
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -34,6 +36,18 @@ pub enum V {
 #[derive(Default)]
 pub struct Obj {
     pub props: RefCell<Vec<(String, Prop)>>,
+    /// The prototype: ordinary reads continue here when a key is not an own property.
+    pub proto: RefCell<Option<Rc<Obj>>>,
+}
+
+impl Obj {
+    /// The property an ordinary read finds: own first, then up the prototype chain.
+    pub fn lookup(&self, key: &str) -> Option<Prop> {
+        if let Some((_, p)) = self.props.borrow().iter().find(|(k, _)| k == key) {
+            return Some(p.clone());
+        }
+        self.proto.borrow().as_ref().and_then(|p| p.lookup(key))
+    }
 }
 
 #[derive(Clone)]
@@ -62,7 +76,7 @@ impl V {
         V::Str(s.encode_utf16().collect())
     }
     pub fn obj(fields: Vec<(&str, V)>) -> V {
-        V::Obj(Rc::new(Obj { props: RefCell::new(fields.into_iter().map(|(k, v)| (k.to_string(), Prop::Value(v))).collect()) }))
+        V::Obj(Rc::new(Obj { props: RefCell::new(fields.into_iter().map(|(k, v)| (k.to_string(), Prop::Value(v))).collect()), ..Default::default() }))
     }
     pub fn arr(items: Vec<V>) -> V {
         V::Arr(Rc::new(RefCell::new(items.into_iter().map(Some).collect())))
@@ -125,16 +139,33 @@ pub struct MockEnv {
     pub open: bool,
     /// Message of a JS exception thrown by a getter during conversion.
     pub thrown: Option<String>,
+    /// `Array.prototype`: array holes and indices past the end read from here (keys "0", "1", ...).
+    pub array_proto: Rc<Obj>,
 }
 
 impl MockEnv {
     pub fn new(generation: u64) -> Self {
         static EPOCH: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(1);
-        Self { arena: Vec::new(), epoch: EPOCH.fetch_add(1, std::sync::atomic::Ordering::Relaxed), generation, open: true, thrown: None }
+        Self { arena: Vec::new(), epoch: EPOCH.fetch_add(1, std::sync::atomic::Ordering::Relaxed), generation, open: true, thrown: None, array_proto: Rc::default() }
     }
     pub fn put(&mut self, v: V) -> Val {
         self.arena.push(v);
         Val::new(self.arena.len() as u32 - 1, self.epoch)
+    }
+    /// The value of a found property (a getter runs now); `undefined` if none was found.
+    fn read(&mut self, prop: Option<Prop>) -> Result<Val, BindError> {
+        let value = match prop {
+            None => V::Undefined,
+            Some(Prop::Value(v)) => v,
+            Some(Prop::Getter(g)) => match g(self) {
+                Ok(v) => v,
+                Err(message) => {
+                    self.thrown = Some(message);
+                    return Err(BindError::Thrown);
+                }
+            },
+        };
+        Ok(self.put(value))
     }
     pub fn take(&self, v: Val) -> V {
         assert_eq!(v.epoch(), self.epoch, "handle from another call");
@@ -167,21 +198,10 @@ impl Env for MockEnv {
     }
     fn get_property(&mut self, object: Val, key: &str) -> Result<Val, BindError> {
         let prop = match self.take(object) {
-            V::Obj(o) => o.props.borrow().iter().find(|(k, _)| k == key).map(|(_, p)| p.clone()),
+            V::Obj(o) => o.lookup(key),
             _ => None,
         };
-        let value = match prop {
-            None => V::Undefined,
-            Some(Prop::Value(v)) => v,
-            Some(Prop::Getter(g)) => match g(self) {
-                Ok(v) => v,
-                Err(message) => {
-                    self.thrown = Some(message);
-                    return Err(BindError::Thrown);
-                }
-            },
-        };
-        Ok(self.put(value))
+        self.read(prop)
     }
     fn array_length(&mut self, array: Val) -> Result<u32, BindError> {
         Ok(match self.take(array) {
@@ -190,11 +210,17 @@ impl Env for MockEnv {
         })
     }
     fn get_index(&mut self, array: Val, index: u32) -> Result<Val, BindError> {
-        let value = match self.take(array) {
-            V::Arr(a) => a.borrow().get(index as usize).cloned().flatten().unwrap_or(V::Undefined),
-            _ => V::Undefined,
+        let own = match self.take(array) {
+            V::Arr(a) => a.borrow().get(index as usize).cloned().flatten(),
+            _ => None,
         };
-        Ok(self.put(value))
+        match own {
+            Some(v) => Ok(self.put(v)),
+            None => {
+                let prop = self.array_proto.clone().lookup(&index.to_string());
+                self.read(prop)
+            }
+        }
     }
     fn undefined(&mut self) -> Val {
         self.put(V::Undefined)

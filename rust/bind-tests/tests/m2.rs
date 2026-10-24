@@ -54,7 +54,7 @@ fn arrays_convert_element_by_element() {
     assert_eq!(h.call(&mut env, "sum", NONE, vec![V::arr(vec![])]).unwrap().num(), 0.0);
     let nested = V::arr(vec![V::arr(vec![V::Num(1.0), V::Num(2.0)]), V::arr(vec![]), V::arr(vec![V::Num(3.0)])]);
     assert_eq!(h.call(&mut env, "nestedSum", NONE, vec![nested]).unwrap().num(), 6.0);
-    // A hole reads as undefined and is rejected with its index.
+    // A hole with nothing inherited at its index reads as undefined and is rejected with its index.
     let holes = V::Arr(Rc::new(RefCell::new(vec![Some(V::Num(1.0)), None, Some(V::Num(3.0))])));
     assert_eq!(h.call(&mut env, "sum", NONE, vec![holes]).unwrap_err(), "TypeError: xs[1] must be a number, got undefined");
     let bad = V::arr(vec![V::arr(vec![V::Num(1.0)]), V::arr(vec![V::str("2")])]);
