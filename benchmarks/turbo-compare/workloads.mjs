@@ -3,7 +3,7 @@
 // its own call site and loop bodies differ only in the receiver (`$M`). The summarizer reads the
 // same table for workload metadata.
 //
-// Fields: id; group; paths: path -> receiver ('rnrs' | 'tm' | 'jsi') and body (a loop body using
+// Fields: id; group; paths: path -> receiver ('rnrs' | 'tm' | 'jsi' | 'nitro' | controls) and body (a loop body using
 // `$M`, the loop index `i`, the accumulator `acc` and the locals from `pre`); pre: per-case
 // locals from the fixtures `fx`; ret: the checksum expression; expect: the checksum for `n`
 // iterations as a JS expression of `n` and `fx`; perIter: calls per iteration and unit label.
@@ -24,11 +24,14 @@ const three = (body) => ({
 });
 const scalar = (body) => ({
   ...three(body),
+  nitro: { receiver: 'nitro', body },
   'jsi-guarded': { receiver: 'guarded', body },
   'jsi-wrapped': { receiver: 'wrapped', body },
   'jsi-shaped': { receiver: 'shaped', body },
   'jsi-shaped-this': { receiver: 'shapedThis', body },
   'jsi-shaped-unbound': { receiver: 'shapedUnbound', body },
+  'jsi-wrapped-proto': { receiver: 'wrappedProto', body },
+  'jsi-entry': { receiver: 'entry', body },
 });
 const two = (body) => ({ rnrs: { receiver: 'rnrs', body }, tm: { receiver: 'tm', body } });
 const sumTo = (n, offset) => `(${n} * (${n} - 1) / 2 + ${offset} * ${n})`;
@@ -89,13 +92,18 @@ export const WORKLOADS = [
     ret: 'acc',
     expect: sumTo('n', 8),
   },
-  ...[16, 1024].map((len) => ({
+  // Four distinct arrays per size, rotated per call (every path the same), so no path sums one
+  // unchanging array object; the checksum depends on every call's result.
+  ...[16, 256, 1024].map((len) => ({
     id: `arrIn-${len}`,
     group: 'array',
-    pre: `const xs = fx.arrays[${len}];`,
-    paths: three('acc += $M.arrSum(xs);'),
+    pre: `const xs = fx.rotArrays[${len}];`,
+    paths: {
+      ...three('acc += $M.arrSum(xs[i & 3]);'),
+      nitro: { receiver: 'nitro', body: 'acc += $M.arrSum(xs[i & 3]);' },
+    },
     ret: 'acc',
-    expect: `n * fx.arrayTotals[${len}]`,
+    expect: `fx.rotatedTotal(${len}, n)`,
   })),
   ...[16, 1024].map((len) => ({
     id: `arrOut-${len}`,
@@ -146,6 +154,32 @@ export const WORKLOADS = [
   },
 ];
 
+/** The browser page's table (web/, informational): the scalar and numeric-array workloads with the
+ *  same bodies on four receivers: the rnrs module on the Wasm backend, plain JS, the minimal direct
+ *  wasm-bindgen crate and its checked JS wrapper. */
+export const WEB_PATHS = { rnrs: 'rnrs', js: 'js', wasm: 'wasm', 'wasm-checked': 'wasmChecked' };
+export const WEB_WORKLOADS = WORKLOADS.filter((w) =>
+  ['nop', 'add', 'flip', 'arrIn-16', 'arrIn-256', 'arrIn-1024'].includes(w.id),
+).map((w) => ({
+  ...w,
+  paths: Object.fromEntries(
+    Object.entries(WEB_PATHS).map(([path, receiver]) => [
+      path,
+      { receiver, body: w.paths.rnrs.body },
+    ]),
+  ),
+}));
+
+/** Web pairs: every path against rnrs, and the checked wrapper against the raw binding. */
+export function webPairsFor() {
+  return [
+    ['rnrs', 'js'],
+    ['rnrs', 'wasm'],
+    ['rnrs', 'wasm-checked'],
+    ['wasm-checked', 'wasm'],
+  ];
+}
+
 /** Paired differences reported per workload: [minuend, subtrahend]. */
 export function pairsFor(workload) {
   const p = Object.keys(workload.paths);
@@ -160,6 +194,13 @@ export function pairsFor(workload) {
   if (p.includes('jsi')) pairs.push(['tm', 'jsi'], ['rnrs', 'jsi']);
   if (p.includes('jsi-guarded'))
     pairs.push(['rnrs', 'jsi-guarded'], ['jsi-guarded', 'jsi'], ['jsi-wrapped', 'jsi-guarded']);
+  if (p.includes('nitro')) pairs.push(['rnrs', 'nitro'], ['nitro', 'tm']);
+  if (p.includes('jsi-entry'))
+    pairs.push(
+      ['rnrs', 'jsi-entry'],
+      ['jsi-entry', 'jsi-wrapped-proto'],
+      ['jsi-wrapped-proto', 'jsi-wrapped'],
+    );
   if (p.includes('jsi-shaped'))
     pairs.push(
       ['rnrs', 'jsi-shaped'],

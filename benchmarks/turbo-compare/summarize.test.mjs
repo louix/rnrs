@@ -60,6 +60,7 @@ function fakeRun(index, seed, nsFor) {
         cxxBuild: { optimize: true, ndebug: true },
       },
       checks: CHECKS,
+      semantics: [{ path: 'nitro', probe: "add('1', 2)", outcome: 'value 3' }],
       columns: ['phase', 'round', 'pos', 'workload', 'path', 'n', 'ms', 'gcs'],
       rows,
     },
@@ -111,11 +112,11 @@ test('rejects truncated runs and missing warmup samples', () => {
 test('rejects unexpected rows: unknown path, extra round, duplicate', () => {
   const set = fakeSet(flat);
   const rows = set.runs[0].report.rows;
-  rows.push([1, 0, 99, 'add', 'nitro', 101, 1, 0]);
+  rows.push([1, 0, 99, 'add', 'bogus', 101, 1, 0]);
   rows.push([1, 4, 0, 'add', 'tm', 101, 1, 0]);
   rows.push(rows[0].slice());
   const problems = validate(set);
-  assert.ok(problems.some((p) => p.includes('unknown workload/path add|nitro')));
+  assert.ok(problems.some((p) => p.includes('unknown workload/path add|bogus')));
   assert.ok(problems.some((p) => p.includes('round out of range')));
   assert.ok(problems.some((p) => p.includes('duplicate sample')));
 });
@@ -228,4 +229,43 @@ test('nearest-rank quantiles', () => {
 test('the committed cases file matches the workload table', () => {
   const committed = readFileSync(new URL('./app/cases.generated.ts', import.meta.url), 'utf8');
   assert.equal(committed, render());
+});
+
+test('a fixed n listing a subset selects the measured workloads; semantics must agree', () => {
+  const subset = ['nop', 'add', 'arrIn-256'];
+  const fixedN = Object.fromEntries(subset.map((w) => [w, FIXED_N[w]]));
+  const set = fakeSet(flat);
+  const runConfig = { ...RUN_CONFIG, fixedN };
+  set.runner.runConfig = runConfig;
+  for (const run of set.runs) {
+    const r = run.report;
+    r.config = { ...runConfig, runId: run.runId, seed: run.seed };
+    const next = new Map();
+    r.rows = r.rows
+      .filter((row) => subset.includes(row[3]))
+      .map((row) => {
+        const key = `${row[0]}|${row[1]}`;
+        const pos = next.get(key) ?? 0;
+        next.set(key, pos + 1);
+        return [row[0], row[1], pos, ...row.slice(3)];
+      });
+    r.semantics = [{ path: 'nitro', probe: "add('1', 2)", outcome: 'value 3' }];
+  }
+  assert.deepEqual(validate(set), []);
+  assert.deepEqual(
+    summarize(set.runs).map((w) => w.workload),
+    subset,
+  );
+  // A listed workload must be complete, and recorded semantics must be identical across runs.
+  set.runs[0].report.rows = set.runs[0].report.rows.filter((row) => row[3] !== 'add');
+  set.runs[1].report.semantics = [{ path: 'nitro', probe: "add('1', 2)", outcome: 'value 12' }];
+  const problems = validate(set);
+  assert.ok(problems.some((p) => p.startsWith('run 1: missing sample 0|0|add|')));
+  assert.ok(problems.some((p) => p.includes('recorded semantics differ from run 1')));
+});
+
+test('every run must record its out-of-contract semantics', () => {
+  const set = fakeSet(flat);
+  delete set.runs[1].report.semantics;
+  assert.ok(validate(set).some((p) => p.includes('run 2: no recorded semantics')));
 });

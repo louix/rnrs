@@ -39,6 +39,17 @@ export function makeCases(r: Receivers, fx: Fixtures): Case[] {
     },
     {
       workload: 'nop',
+      path: 'nitro',
+      expect: (n: number) => n,
+      run: ((M) => (n: number): number => {
+        for (let i = 0; i < n; i++) {
+          M.nop();
+        }
+        return n;
+      })(r.nitro),
+    },
+    {
+      workload: 'nop',
       path: 'jsi-guarded',
       expect: (n: number) => n,
       run: ((M) => (n: number): number => {
@@ -91,6 +102,28 @@ export function makeCases(r: Receivers, fx: Fixtures): Case[] {
         }
         return n;
       })(r.shapedUnbound),
+    },
+    {
+      workload: 'nop',
+      path: 'jsi-wrapped-proto',
+      expect: (n: number) => n,
+      run: ((M) => (n: number): number => {
+        for (let i = 0; i < n; i++) {
+          M.nop();
+        }
+        return n;
+      })(r.wrappedProto),
+    },
+    {
+      workload: 'nop',
+      path: 'jsi-entry',
+      expect: (n: number) => n,
+      run: ((M) => (n: number): number => {
+        for (let i = 0; i < n; i++) {
+          M.nop();
+        }
+        return n;
+      })(r.entry),
     },
     {
       workload: 'add',
@@ -130,6 +163,18 @@ export function makeCases(r: Receivers, fx: Fixtures): Case[] {
     },
     {
       workload: 'add',
+      path: 'nitro',
+      expect: (n: number) => n,
+      run: ((M) => (n: number): number => {
+        let acc = 0;
+        for (let i = 0; i < n; i++) {
+          acc = M.add(acc, 1);
+        }
+        return acc;
+      })(r.nitro),
+    },
+    {
+      workload: 'add',
       path: 'jsi-guarded',
       expect: (n: number) => n,
       run: ((M) => (n: number): number => {
@@ -187,6 +232,30 @@ export function makeCases(r: Receivers, fx: Fixtures): Case[] {
         }
         return acc;
       })(r.shapedUnbound),
+    },
+    {
+      workload: 'add',
+      path: 'jsi-wrapped-proto',
+      expect: (n: number) => n,
+      run: ((M) => (n: number): number => {
+        let acc = 0;
+        for (let i = 0; i < n; i++) {
+          acc = M.add(acc, 1);
+        }
+        return acc;
+      })(r.wrappedProto),
+    },
+    {
+      workload: 'add',
+      path: 'jsi-entry',
+      expect: (n: number) => n,
+      run: ((M) => (n: number): number => {
+        let acc = 0;
+        for (let i = 0; i < n; i++) {
+          acc = M.add(acc, 1);
+        }
+        return acc;
+      })(r.entry),
     },
     {
       workload: 'flip',
@@ -226,6 +295,18 @@ export function makeCases(r: Receivers, fx: Fixtures): Case[] {
     },
     {
       workload: 'flip',
+      path: 'nitro',
+      expect: (n: number) => n % 2,
+      run: ((M) => (n: number): number => {
+        let b = false;
+        for (let i = 0; i < n; i++) {
+          b = M.flip(b);
+        }
+        return b ? 1 : 0;
+      })(r.nitro),
+    },
+    {
+      workload: 'flip',
       path: 'jsi-guarded',
       expect: (n: number) => n % 2,
       run: ((M) => (n: number): number => {
@@ -283,6 +364,30 @@ export function makeCases(r: Receivers, fx: Fixtures): Case[] {
         }
         return b ? 1 : 0;
       })(r.shapedUnbound),
+    },
+    {
+      workload: 'flip',
+      path: 'jsi-wrapped-proto',
+      expect: (n: number) => n % 2,
+      run: ((M) => (n: number): number => {
+        let b = false;
+        for (let i = 0; i < n; i++) {
+          b = M.flip(b);
+        }
+        return b ? 1 : 0;
+      })(r.wrappedProto),
+    },
+    {
+      workload: 'flip',
+      path: 'jsi-entry',
+      expect: (n: number) => n % 2,
+      run: ((M) => (n: number): number => {
+        let b = false;
+        for (let i = 0; i < n; i++) {
+          b = M.flip(b);
+        }
+        return b ? 1 : 0;
+      })(r.entry),
     },
     {
       workload: 'strIn-ascii-16',
@@ -687,12 +792,12 @@ export function makeCases(r: Receivers, fx: Fixtures): Case[] {
     {
       workload: 'arrIn-16',
       path: 'rnrs',
-      expect: (n: number) => n * fx.arrayTotals[16],
+      expect: (n: number) => fx.rotatedTotal(16, n),
       run: ((M) => (n: number): number => {
-        const xs = fx.arrays[16];
+        const xs = fx.rotArrays[16];
         let acc = 0;
         for (let i = 0; i < n; i++) {
-          acc += M.arrSum(xs);
+          acc += M.arrSum(xs[i & 3]);
         }
         return acc;
       })(r.rnrs),
@@ -700,12 +805,12 @@ export function makeCases(r: Receivers, fx: Fixtures): Case[] {
     {
       workload: 'arrIn-16',
       path: 'tm',
-      expect: (n: number) => n * fx.arrayTotals[16],
+      expect: (n: number) => fx.rotatedTotal(16, n),
       run: ((M) => (n: number): number => {
-        const xs = fx.arrays[16];
+        const xs = fx.rotArrays[16];
         let acc = 0;
         for (let i = 0; i < n; i++) {
-          acc += M.arrSum(xs);
+          acc += M.arrSum(xs[i & 3]);
         }
         return acc;
       })(r.tm),
@@ -713,25 +818,90 @@ export function makeCases(r: Receivers, fx: Fixtures): Case[] {
     {
       workload: 'arrIn-16',
       path: 'jsi',
-      expect: (n: number) => n * fx.arrayTotals[16],
+      expect: (n: number) => fx.rotatedTotal(16, n),
       run: ((M) => (n: number): number => {
-        const xs = fx.arrays[16];
+        const xs = fx.rotArrays[16];
         let acc = 0;
         for (let i = 0; i < n; i++) {
-          acc += M.arrSum(xs);
+          acc += M.arrSum(xs[i & 3]);
         }
         return acc;
       })(r.jsi),
+    },
+    {
+      workload: 'arrIn-16',
+      path: 'nitro',
+      expect: (n: number) => fx.rotatedTotal(16, n),
+      run: ((M) => (n: number): number => {
+        const xs = fx.rotArrays[16];
+        let acc = 0;
+        for (let i = 0; i < n; i++) {
+          acc += M.arrSum(xs[i & 3]);
+        }
+        return acc;
+      })(r.nitro),
+    },
+    {
+      workload: 'arrIn-256',
+      path: 'rnrs',
+      expect: (n: number) => fx.rotatedTotal(256, n),
+      run: ((M) => (n: number): number => {
+        const xs = fx.rotArrays[256];
+        let acc = 0;
+        for (let i = 0; i < n; i++) {
+          acc += M.arrSum(xs[i & 3]);
+        }
+        return acc;
+      })(r.rnrs),
+    },
+    {
+      workload: 'arrIn-256',
+      path: 'tm',
+      expect: (n: number) => fx.rotatedTotal(256, n),
+      run: ((M) => (n: number): number => {
+        const xs = fx.rotArrays[256];
+        let acc = 0;
+        for (let i = 0; i < n; i++) {
+          acc += M.arrSum(xs[i & 3]);
+        }
+        return acc;
+      })(r.tm),
+    },
+    {
+      workload: 'arrIn-256',
+      path: 'jsi',
+      expect: (n: number) => fx.rotatedTotal(256, n),
+      run: ((M) => (n: number): number => {
+        const xs = fx.rotArrays[256];
+        let acc = 0;
+        for (let i = 0; i < n; i++) {
+          acc += M.arrSum(xs[i & 3]);
+        }
+        return acc;
+      })(r.jsi),
+    },
+    {
+      workload: 'arrIn-256',
+      path: 'nitro',
+      expect: (n: number) => fx.rotatedTotal(256, n),
+      run: ((M) => (n: number): number => {
+        const xs = fx.rotArrays[256];
+        let acc = 0;
+        for (let i = 0; i < n; i++) {
+          acc += M.arrSum(xs[i & 3]);
+        }
+        return acc;
+      })(r.nitro),
     },
     {
       workload: 'arrIn-1024',
       path: 'rnrs',
-      expect: (n: number) => n * fx.arrayTotals[1024],
+      expect: (n: number) => fx.rotatedTotal(1024, n),
       run: ((M) => (n: number): number => {
-        const xs = fx.arrays[1024];
+        const xs = fx.rotArrays[1024];
         let acc = 0;
         for (let i = 0; i < n; i++) {
-          acc += M.arrSum(xs);
+          acc += M.arrSum(xs[i & 3]);
         }
         return acc;
       })(r.rnrs),
@@ -739,12 +909,12 @@ export function makeCases(r: Receivers, fx: Fixtures): Case[] {
     {
       workload: 'arrIn-1024',
       path: 'tm',
-      expect: (n: number) => n * fx.arrayTotals[1024],
+      expect: (n: number) => fx.rotatedTotal(1024, n),
       run: ((M) => (n: number): number => {
-        const xs = fx.arrays[1024];
+        const xs = fx.rotArrays[1024];
         let acc = 0;
         for (let i = 0; i < n; i++) {
-          acc += M.arrSum(xs);
+          acc += M.arrSum(xs[i & 3]);
         }
         return acc;
       })(r.tm),
@@ -752,15 +922,28 @@ export function makeCases(r: Receivers, fx: Fixtures): Case[] {
     {
       workload: 'arrIn-1024',
       path: 'jsi',
-      expect: (n: number) => n * fx.arrayTotals[1024],
+      expect: (n: number) => fx.rotatedTotal(1024, n),
       run: ((M) => (n: number): number => {
-        const xs = fx.arrays[1024];
+        const xs = fx.rotArrays[1024];
         let acc = 0;
         for (let i = 0; i < n; i++) {
-          acc += M.arrSum(xs);
+          acc += M.arrSum(xs[i & 3]);
         }
         return acc;
       })(r.jsi),
+    },
+    {
+      workload: 'arrIn-1024',
+      path: 'nitro',
+      expect: (n: number) => fx.rotatedTotal(1024, n),
+      run: ((M) => (n: number): number => {
+        const xs = fx.rotArrays[1024];
+        let acc = 0;
+        for (let i = 0; i < n; i++) {
+          acc += M.arrSum(xs[i & 3]);
+        }
+        return acc;
+      })(r.nitro),
     },
     {
       workload: 'arrOut-16',

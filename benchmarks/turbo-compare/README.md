@@ -8,10 +8,12 @@ or a published result.
 | --- | --- |
 | `rnrs-module/` | `@rnrs/labs-turbo-compare`: rnrs spec + Rust implementation |
 | `cxx-module/` | `@rnrs-bench/cmp-cxx`: RN 0.88 codegen spec + pure C++ TurboModule `RnrsCmpCxx` (autolinked: Android `cxxModule*`, iOS `codegenConfig.ios.modulesProvider`), plus the handwritten JSI scalar control installed by `installHarness()` |
+| `nitro-module/` | `@rnrs-bench/cmp-nitro`: Nitro Modules 0.37.1 pure C++ HybridObject (nop/add/flip/arrSum); nitrogen 0.37.1 output committed in `nitrogen/`; installed with `react-native-nitro-modules@0.37.1` (exact) |
+| `web/` | browser page (informational): the rnrs module on the Wasm backend vs plain JS vs a minimal direct wasm-bindgen crate (`web/direct`, no strict validation) and that crate behind thin strict JS checks; `web/build.sh`, `web/run-web.mjs` (fresh headless Chromium per run, via `scripts/web-test.mjs`) |
 | `app/` | harness JS copied into the RN 0.88.0 community template (`cases.generated.ts` from `workloads.mjs` via `gen-cases.mjs`) |
 | `build-android.sh`, `build-ios.sh` | release builds with provenance |
 | `run-android.mjs`, `run-ios.mjs` | fresh-process device runs, one CSPRNG seed per run |
-| `fixed-n.mjs` | fixed iterations per sample per phone, derived from a pilot summary (`--fixed-n` of the runners) |
+| `fixed-n.mjs` | fixed iterations per sample per phone, derived from a pilot summary (`--fixed-n` of the runners); a fixed-n file also selects the measured workloads (only those listed run) |
 | `summarize.mjs` | strict validation, per-path and paired statistics, GC sensitivity and drift (descriptive) |
 
 Both modules implement the same methods with the same algorithms; fixture strings are generated

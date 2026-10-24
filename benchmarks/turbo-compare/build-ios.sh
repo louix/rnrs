@@ -27,6 +27,7 @@ RNRS_PACK_OUT="$OUT/pack" node "$ROOT/scripts/pack.mjs" > "$OUT/pack.log"
 node "$ROOT/packages/cli/bin/rnrs.mjs" pack-js "$HERE/rnrs-module"
 (cd "$HERE/rnrs-module" && npm pack --ignore-scripts --pack-destination "$OUT/pack" >/dev/null)
 (cd "$HERE/cxx-module" && npm pack --ignore-scripts --pack-destination "$OUT/pack" >/dev/null)
+(cd "$HERE/nitro-module" && npm pack --ignore-scripts --pack-destination "$OUT/pack" >/dev/null)
 
 TEMPLATE="$OUT/react-native-community-template-0.88.0.tgz"
 (cd "$OUT" && npm pack @react-native-community/template@0.88.0 >/dev/null)
@@ -42,6 +43,11 @@ cp "$HERE/app/"*.ts "$HERE/app/App.tsx" "$APP/"
 P="$OUT/pack"
 (cd "$APP" && npm install --no-audit --no-fund "$P/rnrs-cli-0.1.0.tgz" "$P/rnrs-runtime-0.1.0.tgz" \
   "$P/rnrs-labs-turbo-compare-0.1.0.tgz" "$P/rnrs-bench-cmp-cxx-0.1.0.tgz")
+# Nitro Modules core from the registry at the exact version its generated bindings come from.
+(cd "$APP" && npm install --no-audit --no-fund --save-exact "$P/rnrs-bench-cmp-nitro-0.1.0.tgz" \
+  react-native-nitro-modules@0.37.1)
+[ "$(node -p "require('$APP/node_modules/react-native-nitro-modules/package.json').version")" = 0.37.1 ] ||
+  { echo "react-native-nitro-modules is not 0.37.1" >&2; exit 1; }
 node -e 'const p = require(process.argv[1]); if (p.rustNativeApp?.logging) process.exit(1);' "$APP/package.json" ||
   { echo "rustNativeApp.logging is set" >&2; exit 1; }
 
@@ -51,6 +57,7 @@ rustup toolchain install "$RUSTUP_TOOLCHAIN" --profile minimal --target aarch64-
 export RCT_USE_RN_DEP=1 RCT_USE_PREBUILT_RNCORE=1 RNRS_TEST_HOOKS=0
 (cd "$APP/ios" && pod install) > "$OUT/pod-install.log" 2>&1 || { tail -40 "$OUT/pod-install.log"; exit 1; }
 grep -q "RnrsCmpCxx" "$APP/ios/Podfile.lock" || { echo "RnrsCmpCxx pod not autolinked" >&2; exit 1; }
+grep -q "NitroCmp" "$APP/ios/Podfile.lock" || { echo "NitroCmp pod not autolinked" >&2; exit 1; }
 # Metro waits forever for watchman at a lowered priority (see scripts/consumer/ios-app.sh).
 PATH="$(printf %s "$PATH" | tr : '\n' | while read -r d; do [ -x "$d/watchman" ] || printf '%s:' "$d"; done)"
 export PATH="${PATH%:}"
@@ -63,6 +70,22 @@ tail -n 2 "$OUT/xcodebuild.log"
 (cd "$APP/ios" && xcodebuild -project Pods/Pods.xcodeproj -target RnrsCmpCxx -configuration Release -sdk iphoneos -showBuildSettings 2>/dev/null |
   grep -E " (GCC_OPTIMIZATION_LEVEL|LLVM_LTO|CONFIGURATION|GCC_PREPROCESSOR_DEFINITIONS) =" > "$OUT/build-settings-RnrsCmpCxx.txt") || true
 cat "$OUT/build-settings-RnrsCmpCxx.txt"
+# Compile flags per pod target from Xcode's per-target response files (*-common-args.resp, where
+# Xcode 26 passes -O and -D flags); the Nitro example and Nitro core must be optimized with NDEBUG.
+PODS_BUILD="$OUT/build/Build/Intermediates.noindex/Pods.build/Release-iphoneos"
+for target in RnrsCmpCxx NitroCmp NitroModules; do
+  ls "$PODS_BUILD/$target.build/Objects-normal/arm64/"*-common-args.resp >/dev/null ||
+    { echo "$target: no compile response files" >&2; exit 1; }
+  cat "$PODS_BUILD/$target.build/Objects-normal/arm64/"*-common-args.resp | tr ' ' '\n' |
+    grep -E '^-O|^-D(N?DEBUG)|^-fstack-protector' | LC_ALL=C sort -u > "$OUT/compile-flags-$target.txt"
+  echo "$target: $(tr '\n' ' ' < "$OUT/compile-flags-$target.txt")"
+  (cd "$APP/ios" && xcodebuild -project Pods/Pods.xcodeproj -target "$target" -configuration Release -sdk iphoneos -showBuildSettings 2>/dev/null |
+    grep -E " (GCC_OPTIMIZATION_LEVEL|LLVM_LTO|CONFIGURATION|GCC_PREPROCESSOR_DEFINITIONS|SWIFT_OPTIMIZATION_LEVEL) =" > "$OUT/build-settings-$target.txt") || true
+done
+for target in NitroCmp NitroModules; do
+  { grep -q -E '^-O(s|2|3|z)$' "$OUT/compile-flags-$target.txt" && grep -q -x -- '-DNDEBUG' "$OUT/compile-flags-$target.txt"; } ||
+    { echo "$target pod is not built with optimization and NDEBUG" >&2; exit 1; }
+done
 
 BUNDLE="$OUT/build/Build/Products/Release-iphoneos/HelloWorld.app"
 BIN="$BUNDLE/HelloWorld"
@@ -73,7 +96,7 @@ cp "$APP/ios/Podfile.lock" "$OUT/Podfile.lock"
 
 sha() { shasum -a 256 "$1" | cut -d' ' -f1; }
 COMMIT="$COMMIT" SOURCE="$SOURCE" OUT="$OUT" APP="$APP" LABEL="$LABEL" BUNDLE_ID="$RNRS_IOS_BUNDLE_ID" \
-  BIN_SHA="$(sha "$BIN")" MANIFEST_SHA="$(sha "$OUT/app-manifest.txt")" TEMPLATE_SHA="$(sha "$TEMPLATE")" \
+  BIN_SHA="$(sha "$BIN")" NITROGEN_SHA="$(cd "$HERE/nitro-module" && find nitrogen -type f | LC_ALL=C sort | xargs shasum -a 256 | shasum -a 256 | cut -d' ' -f1)" MANIFEST_SHA="$(sha "$OUT/app-manifest.txt")" TEMPLATE_SHA="$(sha "$TEMPLATE")" \
   LOCK_SHA="$(sha "$APP/package-lock.json")" PODLOCK_SHA="$(sha "$APP/ios/Podfile.lock")" \
   ARCHIVE_SHA="$(cat "$ROOT/ARCHIVE_SHA256" 2>/dev/null || true)" \
   RUSTC="$(rustc --version)" XCODE="$(xcodebuild -version | tr '\n' ' ')" SDK="$(xcrun --sdk iphoneos --show-sdk-version)" \
@@ -89,10 +112,13 @@ const record = {
   sourceArchiveSha256: e.ARCHIVE_SHA || null, bundleId: e.BUNDLE_ID, binarySha256: e.BIN_SHA, appManifestSha256: e.MANIFEST_SHA,
   template: "@react-native-community/template@0.88.0", templateSha256: e.TEMPLATE_SHA, packageLockSha256: e.LOCK_SHA,
   podfileLockSha256: e.PODLOCK_SHA, tarballs,
-  versions: { reactNative: ver("react-native"), codegen: ver("@react-native/codegen"), node: process.version, rustc: e.RUSTC,
+  versions: { reactNative: ver("react-native"), codegen: ver("@react-native/codegen"), nitroModules: ver("react-native-nitro-modules"), nitrogen: "0.37.1 (generated output committed in nitro-module/nitrogen)", node: process.version, rustc: e.RUSTC,
     xcode: e.XCODE.trim(), iosSdk: e.SDK, macos: e.MACOS, cocoapods: e.POD },
   prebuiltCore: true, rnrsDiagnostics: false, rnrsTestHooks: false, rustLogging: false,
   cxxBuildSettings: fs.readFileSync(path.join(e.OUT, "build-settings-RnrsCmpCxx.txt"), "utf8").trim().split("\n"),
+  compileFlags: Object.fromEntries(["RnrsCmpCxx", "NitroCmp", "NitroModules"].map((t) =>
+    [t, fs.readFileSync(path.join(e.OUT, "compile-flags-" + t + ".txt"), "utf8").trim().split("\n")])),
+  nitrogenSha256: e.NITROGEN_SHA,
 };
 fs.writeFileSync(path.join(e.OUT, "provenance.json"), JSON.stringify(record, null, 1) + "\n");
 console.log(JSON.stringify({ binarySha256: record.binarySha256, appManifestSha256: record.appManifestSha256, commit: record.commit }));'

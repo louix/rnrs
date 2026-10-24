@@ -73,10 +73,24 @@ export function makeFixtures(): Fixtures {
   const strings = [...SIZES.map(asciiString), ...SIZES.map(unicodeString)];
   const arrays: Record<number, number[]> = {};
   const arrayTotals: Record<number, number> = {};
+  const rotArrays: Record<number, number[][]> = {};
+  const rotTotals: Record<number, number[]> = {};
   for (const len of [16, 256, 1024]) {
     arrays[len] = Array.from({ length: len }, (_, i) => i % 100);
     arrayTotals[len] = arrays[len].reduce((a, b) => a + b, 0);
+    // Four distinct small-integer arrays (exact sums in any order).
+    rotArrays[len] = [0, 1, 2, 3].map((k) =>
+      Array.from({ length: len }, (_, i) => (i * 7 + k * 13 + 1) % 100),
+    );
+    rotTotals[len] = rotArrays[len].map((xs) => xs.reduce((a, b) => a + b, 0));
   }
+  // Sum over calls i < n of the total of array i & 3.
+  const rotatedTotal = (len: number, n: number) => {
+    const t = rotTotals[len];
+    let sum = Math.floor(n / 4) * (t[0] + t[1] + t[2] + t[3]);
+    for (let k = 0; k < n % 4; k++) sum += t[k];
+    return sum;
+  };
   const points64 = Array.from({ length: 64 }, (_, k) => point(k));
   return {
     strings,
@@ -87,6 +101,8 @@ export function makeFixtures(): Fixtures {
     nestedTotal: nestedTotal(nested(1)),
     arrays,
     arrayTotals,
+    rotArrays,
+    rotatedTotal,
     points64,
     points64Total: points64.reduce((a, p) => a + pointTotal(p), 0),
   };

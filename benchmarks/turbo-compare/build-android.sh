@@ -31,6 +31,7 @@ RNRS_PACK_OUT="$OUT/pack" node "$ROOT/scripts/pack.mjs" > "$OUT/pack.log"
 node "$ROOT/packages/cli/bin/rnrs.mjs" pack-js "$HERE/rnrs-module"
 (cd "$HERE/rnrs-module" && npm pack --ignore-scripts --pack-destination "$OUT/pack" >/dev/null)
 (cd "$HERE/cxx-module" && npm pack --ignore-scripts --pack-destination "$OUT/pack" >/dev/null)
+(cd "$HERE/nitro-module" && npm pack --ignore-scripts --pack-destination "$OUT/pack" >/dev/null)
 
 TEMPLATE="$ROOT/.generated/turbo-compare/react-native-community-template-0.88.0.tgz"
 [ -f "$TEMPLATE" ] || (cd "$(dirname "$TEMPLATE")" && npm pack @react-native-community/template@0.88.0 >/dev/null)
@@ -52,6 +53,11 @@ diff -u "$OUT/build.gradle.template" "$GRADLE" > "$OUT/android-app-build.gradle.
 P="$OUT/pack"
 (cd "$APP" && npm install --no-audit --no-fund "$P/rnrs-cli-0.1.0.tgz" "$P/rnrs-runtime-0.1.0.tgz" \
   "$P/rnrs-labs-turbo-compare-0.1.0.tgz" "$P/rnrs-bench-cmp-cxx-0.1.0.tgz")
+# Nitro Modules core from the registry at the exact version its generated bindings come from.
+(cd "$APP" && npm install --no-audit --no-fund --save-exact "$P/rnrs-bench-cmp-nitro-0.1.0.tgz" \
+  react-native-nitro-modules@0.37.1)
+[ "$(node -p "require('$APP/node_modules/react-native-nitro-modules/package.json').version")" = 0.37.1 ] ||
+  { echo "react-native-nitro-modules is not 0.37.1" >&2; exit 1; }
 node -e 'const p = require(process.argv[1]); if (p.rustNativeApp?.logging) process.exit(1);' "$APP/package.json" ||
   { echo "rustNativeApp.logging is set" >&2; exit 1; }
 
@@ -71,15 +77,31 @@ node -e 'const db = require(process.argv[1]); const e = db.find((x) => x.file.en
   if (!e) { console.error("RnrsCmpCxx.cpp not in the compile database"); process.exit(1); }
   require("fs").writeFileSync(process.argv[2], (e.command ?? e.arguments.join(" ")) + "\n");' "$CDB" "$OUT/RnrsCmpCxx.compile.txt"
 grep -q -- "-O[23s]" "$OUT/RnrsCmpCxx.compile.txt" || { echo "RnrsCmpCxx.cpp not compiled with optimization" >&2; exit 1; }
+# Nitro: the example HybridObject and the Nitro core library, each with optimization (the last -O
+# wins) and NDEBUG.
+for spec in "cmp-nitro:@rnrs-bench/cmp-nitro:HybridNitroCmpSpec.cpp:NitroCmp" \
+  "nitro-core:react-native-nitro-modules:HybridObject.cpp:NitroModules"; do
+  IFS=: read -r _ pkg file name <<< "$spec"
+  db="$(find "$APP/node_modules/$pkg/android/.cxx" -name compile_commands.json -path '*RelWithDebInfo*arm64-v8a*' | head -1)"
+  node -e 'const db = require(process.argv[1]); const e = db.find((x) => x.file.endsWith("/" + process.argv[2]));
+    if (!e) { console.error(process.argv[2] + " not in " + process.argv[1]); process.exit(1); }
+    require("fs").writeFileSync(process.argv[3], (e.command ?? e.arguments.join(" ")) + "\n");' "$db" "$file" "$OUT/$name.compile.txt"
+  last="$(grep -o -- ' -O[0-9sz]*' "$OUT/$name.compile.txt" | tail -1)"
+  { [[ "$last" =~ ^\ -O[23s]$ ]] && grep -q -- ' -DNDEBUG' "$OUT/$name.compile.txt"; } ||
+    { echo "$name: last optimization flag '$last' or NDEBUG missing" >&2; exit 1; }
+done
 unzip -p "$APK" lib/arm64-v8a/librnrs.so > "$OUT/librnrs.so"
 unzip -p "$APK" lib/arm64-v8a/libappmodules.so > "$OUT/libappmodules.so"
+for lib in libNitroCmp.so libNitroModules.so; do
+  unzip -l "$APK" "lib/arm64-v8a/$lib" >/dev/null || { echo "$lib missing from the APK" >&2; exit 1; }
+done
 if grep -a -q -E "(invalidate|forceBytesCopyOut|collectGarbage|reload)ForTesting" "$OUT/librnrs.so"; then
   echo "librnrs.so contains native test hooks" >&2; exit 1
 fi
 
 sha() { sha256sum "$1" | cut -d' ' -f1; }
 STATUS="$STATUS" OUT="$OUT" APP="$APP" LABEL="$LABEL" ROOT="$ROOT" APP_ID="$APP_ID" \
-  APK_SHA="$(sha "$APK")" TEMPLATE_SHA="$(sha "$TEMPLATE")" LIBRNRS_SHA="$(sha "$OUT/librnrs.so")" \
+  APK_SHA="$(sha "$APK")" NITROGEN_SHA="$(cd "$HERE/nitro-module" && find nitrogen -type f | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -d' ' -f1)" TEMPLATE_SHA="$(sha "$TEMPLATE")" LIBRNRS_SHA="$(sha "$OUT/librnrs.so")" \
   LIBAPPMODULES_SHA="$(sha "$OUT/libappmodules.so")" LOCK_SHA="$(sha "$APP/package-lock.json")" \
   RUSTC="$(rustc --version)" CARGO="$(cargo --version)" JAVA="$(java -version 2>&1 | head -1)" \
   GRADLE_VERSION="$(grep distributionUrl "$APP/android/gradle/wrapper/gradle-wrapper.properties")" \
@@ -96,10 +118,13 @@ const record = {
   commit: git("rev-parse", "HEAD"), sourceStatus: e.STATUS.split("\n").filter(Boolean), sourceClean: !e.STATUS,
   applicationId: e.APP_ID, apkSha256: e.APK_SHA, librnrsSha256: e.LIBRNRS_SHA, libappmodulesSha256: e.LIBAPPMODULES_SHA,
   template: "@react-native-community/template@0.88.0", templateSha256: e.TEMPLATE_SHA, packageLockSha256: e.LOCK_SHA,
-  tarballs, versions: { reactNative: ver("react-native"), codegen: ver("@react-native/codegen"), hermesCompiler: ver("hermes-compiler"),
+  tarballs, versions: { reactNative: ver("react-native"), codegen: ver("@react-native/codegen"), nitroModules: ver("react-native-nitro-modules"), nitrogen: "0.37.1 (generated output committed in nitro-module/nitrogen)", hermesCompiler: ver("hermes-compiler"),
     node: process.version, rustc: e.RUSTC, cargo: e.CARGO, java: e.JAVA, gradle: e.GRADLE_VERSION, ndk: e.NDK },
   rnrsDiagnostics: false, rnrsTestHooks: false, rustLogging: false,
   cxxCompile: fs.readFileSync(path.join(e.OUT, "RnrsCmpCxx.compile.txt"), "utf8").trim(),
+  nitroCompile: fs.readFileSync(path.join(e.OUT, "NitroCmp.compile.txt"), "utf8").trim(),
+  nitroModulesCompile: fs.readFileSync(path.join(e.OUT, "NitroModules.compile.txt"), "utf8").trim(),
+  nitrogenSha256: e.NITROGEN_SHA,
 };
 fs.writeFileSync(path.join(e.OUT, "provenance.json"), JSON.stringify(record, null, 1) + "\n");
 console.log(JSON.stringify({ apkSha256: record.apkSha256, commit: record.commit, clean: record.sourceClean }));'

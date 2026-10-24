@@ -1,0 +1,11 @@
+{
+  "name": "rnrs-turbo-compare-web",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "description": "Browser page of the comparison harness (informational): the rnrs benchmark module on the Wasm backend, plain JS, a minimal direct wasm-bindgen crate (web/direct) and a checked JS wrapper of it. Packages resolve from the root node_modules.",
+  "dependencies": {
+    "@rnrs/labs-turbo-compare": "file:../rnrs-module",
+    "@rnrs/runtime": "file:../../../packages/runtime"
+  }
+}

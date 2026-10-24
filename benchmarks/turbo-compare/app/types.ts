@@ -62,6 +62,12 @@ export interface Receivers {
   shaped: Pick<CmpApi, 'nop' | 'add' | 'flip'>;
   shapedThis: Pick<CmpApi, 'nop' | 'add' | 'flip'>;
   shapedUnbound: Pick<CmpApi, 'nop' | 'add' | 'flip'>;
+  /** The wrapped control with prototype methods. */
+  wrappedProto: Pick<CmpApi, 'nop' | 'add' | 'flip'>;
+  /** rnrs's protocol 3 JS shape (class, ModuleHost-like host, m<index>) around guarded leaves. */
+  entry: Pick<CmpApi, 'nop' | 'add' | 'flip'>;
+  /** Nitro Modules 0.37.1 C++ HybridObject (nitro-module/). */
+  nitro: Pick<CmpApi, 'nop' | 'add' | 'flip' | 'arrSum'>;
 }
 
 export interface Fixtures {
@@ -73,6 +79,10 @@ export interface Fixtures {
   nestedTotal: number;
   arrays: Record<number, number[]>;
   arrayTotals: Record<number, number>;
+  /** Four distinct arrays per size (16, 256, 1024), rotated per call by the arrIn workloads. */
+  rotArrays: Record<number, number[][]>;
+  /** Sum over calls i < n of the total of rotArrays[len][i & 3]. */
+  rotatedTotal(len: number, n: number): number;
   points64: Point8[];
   points64Total: number;
 }

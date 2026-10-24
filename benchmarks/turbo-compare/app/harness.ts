@@ -7,6 +7,7 @@ import { Linking, Platform } from 'react-native';
 import { runtimeBindings } from '@rnrs/runtime/testing';
 import { turboCompareModule } from '@rnrs/labs-turbo-compare';
 import RnrsCmpCxx from '@rnrs-bench/cmp-cxx';
+import { createNitroCmp } from '@rnrs-bench/cmp-nitro';
 import { makeCases } from './cases.generated';
 import { makeFixtures, nested, point, utf8Length } from './fixtures';
 import type { Case, CmpApi, JsiControl, Receivers } from './types';
@@ -20,7 +21,8 @@ export interface Config {
   targetMs: number;
   settleMs: number;
   /** Iterations per sample by workload, fixed for every path and process of a run set (from the
-   *  pilot; see the notes). Absent: calibrate in-process (pilot only). */
+   *  pilot; see the notes). Absent: calibrate in-process (pilot only). Also selects the workloads
+   *  measured: only those listed run (each must be a known workload). */
   fixedN?: Record<string, number>;
 }
 
@@ -137,6 +139,56 @@ class ShapedModule {
   }
 }
 
+// rnrs's protocol 3 JS shape around the guarded C++ leaves (measurement control only): a class
+// whose prototype methods call this.host.m<index>(...arguments) on a host instance carrying
+// ModuleHost's own properties (initialized in the same order), the m<index> entries being the
+// guarded host functions. rnrs minus this control is the native side of an rnrs scalar call.
+class EntryHost {
+  readonly pendingOps = new Map<number, unknown>();
+  closed = false;
+  readonly violations: string[] = [];
+  readonly adapter: object;
+  readonly m0: Entry;
+  readonly m1: Entry;
+  readonly m2: Entry;
+  readonly call0: Entry;
+  readonly call1: Entry;
+  readonly call2: Entry;
+  readonly call3: Entry;
+  readonly call4: Entry;
+  constructor(
+    readonly name: string,
+    readonly runtimeOwned: boolean,
+    g: JsiControl['guarded'],
+  ) {
+    this.adapter = {};
+    const unused = () => undefined;
+    this.call0 = unused;
+    this.call1 = unused;
+    this.call2 = unused;
+    this.call3 = unused;
+    this.call4 = unused;
+    Object.defineProperty(this, 'rnrs:helpers', { value: {} });
+    this.m0 = g.nop as Entry;
+    this.m1 = g.add as Entry;
+    this.m2 = g.flip as Entry;
+  }
+}
+class EntryBase {
+  constructor(readonly host: EntryHost) {}
+}
+class EntryModule extends EntryBase {
+  nop(): void {
+    this.host.m0();
+  }
+  add(a: number, b: number): number {
+    return this.host.m1(a, b) as number;
+  }
+  flip(b: boolean): boolean {
+    return this.host.m2(b) as boolean;
+  }
+}
+
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
 function correctness(r: Receivers): Check[] {
@@ -178,6 +230,37 @@ function correctness(r: Receivers): Check[] {
   scalar('jsi-shaped', r.shaped);
   scalar('jsi-shaped-this', r.shapedThis);
   scalar('jsi-shaped-unbound', r.shapedUnbound);
+  scalar('jsi-wrapped-proto', r.wrappedProto);
+  scalar('jsi-entry', r.entry);
+  // Nitro: the same IEEE results; its wrong-type behaviour is recorded in `semantics`, not required.
+  check('nitro', 'nop() is undefined', () => r.nitro.nop() === undefined);
+  check('nitro', 'add(-1.25, 3.5) = 2.25', () => r.nitro.add(-1.25, 3.5) === 2.25);
+  check('nitro', 'add(NaN, 1) is NaN', () => Number.isNaN(r.nitro.add(NaN, 1)));
+  check('nitro', 'add(1e308, 1e308) = Infinity', () => r.nitro.add(1e308, 1e308) === Infinity);
+  check('nitro', 'add(-0, -0) is -0', () => Object.is(r.nitro.add(-0, -0), -0));
+  check(
+    'nitro',
+    'flip(true) = false, flip(false) = true',
+    () => r.nitro.flip(true) === false && r.nitro.flip(false) === true,
+  );
+  check(
+    'nitro',
+    'array IEEE values',
+    () =>
+      Number.isNaN(r.nitro.arrSum([NaN])) &&
+      r.nitro.arrSum([Infinity]) === Infinity &&
+      Object.is(r.nitro.arrSum([-0]), 0),
+  );
+  // The measured array inputs, on every array path.
+  for (const path of ['rnrs', 'tm', 'jsi', 'nitro'] as const)
+    for (const len of [16, 256, 1024])
+      check(path, `arrSum of the four rotated ${len}-element arrays`, () =>
+        [0, 1, 2, 3].every(
+          (k) =>
+            r[path].arrSum(fx.rotArrays[len][k]) ===
+            fx.rotatedTotal(len, k + 1) - fx.rotatedTotal(len, k),
+        ),
+      );
   // rnrs and the handwritten control promise ordinary reads; codegen's indexed
   // reader has different proxy/length semantics and is intentionally excluded here.
   for (const path of ['rnrs', 'jsi'] as const) {
@@ -340,6 +423,55 @@ function correctness(r: Receivers): Check[] {
   return checks;
 }
 
+/** Per-path behaviour on inputs outside the shared contract (wrong types, holes, proxies,
+ *  array-likes): recorded as observed, never required to agree. */
+function semantics(r: Receivers): { path: string; probe: string; outcome: string }[] {
+  const out: { path: string; probe: string; outcome: string }[] = [];
+  const observe = (path: string, probe: string, f: () => unknown) => {
+    let outcome: string;
+    try {
+      const v = f();
+      outcome = `value ${Object.is(v, -0) ? '-0' : typeof v === 'number' && !Number.isFinite(v) ? String(v) : JSON.stringify(v)}`;
+    } catch (e) {
+      const err = e as Error;
+      // First line only: some messages append a native stack with addresses.
+      outcome = `throws ${err?.name ?? typeof e}: ${String(err?.message ?? e)
+        .split('\n')[0]
+        .slice(0, 160)}`;
+    }
+    out.push({ path, probe, outcome });
+  };
+  const scalarPaths = {
+    rnrs: r.rnrs,
+    tm: r.tm,
+    jsi: r.jsi,
+    'jsi-guarded': r.guarded,
+    nitro: r.nitro,
+  };
+  for (const [path, m] of Object.entries(scalarPaths)) {
+    observe(path, "add('1', 2)", () => m.add('1' as any, 2));
+    observe(path, 'add(1) (missing argument)', () => (m.add as any)(1));
+    observe(path, 'add(1, 2, 3) (extra argument)', () => (m.add as any)(1, 2, 3));
+    observe(path, 'add(1n, 2)', () => m.add(1n as any, 2));
+    observe(path, 'flip(1)', () => m.flip(1 as any));
+    observe(path, 'flip(undefined)', () => m.flip(undefined as any));
+  }
+  const arrayPaths = { rnrs: r.rnrs, tm: r.tm, jsi: r.jsi, nitro: r.nitro };
+  for (const [path, m] of Object.entries(arrayPaths)) {
+    observe(path, "arrSum([1, '2'])", () => m.arrSum([1, '2' as any]));
+    const holed = [1];
+    holed[2] = 3; // [1, <hole>, 3]
+    observe(path, 'arrSum([1, , 3]) (hole)', () => m.arrSum(holed));
+    observe(path, 'arrSum(Proxy([1, 2, 3]))', () => m.arrSum(new Proxy([1, 2, 3], {})));
+    observe(path, 'arrSum({length: 2, 0: 1, 1: 2}) (array-like)', () =>
+      m.arrSum({ length: 2, 0: 1, 1: 2 } as any),
+    );
+    observe(path, 'arrSum(Float64Array [1, 2])', () => m.arrSum(new Float64Array([1, 2]) as any));
+    observe(path, 'arrSum(undefined)', () => m.arrSum(undefined as any));
+  }
+  return out;
+}
+
 function runChecked(c: Case, n: number): number {
   const t0 = now();
   const result = c.run(n);
@@ -446,11 +578,29 @@ export async function runHarness(status: (text: string) => void): Promise<void> 
       shaped: new ShapedModule(new ShapedHost(g.callp.bind(g, helpers))),
       shapedThis: new ShapedModule(new ShapedHost(g.callpThis.bind(helpers))),
       shapedUnbound: new ShapedModule(new ShapedHost(g.callpThis)),
+      nitro: createNitroCmp(),
+      // The wrapped control with its methods on a prototype instead of own properties.
+      wrappedProto: Object.assign(
+        Object.create({
+          nop(this: { host: JsiControl['guarded'] }) {
+            this.host.nop();
+          },
+          add(this: { host: JsiControl['guarded'] }, a: number, b: number) {
+            return this.host.add(a, b);
+          },
+          flip(this: { host: JsiControl['guarded'] }, b: boolean) {
+            return this.host.flip(b);
+          },
+        }),
+        { host: g },
+      ),
+      entry: new EntryModule(new EntryHost('EntryControl', true, g)),
     };
     const checks = correctness(receivers);
     const failed = checks.filter((c) => !c.ok);
     if (failed.length)
       throw Object.assign(new Error(`${failed.length} correctness checks failed`), { checks });
+    const observed = semantics(receivers);
 
     // From here to the report the JS thread never yields: no rendering between samples.
     status(`run ${config.runId}: measuring`);
@@ -461,12 +611,14 @@ export async function runHarness(status: (text: string) => void): Promise<void> 
     let calib: Record<string, { n: number; probeN?: number; probeMs?: Record<string, number> }>;
     if (config.fixedN) {
       const fixed = config.fixedN;
+      const extra = Object.keys(fixed).filter((w) => !byWorkload.has(w));
+      // fixedN selects the measured workloads.
+      for (const w of byWorkload.keys()) if (!(w in fixed)) byWorkload.delete(w);
       const keys = [...byWorkload.keys()];
       const bad = keys.filter(
         (w) => !(Number.isInteger(fixed[w]) && fixed[w] >= 1 && fixed[w] <= MAX_N),
       );
-      const extra = Object.keys(fixed).filter((w) => !byWorkload.has(w));
-      if (bad.length || extra.length)
+      if (bad.length || extra.length || !keys.length)
         throw new Error(`fixedN: invalid ${bad.join(',')} unknown ${extra.join(',')}`);
       calib = Object.fromEntries(keys.map((w) => [w, { n: fixed[w] }]));
     } else calib = calibrate(byWorkload, config.targetMs);
@@ -508,6 +660,7 @@ export async function runHarness(status: (text: string) => void): Promise<void> 
       config,
       env,
       checks,
+      semantics: observed,
       calib,
       columns: ['phase', 'round', 'pos', 'workload', 'path', 'n', 'ms', 'gcs'],
       rows,

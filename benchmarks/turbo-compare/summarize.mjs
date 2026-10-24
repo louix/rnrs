@@ -16,7 +16,7 @@ import { describe, median } from './runner-lib.mjs';
 import { WORKLOADS, pairsFor } from './workloads.mjs';
 
 /** Correctness checks the harness runs (app/harness.ts correctness()). */
-export const EXPECTED_CHECKS = 144;
+export const EXPECTED_CHECKS = 179;
 const MAX_N = 1_000_000;
 const COLUMNS = ['phase', 'round', 'pos', 'workload', 'path', 'n', 'ms', 'gcs'];
 
@@ -84,6 +84,7 @@ export function validate({ runs, runner, build }) {
   if (!fixedN) bad('run config has no fixedN');
   const deviceId = platform === 'android' ? runner.device?.serial : runner.device?.udid;
   let checkNames = null;
+  let semantics;
   for (const run of runs) {
     const tag = `run ${run.index}`;
     const listed = runner.runs.find((x) => x.index === run.index);
@@ -127,9 +128,18 @@ export function validate({ runs, runner, build }) {
       checkNames ??= names;
       if (!same(names, checkNames)) bad(`${tag}: check set differs from run 1`);
     }
+    // Recorded out-of-contract behaviour (app/harness.ts semantics): identical in every run.
+    if (!Array.isArray(r.semantics) || !r.semantics.length) bad(`${tag}: no recorded semantics`);
+    else {
+      semantics ??= r.semantics;
+      if (!same(r.semantics, semantics)) bad(`${tag}: recorded semantics differ from run 1`);
+    }
     // Samples: complete, unique, known, numerically valid, n = fixed n.
     if (!same(r.columns, COLUMNS)) bad(`${tag}: unexpected columns`);
-    const cases = WORKLOADS.flatMap((w) => Object.keys(w.paths).map((p) => [w.id, p]));
+    // The fixed n selects the measured workloads (app/harness.ts).
+    const cases = WORKLOADS.filter((w) => !fixedN || w.id in fixedN).flatMap((w) =>
+      Object.keys(w.paths).map((p) => [w.id, p]),
+    );
     const known = new Set(cases.map(([w, p]) => `${w}|${p}`));
     const rounds = [r.config.warmupRounds, r.config.rounds];
     const seen = new Set();
@@ -208,7 +218,7 @@ export function summarize(runs) {
   const measured = samples(runs, 1);
   const warmup = samples(runs, 0);
   const result = [];
-  for (const w of WORKLOADS) {
+  for (const w of WORKLOADS.filter((w) => measured.some((x) => x.w === w.id))) {
     const paths = {};
     for (const p of Object.keys(w.paths)) {
       const s = measured.filter((x) => x.w === w.id && x.p === p);
