@@ -36,6 +36,12 @@ impl spec::ValuesModule for Values {
     fn echo_bool(&self, b: bool) -> Result<bool, String> {
         Ok(b)
     }
+    fn checked_divide(&self, a: f64, b: f64) -> Result<f64, String> {
+        if b == 0.0 {
+            return Err("division by zero".into());
+        }
+        Ok(a / b)
+    }
     fn echo_string(&self, s: String) -> Result<String, String> {
         Ok(s)
     }

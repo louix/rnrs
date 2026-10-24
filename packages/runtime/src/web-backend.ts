@@ -14,6 +14,100 @@ import {
 const reflectApply = Reflect.apply;
 const functionBind = Function.prototype.bind;
 const POSITIONAL = ['call0', 'call1', 'call2', 'call3', 'call4'] as const;
+const Float64ArrayCtor = Float64Array;
+const memoryBuffer = Object.getOwnPropertyDescriptor(
+  (globalThis as any).WebAssembly?.Memory?.prototype ?? {},
+  'buffer',
+)?.get;
+
+/** Web: reads `xs[start]` .. `xs[start + count - 1]` with ordinary reads, in order, into the
+ *  f64 slots at `ptr` in Wasm memory (the Rust reader's spare capacity). Stops at the first
+ *  value that is not a number and returns `[index, value]`; later elements are not read.
+ *  Getter and proxy-trap exceptions propagate. A getter may re-enter Wasm and grow its
+ *  memory, which detaches the old buffer: the view is then derived again. */
+function readNumbers(
+  xs: any,
+  start: number,
+  count: number,
+  memory: object,
+  ptr: number,
+): [number, unknown] | undefined {
+  let view = new Float64ArrayCtor(reflectApply(memoryBuffer!, memory, []), ptr, count);
+  for (let i = 0; i < count; i++) {
+    const x = xs[start + i];
+    if (typeof x !== 'number') return [start + i, x];
+    // i < count, so an attached view reads a number here; only a detached one reads
+    // undefined. Indexed reads of a typed array run no user code, unlike its patchable
+    // `length` getter: every slot Rust then counts as written was written to live memory.
+    if (view[i] === undefined)
+      view = new Float64ArrayCtor(reflectApply(memoryBuffer!, memory, []), ptr, count);
+    view[i] = x;
+  }
+  return undefined;
+}
+
+type Adapter = InstanceType<RnrsWasm['RnrsWebAdapter']>;
+
+/** The scalar entry of a method with a prepared Rust leaf (`signature` from the adapter's
+ *  scalar_signature): when every argument already has its declared type (`typeof` only, no
+ *  user code), one Wasm call with plain f64 slots; otherwise `slow`, the generic positional
+ *  call, which raises exactly the generic errors. Extra arguments are ignored, as there. */
+function scalarEntry(
+  adapter: Adapter,
+  signature: ArrayLike<number>,
+  arity: number,
+  slow: (...args: any[]) => unknown,
+): ((...args: any[]) => unknown) | undefined {
+  // Indexed reads, no destructuring or array methods (Array.prototype may be patched).
+  const slot = signature[0],
+    kinds = signature[1],
+    result = signature[2];
+  const call = bindThis(adapter.scalar, adapter) as (
+    slot: number,
+    a0: number,
+    a1: number,
+    a2: number,
+    a3: number,
+  ) => number;
+  const takeError = bindThis(adapter.take_scalar_error, adapter);
+  const k0 = kinds & 3,
+    k1 = (kinds >> 2) & 3,
+    k2 = (kinds >> 4) & 3,
+    k3 = (kinds >> 6) & 3;
+  // Declared parameters must match the wrapper's arity exactly; otherwise keep the slow path.
+  if (+(k0 !== 0) + +(k1 !== 0) + +(k2 !== 0) + +(k3 !== 0) !== arity) return undefined;
+  // 1 number, 2 boolean; `+x` is then the f64 slot (booleans 0/1).
+  const fits = (kind: number, x: unknown) =>
+    kind === 1 ? typeof x === 'number' : typeof x === 'boolean';
+  const done = (r: number): unknown => {
+    if (r !== r) {
+      const error = takeError();
+      if (error !== undefined) throw error;
+    }
+    return result === 0 ? undefined : result === 2 ? r !== 0 : r;
+  };
+  switch (arity) {
+    case 0:
+      return () => done(call(slot, 0, 0, 0, 0));
+    case 1:
+      return (a0: any) => (fits(k0, a0) ? done(call(slot, +a0, 0, 0, 0)) : slow(a0));
+    case 2:
+      return (a0: any, a1: any) =>
+        fits(k0, a0) && fits(k1, a1) ? done(call(slot, +a0, +a1, 0, 0)) : slow(a0, a1);
+    case 3:
+      return (a0: any, a1: any, a2: any) =>
+        fits(k0, a0) && fits(k1, a1) && fits(k2, a2)
+          ? done(call(slot, +a0, +a1, +a2, 0))
+          : slow(a0, a1, a2);
+    case 4:
+      return (a0: any, a1: any, a2: any, a3: any) =>
+        fits(k0, a0) && fits(k1, a1) && fits(k2, a2) && fits(k3, a3)
+          ? done(call(slot, +a0, +a1, +a2, +a3))
+          : slow(a0, a1, a2, a3);
+    default:
+      return undefined;
+  }
+}
 
 /** The wasm-bindgen module of the app's Wasm bundle (web/pkg/web_bundle.js). */
 export interface RnrsWasm {
@@ -39,6 +133,10 @@ export interface RnrsWasm {
       a3: unknown,
     ): unknown;
     drain(settle: SettleFn): void;
+    /** Prepared scalar leaves (bundles built by an older @rnrs/runtime may lack them). */
+    scalar_signature?(index: number): Uint32Array | undefined;
+    scalar(slot: number, a0: number, a1: number, a2: number, a3: number): number;
+    take_scalar_error(): unknown;
     cancel(id: number): boolean;
     dispose(handle: unknown): void;
     teardown(): void;
@@ -164,6 +262,7 @@ export function installWebBackend(
         apply = Reflect.apply;
       const helpers = Object.freeze({
         ...conversionHelpers,
+        numbers: readNumbers,
         wrap(slot: number, version: number): object {
           const wrapper = Object.freeze(Object.create(null));
           apply(weakSet, handles, [wrapper, [slot, version]]);
@@ -219,14 +318,22 @@ export function installWebBackend(
             call4: bindThis(adapter.call4, adapter) as NativeAdapter['call4'],
             // Scalar entry: the positional wasm method of that arity, bound to the adapter,
             // the method index and the module receiver (undefined), so the wrapper passes only
-            // its arguments, as with the JSI backend's prepared host functions.
+            // its arguments, as with the JSI backend's prepared host functions. Methods with a
+            // prepared Rust leaf take it first (scalarEntry), with that call as the slow path.
             entry: (index, arity) => {
               const call = POSITIONAL[arity];
               if (call === undefined)
                 throw new Error(`@rnrs/runtime: ${name}: no entry of arity ${arity}`);
-              return reflectApply(functionBind, adapter[call], [adapter, index, undefined]) as (
-                ...args: any[]
-              ) => unknown;
+              const slow = reflectApply(functionBind, adapter[call], [
+                adapter,
+                index,
+                undefined,
+              ]) as (...args: any[]) => unknown;
+              const signature =
+                typeof adapter.scalar_signature === 'function'
+                  ? adapter.scalar_signature(index)
+                  : undefined;
+              return (signature && scalarEntry(adapter, signature, arity, slow)) ?? slow;
             },
             cancel: (id) => adapter.cancel(id),
             dispose: (handle) => adapter.dispose(handle),

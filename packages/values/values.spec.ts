@@ -65,6 +65,8 @@ export interface Bag extends NativeObject {
 export interface ValuesModule extends NativeModule {
   echoNumber(x: number): number;
   echoBool(b: boolean): boolean;
+  /** a / b; fails with "division by zero" when b is 0 (a fallible prepared scalar entry). */
+  checkedDivide(a: number, b: number): number;
   echoString(s: string): string;
   /** UTF-8 byte length as Rust sees it. */
   utf8Length(s: string): number;

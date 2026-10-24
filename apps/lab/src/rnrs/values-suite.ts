@@ -39,6 +39,8 @@ export interface ValuesEnv {
    *  check then also patches the ArrayBuffer/Uint8Array globals (in the browser the
    *  wasm-bindgen glue itself looks those up, so they are left alone there). */
   forceBytesCopyOut?(force: boolean): void;
+  /** Browser: grows the bundle's Wasm memory by one page (detaching its old buffer). */
+  growWasmMemory?(): void;
 }
 
 export async function runValuesSuite(env: ValuesEnv): Promise<CheckResult[]> {
@@ -110,6 +112,44 @@ export async function runValuesSuite(env: ValuesEnv): Promise<CheckResult[]> {
     throws(() => (other.echoNumber as any)(), 'Error: runtime adapter is closed');
     throws(() => other.echoNumber(revoked.proxy as any), 'Error: runtime adapter is closed');
     expect(echo.call(v, 9) === 9, 'borrowed method from closed module uses live receiver');
+  });
+
+  await check('prepared scalar entries: Rust errors, NaN results and closed admission', () => {
+    // Browser: every prepared entry is the Rust scalar leaf's entry, not the bound generic
+    // positional call it falls back to (both raise the same errors, so check which runs).
+    if ((globalThis as any).__rnrsRuntime === undefined) {
+      const host = (v as any).host;
+      const direct = (v.constructor as any).descriptor.direct as number[][];
+      const generic = direct.filter(([index]) => host[`m${index}`].name.startsWith('bound '));
+      expect(direct.length >= 3 && generic.length === 0, `generic entries: ${generic}`);
+    }
+    expect(v.checkedDivide(7, 2) === 3.5, 'value');
+    throws(() => v.checkedDivide(1, 0), 'Error: division by zero');
+    throws(() => v.checkedDivide(1, -0), 'Error: division by zero');
+    // A NaN result right after a failure is a value: no error is left behind.
+    expect(Number.isNaN(v.checkedDivide(NaN, 1)), 'NaN result after an error');
+    expect(Number.isNaN(v.checkedDivide(0, NaN)), 'NaN divisor is not zero');
+    expect(Object.is(v.checkedDivide(-0, 5), -0), '-0 result');
+    let caught: unknown;
+    try {
+      v.checkedDivide(2, 0);
+    } catch (error) {
+      caught = error;
+    }
+    expect(
+      caught instanceof Error && caught.constructor === Error,
+      `a plain Error: ${Object.prototype.toString.call(caught)} ${(caught as any)?.constructor?.name}`,
+    );
+    throws(() => v.checkedDivide('1' as any, 0), 'TypeError: a must be a number, got a string');
+    throws(() => (v.checkedDivide as any)(1), 'TypeError: b must be a number, got undefined');
+    const t = createValuesModuleForTesting(4);
+    throws(() => t.checkedDivide(1, 0), 'Error: division by zero');
+    expect(t.checkedDivide(9, 3) === 3, 'other module after an error');
+    t.teardown();
+    throws(() => t.checkedDivide(1, 1), 'Error: runtime adapter is closed');
+    throws(() => t.checkedDivide(1, 0), 'Error: runtime adapter is closed');
+    throws(() => t.checkedDivide('1' as any, 0), 'Error: runtime adapter is closed');
+    expect(v.checkedDivide(8, 2) === 4, 'other modules unaffected');
   });
 
   await check('prepared scalar entries: subclasses, object arguments, fabricated hosts', () => {
@@ -721,6 +761,26 @@ export async function runValuesSuite(env: ValuesEnv): Promise<CheckResult[]> {
       }
     }
     expect(v.sum(Array.from({ length: 8193 }, () => 1)) === 8193, 'usable after partial failures');
+  });
+
+  await check('numeric arrays: Wasm memory growth from getters mid-conversion', () => {
+    const grow = env.growWasmMemory;
+    if (!grow) return 'skipped: no Wasm memory on this backend';
+    // Two chunks of the browser's fused reader (4096 elements each); each getter grows the
+    // memory (detaching the buffer being written) and re-enters.
+    const xs = Array.from({ length: 6000 }, (_, i) => i + 0.5);
+    for (const index of [3, 5000])
+      Object.defineProperty(xs, index, {
+        get() {
+          grow();
+          expect(v.sum([1, 2]) === 3, 're-entrant call after growth');
+          return -index;
+        },
+      });
+    const expected = Array.from({ length: 6000 }, (_, i) => (i === 3 || i === 5000 ? -i : i + 0.5));
+    const echoed = v.echoNumbers(xs);
+    expect(same(echoed, expected), 'every element lands after growth');
+    expect(v.sum(xs) === expected.reduce((a, b) => a + b, 0), 'sum after growth');
   });
 
   await check('ordinary input reads: mutation and re-entrancy during array conversion', () => {

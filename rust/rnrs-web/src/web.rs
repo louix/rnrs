@@ -5,7 +5,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::OnceLock;
 
 use js_sys::{Array, Function, Reflect};
-use rnrs_core::bind::{valid_length, Adapter, BindError, BytesError, Env, ErrorKind, Kind, ModuleDef, NativeBox, Spawner, UnwrapError, Val};
+use rnrs_core::bind::{expected, valid_length, Adapter, BindError, BytesError, Env, ErrorKind, Kind, ModuleDef, NativeBox, Path, Spawner, UnwrapError, Val};
 use rnrs_core::{Budget, Notify, SpawnLocal};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
@@ -134,7 +134,11 @@ pub fn rnrs_diagnostics() -> Vec<f64> {
 
 // ---- Helpers -------------------------------------------------------------------------
 
-const HELPER_NAMES: [&str; 9] = ["get", "define", "isArray", "length", "byteLength", "copyBuffer", "bytesFromMemory", "wrap", "unwrap"];
+const HELPER_NAMES: [&str; 10] = ["get", "define", "isArray", "length", "byteLength", "copyBuffer", "bytesFromMemory", "numbers", "wrap", "unwrap"];
+
+/// Elements per `numbers` helper call: the destination grows per chunk, as the generic
+/// reader's capacity does, so a lying `length` never reserves memory up front.
+const NUMBER_CHUNK: u32 = 4096;
 
 /// The adapter's helpers object (the framework's frozen conversion helpers plus wrap/unwrap)
 /// and its functions, each resolved once, at first use, and kept for the adapter's lifetime
@@ -142,19 +146,25 @@ const HELPER_NAMES: [&str; 9] = ["get", "define", "isArray", "length", "byteLeng
 /// frozen, so a cached function is the one a fresh lookup would return.
 struct Helpers {
     object: JsValue,
-    resolved: [OnceCell<Function>; HELPER_NAMES.len()],
+    resolved: [OnceCell<Option<Function>>; HELPER_NAMES.len()],
 }
 
 impl Helpers {
     fn new(object: JsValue) -> Self {
         Helpers { object, resolved: Default::default() }
     }
-    fn get(&self, name: &str) -> &Function {
+    /// The helper, or None if this helpers object lacks it (an older @rnrs/runtime).
+    fn find(&self, name: &str) -> Option<&Function> {
         let i = HELPER_NAMES.iter().position(|n| *n == name).expect("known helper");
-        self.resolved[i].get_or_init(|| {
-            diag(0);
-            Reflect::get(&self.object, &JsValue::from_str(name)).ok().and_then(|f| f.dyn_into().ok()).expect("rnrs-web helpers")
-        })
+        self.resolved[i]
+            .get_or_init(|| {
+                diag(0);
+                Reflect::get(&self.object, &JsValue::from_str(name)).ok().and_then(|f| f.dyn_into().ok())
+            })
+            .as_ref()
+    }
+    fn get(&self, name: &str) -> &Function {
+        self.find(name).expect("rnrs-web helpers")
     }
 }
 
@@ -211,7 +221,8 @@ impl<'a> WebEnv<'a> {
             [a, b] => f.call2(&this, a, b),
             [a, b, c] => f.call3(&this, a, b, c),
             [a, b, c, d] => f.call4(&this, a, b, c, d),
-            _ => unreachable!("helpers take one to four arguments"),
+            [a, b, c, d, e] => f.call5(&this, a, b, c, d, e),
+            _ => unreachable!("helpers take one to five arguments"),
         };
         self.caught(r)
     }
@@ -280,6 +291,44 @@ impl Env for WebEnv<'_> {
         let a = self.get(array).clone();
         let v = self.call_helper("length", &[&a])?;
         valid_length(v.as_f64().unwrap_or(f64::NAN))
+    }
+    /// Fused: one `numbers` helper call per chunk reads the elements in JS (ordinary reads,
+    /// in order, stopping at the first non-number) straight into the Vec's spare capacity,
+    /// instead of several JS/Wasm crossings per element. Same checks, length read, error
+    /// texts and exception identity as the generic reader.
+    fn number_array(&mut self, v: Val, path: &Path<'_>) -> Result<Vec<f64>, BindError> {
+        if self.helpers.find("numbers").is_none() {
+            // Helpers from an @rnrs/runtime older than this bundle: read element by element.
+            return number_array_by_element(self, v, path);
+        }
+        if self.kind(v) != Kind::Array {
+            return Err(expected(self, v, path, "an array"));
+        }
+        let length = self.array_length(v)?;
+        let array = self.get(v).clone();
+        let memory = wasm_bindgen::memory();
+        let mut out: Vec<f64> = Vec::new();
+        while (out.len() as u32) < length {
+            let start = out.len() as u32;
+            let count = (length - start).min(NUMBER_CHUNK);
+            out.reserve(count as usize);
+            // The helper writes `count` f64 slots here (8-aligned, inside the reservation),
+            // re-deriving its view if re-entrant JS grew Wasm memory. No Rust reference to
+            // the spare capacity exists while it runs.
+            let ptr = out.spare_capacity_mut().as_mut_ptr() as usize as f64;
+            let stop = self.call_helper("numbers", &[&array, &JsValue::from(start), &JsValue::from(count), &memory, &JsValue::from_f64(ptr)])?;
+            if stop.is_undefined() {
+                // SAFETY: the helper returned normally having written all `count` slots.
+                unsafe { out.set_len((start + count) as usize) };
+                continue;
+            }
+            // `[index, value]` of the first non-number; nothing after it was read.
+            let stop: Array = stop.unchecked_into();
+            let index = stop.get(0).as_f64().unwrap_or(0.0) as u32;
+            let element = self.put(stop.get(1));
+            return Err(expected(self, element, &path.index(index), "a number"));
+        }
+        Ok(out)
     }
     fn get_index(&mut self, array: Val, index: u32) -> Result<Val, BindError> {
         let a = self.get(array).clone();
@@ -376,6 +425,23 @@ impl Env for WebEnv<'_> {
     }
 }
 
+/// The generic reader (`Env::number_array`'s default): one ordinary read per element.
+fn number_array_by_element(env: &mut dyn Env, v: Val, path: &Path<'_>) -> Result<Vec<f64>, BindError> {
+    if env.kind(v) != Kind::Array {
+        return Err(expected(env, v, path, "an array"));
+    }
+    let length = env.array_length(v)?;
+    let mut out = Vec::with_capacity(length.min(NUMBER_CHUNK) as usize);
+    for i in 0..length {
+        let element = env.get_index(v, i)?;
+        match env.number_value(element) {
+            Some(x) => out.push(x),
+            None => return Err(expected(env, element, &path.index(i), "a number")),
+        }
+    }
+    Ok(out)
+}
+
 fn js_error(error: BindError, thrown: Option<JsValue>) -> JsValue {
     match error {
         BindError::Thrown => thrown.unwrap_or_else(|| js_sys::Error::new("native call failed").into()),
@@ -394,6 +460,8 @@ pub struct RnrsWebAdapter {
     adapter: Adapter<JsNotify>,
     helpers: Helpers,
     torn_down: Cell<bool>,
+    /// The error of the last failed `scalar` call, until `take_scalar_error`.
+    scalar_error: Cell<Option<JsValue>>,
 }
 
 impl RnrsWebAdapter {
@@ -430,7 +498,7 @@ impl RnrsWebAdapter {
         let adapter = Adapter::new(def, max_in_flight as usize, Budget::unlimited(), spawner, JsNotify(notify))
             .map_err(|m| JsValue::from(js_sys::Error::new(&m)))?;
         HOSTS_CREATED.fetch_add(1, Ordering::SeqCst);
-        Ok(RnrsWebAdapter { adapter, helpers: Helpers::new(helpers), torn_down: Cell::new(false) })
+        Ok(RnrsWebAdapter { adapter, helpers: Helpers::new(helpers), torn_down: Cell::new(false), scalar_error: Cell::new(None) })
     }
 
     #[wasm_bindgen(getter)]
@@ -470,6 +538,53 @@ impl RnrsWebAdapter {
     }
     pub fn call4(&self, index: u32, receiver: JsValue, a0: JsValue, a1: JsValue, a2: JsValue, a3: JsValue) -> Result<JsValue, JsValue> {
         self.call_with(index, receiver, [a0, a1, a2, a3])
+    }
+
+    /// The prepared scalar leaf of method `index` (ModuleDef.scalars), as
+    /// `[slot, argument kinds (2 bits each: 1 number, 2 boolean), result (0 void, 1 number,
+    /// 2 boolean)]`, or undefined if the method has none.
+    pub fn scalar_signature(&self, index: u32) -> Option<Vec<u32>> {
+        let scalars = self.adapter.def().scalars;
+        let slot = scalars.iter().position(|d| d.method == index)?;
+        Some(vec![slot as u32, scalars[slot].args, scalars[slot].result])
+    }
+
+    /// Calls scalar leaf `slot` with plain f64 slots (booleans as 0/1; unused slots ignored).
+    /// The JS entry has already checked every argument's type, so no JS value crosses and no
+    /// JS runs. Returns the result as f64; on failure returns NaN and keeps the error for
+    /// `take_scalar_error` (the entry asks only when the result is NaN).
+    pub fn scalar(&self, slot: u32, a0: f64, a1: f64, a2: f64, a3: f64) -> f64 {
+        drop(self.scalar_error.take());
+        diag(4);
+        let Some(def) = self.adapter.def().scalars.get(slot as usize) else {
+            self.scalar_error.set(Some(js_sys::RangeError::new("no scalar entry").into()));
+            return f64::NAN;
+        };
+        let mut args = [a0, a1, a2, a3];
+        // Boolean slots hold exactly 0/1 (the leaf's contract), whatever a caller passed.
+        for (i, x) in args.iter_mut().enumerate() {
+            if (def.args >> (2 * i)) & 3 == 2 {
+                *x = if *x != 0.0 { 1.0 } else { 0.0 };
+            }
+        }
+        let result = self.adapter.check_open().and_then(|()| {
+            // SAFETY: the instance pointer comes from this adapter's own instance, which lives
+            // until the adapter is dropped (teardown never frees it); `&self` keeps it alive
+            // through this synchronous call, and boolean slots are 0/1.
+            unsafe { (def.call)(self.adapter.scalar_instance(def), &args) }.map_err(BindError::error)
+        });
+        match result {
+            Ok(value) => value,
+            Err(error) => {
+                self.scalar_error.set(Some(js_error(error, None)));
+                f64::NAN
+            }
+        }
+    }
+
+    /// The error of the last failed `scalar` call (cleared), or undefined.
+    pub fn take_scalar_error(&self) -> JsValue {
+        self.scalar_error.take().unwrap_or(JsValue::UNDEFINED)
     }
 
     /// Converts and settles queued outcomes: `settle(id, status, value, message)`.

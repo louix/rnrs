@@ -15,9 +15,13 @@ if (!process.execArgv.includes(FLAG)) {
     const run = spawnSync(
       process.execPath,
       [FLAG, '--no-warnings', '--test', '--test-reporter=tap', fileURLToPath(import.meta.url)],
-      { encoding: 'utf8' },
+      // Without NODE_TEST_CONTEXT the inner run is a top-level test run whose exit status
+      // reflects its own failures (inherited, it reports to this runner and exits 0).
+      { encoding: 'utf8', env: { ...process.env, NODE_TEST_CONTEXT: undefined } },
     );
     assert.equal(run.status, 0, run.stdout + run.stderr);
+    assert.match(run.stdout, /^# pass [1-9]/m, run.stdout);
+    assert.match(run.stdout, /^# fail 0$/m, run.stdout);
   });
 } else {
   const rt = await import('../src/runtime.ts');
