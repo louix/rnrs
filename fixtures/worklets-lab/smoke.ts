@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 // Worklets lab checks, in stages. Test-hooks build only
 // (RNRS_TEST_HOOKS=1); uses lab diagnostics from @rnrs/runtime/testing.
 import * as Worklets from 'react-native-worklets';
@@ -540,7 +541,7 @@ async function endpointStages(
     }
     return waited;
   };
-  console.log('RNRS_WORKLETS_SWIPE w6');
+  labLog('RNRS_WORKLETS_SWIPE w6');
   const gestureWaited = await settle(
     () => stats.value.events >= 20 && reactions.value() >= 10,
     () => stats.value.events,
@@ -622,7 +623,7 @@ async function endpointStages(
   // ERR_RNRS_CLOSED is actually thrown on the UI thread and must be caught there (and in the
   // reaction it drives); an uncaught one would crash the app.
   const beforeSkip = stats.value;
-  console.log('RNRS_WORKLETS_SWIPE late-skip');
+  labLog('RNRS_WORKLETS_SWIPE late-skip');
   await settle(
     () => stats.value.skippedClosed - beforeSkip.skippedClosed >= 5,
     () => stats.value.skippedClosed,
@@ -630,7 +631,7 @@ async function endpointStages(
   );
   const afterSkip = stats.value;
   control.value = { bypassOpen: true };
-  console.log('RNRS_WORKLETS_SWIPE late-forced');
+  labLog('RNRS_WORKLETS_SWIPE late-forced');
   await settle(
     () =>
       stats.value.caughtClosed - afterSkip.caughtClosed >= 5 &&
@@ -684,3 +685,7 @@ async function endpointStages(
   bindings.collectGarbageForTesting();
   observations.lifecycleAfterClose = bindings.lifecycle();
 }
+
+// iOS release builds forward console.error to the device console.
+export const labLog = (...args: unknown[]) =>
+  Platform.OS === 'ios' ? console.error(...args) : console.log(...args);

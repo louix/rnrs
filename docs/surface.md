@@ -116,7 +116,7 @@ winit window or event loop.
 
 | Concept | Rule |
 | --- | --- |
-| Epoch | Events belong to the current attachment. Detach (hide, unmount, key change, zero size) and close queue a `Reset`; a pointer still down from the old attachment is unknown in the new one. |
+| Epoch | Events belong to the current attachment. Detach (hide, unmount, key change, zero size) and close queue a `Reset`; a pointer still down from the old attachment is unknown in the new one. A closed renderer may stop before it drains the `Closed` reset. |
 | Reset | "Cancel every pointer you have seen down and not yet ended." Records before it stay valid. |
 | Stable ids | A `u64` assigned at each accepted down and never reused. |
 | Bounds | 10 tracked pointers; 128 queued records per drain. |
@@ -139,7 +139,9 @@ Keyboard, stylus, hover, wheel and gesture recognition are not provided.
 
 - Ownership is per `UITouch`: a touch is owned only if Rust accepts its down; others go to the next responder.
 - RN children of `<SurfaceView>` that do not handle a touch pass it up to the surface, which captures it for Rust. Put controls next to the surface, not inside it.
-- A parent `UIScrollView` that starts panning cancels the touches. Gesture Handler and Worklets interplay are untested. Touch has run only on the simulator.
+- A parent `UIScrollView` that starts panning cancels the touches. Gesture Handler and Worklets interplay are untested.
+- Observed on iOS: after a detach or `close()` the view keeps showing its last presented frame; it is not cleared. After `close()` the view stays mounted on the closed key until React unmounts it.
+- Besides the simulator, touch has run on one iPhone 12 Pro (iOS 26.7.1, release build): drag, two pointers, and opt-out, detach, hide, lock, background, resize, remount, close and reload during a gesture.
 
 ### Touch input (browser)
 

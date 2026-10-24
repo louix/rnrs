@@ -30,6 +30,9 @@
 #   RNRS_IOS_FIXTURE=triangle                  the rnrs::gpu triangle (fixtures/triangle-consumer: App.tsx, smoke.ts)
 #                                             with @rnrs/surface and @rnrs/labs-webgpu-triangle; run by
 #                                             scripts/consumer/ios-triangle-sim-test.mjs
+#   RNRS_IOS_FIXTURE=worklets-lab              the Worklets lab (fixtures/worklets-lab: App.tsx, GestureLab.tsx, smoke.ts,
+#                                             babel.config.js) with @rnrs/labs-worklets-probe and the pins of
+#                                             scripts/consumer/worklets-app.sh
 #   RNRS_IOS_FIXTURE=smoke                    a JS smoke fixture: RNRS_IOS_SMOKE_DIR's smoke.ts (repo-relative
 #                                             directory exporting runSmoke(); e.g. fixtures/scheduler-probe) under
 #                                             fixtures/consumer/ios/SmokeApp.tsx, with @rnrs/<m> for each m in
@@ -94,6 +97,17 @@ elif [ "${RNRS_IOS_FIXTURE:-}" = bevy ]; then
 elif [ "${RNRS_IOS_FIXTURE:-}" = triangle ]; then
   cp "$ROOT/fixtures/triangle-consumer/App.tsx" "$ROOT/fixtures/triangle-consumer/smoke.ts" "$APP/"
   (cd "$APP" && npm install --no-audit --no-fund "$P/rnrs-cli-0.2.0.tgz" "$P/rnrs-runtime-0.2.0.tgz" "$P/rnrs-surface-0.2.0.tgz" "$P/rnrs-labs-webgpu-triangle-0.2.0.tgz")
+elif [ "${RNRS_IOS_FIXTURE:-}" = worklets-lab ]; then
+  cp "$ROOT/fixtures/worklets-lab/App.tsx" "$ROOT/fixtures/worklets-lab/GestureLab.tsx" "$ROOT/fixtures/worklets-lab/smoke.ts" \
+    "$ROOT/fixtures/worklets-lab/babel.config.js" "$APP/"
+  PINS=(react-native-worklets@0.13.0 react-native-reanimated@4.7.1 react-native-gesture-handler@3.3.0)
+  (cd "$APP" && npm install --no-audit --no-fund --save-exact "${PINS[@]}" \
+    "$P/rnrs-cli-0.2.0.tgz" "$P/rnrs-runtime-0.2.0.tgz" "$P/rnrs-labs-worklets-probe-0.2.0.tgz")
+  for pin in "${PINS[@]}"; do
+    name="${pin%@*}" want="${pin##*@}"
+    got=$(node -p "require('$APP/node_modules/$name/package.json').version")
+    [ "$got" = "$want" ] || { echo "$name: installed $got, pinned $want" >&2; exit 1; }
+  done
 elif [ "${RNRS_IOS_FIXTURE:-}" = smoke ]; then
   cp "$ROOT/${RNRS_IOS_SMOKE_DIR:?set RNRS_IOS_SMOKE_DIR with RNRS_IOS_FIXTURE=smoke}/smoke.ts" "$APP/smoke.ts"
   cp "$ROOT/fixtures/consumer/ios/SmokeApp.tsx" "$APP/App.tsx"

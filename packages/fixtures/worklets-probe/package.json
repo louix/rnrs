@@ -6,7 +6,8 @@
   "license": "MIT",
   "rustNative": {
     "targets": [
-      "android"
+      "android",
+      "ios"
     ],
     "spec": "worklets-probe.spec.ts",
     "rust": {

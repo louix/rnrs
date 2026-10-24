@@ -8,8 +8,8 @@
 | Browser | Wasm on the main thread, initialized with `initRnrs`. No workers, WASI or Node.js. |
 | Expo | SDK 58 with prebuild and a custom build. Expo Go cannot load custom native code. The iOS build has been run; the Android build has not. |
 | Rust | 1.90.0. The Bevy example needs 1.97.1 and Android API 26 ([Bevy](../packages/bevy3d/README.md)). |
-| Rendering surfaces | Android, iOS and browser WebGPU; see [surface](surface.md). iOS touch input has run on the simulator only. The Bevy example does not render on the iOS simulator. |
-| Worklets / Reanimated | Android only (Worklets 0.13.0, Reanimated 4.7.1); see [limits](#worklets). iOS and web are untested. |
+| Rendering surfaces | Android, iOS and browser WebGPU; see [surface](surface.md). iOS touch input has run on the simulator and an iPhone 12 Pro. The Bevy example does not render on the iOS simulator. |
+| Worklets / Reanimated | Android (Worklets 0.13.0, Reanimated 4.7.1), plus one iOS run of the lab checks: iPhone 12 Pro, iOS 26.7.1, release build, React Native 0.88.0 prebuilt core, Worklets 0.13.0, Reanimated 4.7.1, Gesture Handler 3.3.0; see [limits](#worklets). Web is untested. |
 
 ## Features
 
