@@ -27,6 +27,9 @@
     packages = with pkgs; [ nodejs_24 rustup clang cmake pkg-config jdk17 android-tools curl unzip python3 android.androidsdk ];
     ANDROID_HOME = "${android.androidsdk}/libexec/android-sdk";
     ANDROID_SDK_ROOT = "${android.androidsdk}/libexec/android-sdk";
+    # Override host/CI NDK variables as well as the SDK: build-native prefers these.
+    ANDROID_NDK_HOME = "${android.androidsdk}/libexec/android-sdk/ndk/27.1.12297006";
+    ANDROID_NDK_ROOT = "${android.androidsdk}/libexec/android-sdk/ndk/27.1.12297006";
     JAVA_HOME = "${pkgs.jdk17}";
     GRADLE_OPTS = "-Dorg.gradle.project.android.aapt2FromMavenOverride=${android.androidsdk}/libexec/android-sdk/build-tools/37.0.0/aapt2";
   };
