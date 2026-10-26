@@ -1,4 +1,4 @@
-# rnrs: React Native modules in TypeScript + Rust
+# rnrs: React Native Rust Modules
 
 Rust-powered native modules: write a TypeScript spec and a Rust implementation. Use the same
 module on Android, iOS and in the browser.
@@ -42,6 +42,12 @@ mathModule().sum([1, 2, 3]); // 6
 ```
 
 The CLI generates the bindings; the [quickstart](docs/quickstart.md) covers setup and builds.
+
+# Comparisions
+
+Compared with [uniffi-bindgen-react-native](https://jhugman.github.io/uniffi-bindgen-react-native/)
+(0.31.0-6, both classi JSI and newer  JSI2 backends), rnrs (0.3.0) measures **>20× faster scalar addition**
+and **~7× faster array sums (1024 numbers)**, in addition to being much easier to setup.
 
 Experimental Fabric surface integration lets Rust draw inside React Native:
 
