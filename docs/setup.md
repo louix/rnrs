@@ -8,10 +8,10 @@ Tools for authoring modules, and the per-platform steps for using a module in an
 | Need | For |
 | --- | --- |
 | Node 24, npm | everything |
-| rustup with Rust **1.90.0** | any Rust build (the only tested toolchain) |
+| rustup with Rust **1.90.0** | any Rust build (project toolchain) |
 | target `wasm32-unknown-unknown`, `wasm-bindgen` CLI **0.2.129** | web |
 | target `aarch64-linux-android`, JDK 17, Android SDK 37 (build-tools 37.0.0), NDK 27.1.12297006, CMake 3.22.1 | Android |
-| macOS, Xcode (26.6 tested), CocoaPods, targets `aarch64-apple-ios` and `aarch64-apple-ios-sim` | iOS |
+| macOS, Xcode, CocoaPods, targets `aarch64-apple-ios` and `aarch64-apple-ios-sim` | iOS |
 
 Install the Rust toolchain and the targets you need (this needs the network):
 
@@ -120,7 +120,7 @@ cd android && ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a
 
 - **Nix SDK:** it has only build-tools 37.0.0. Add `--init-script "$REPO/scripts/consumer/nix-sdk.init.gradle"`, which sets library modules' `buildToolsVersion` without editing the app.
 - **Tools outside the shell:** the Gradle task runs `node` and `cargo`. If they are not on Gradle's `PATH` (Android Studio started from the desktop), set `NODE_BINARY` or `-Prnrs.node=/absolute/path/to/node`, and `RNRS_CARGO` with the matching `RUSTC`. Relative paths are rejected.
-- **ABIs:** only arm64 is tested.
+- **ABIs:** select the architectures your app needs with `reactNativeArchitectures`; the integration maps `arm64-v8a`, `armeabi-v7a`, `x86` and `x86_64` to Rust targets. Your module dependencies must build for the selected targets.
 - Android Studio sync warns that the bundle is not built yet; the first Gradle build builds it.
 
 ### iOS

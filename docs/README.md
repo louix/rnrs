@@ -9,12 +9,13 @@ Tutorials:
 
 Reference:
 
-- [Platform support](support.md) and example modules.
+- [Platform support](support.md).
 - [Type map](types.md): TypeScript types, Rust equivalents and conversion rules.
 - [Generator](generator.md): spec rules, generated interfaces and async methods.
 - [Ownership](ownership.md): runtime rules, buffers, native objects, cancellation and teardown.
 - [Packaging](packaging.md): module packages, discovery, targets and lock files.
 - [Rendering surfaces](surface.md), [logging](logging.md) and [iOS integration](ios.md).
+- Example code: [counter](../packages/counter), [native objects](../packages/meter), [value types](../packages/values), [2D rendering](../packages/vello2d).
 - Example module guides: [HTTP](../packages/http/README.md), [key-value storage](../packages/kv/README.md), [BLAKE3](../packages/blake3/README.md), [Bevy](../packages/bevy3d/README.md).
 
 Working on rnrs itself: [development](development.md) and [releasing](releasing.md).

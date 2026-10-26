@@ -139,9 +139,9 @@ Keyboard, stylus, hover, wheel and gesture recognition are not provided.
 
 - Ownership is per `UITouch`: a touch is owned only if Rust accepts its down; others go to the next responder.
 - RN children of `<SurfaceView>` that do not handle a touch pass it up to the surface, which captures it for Rust. Put controls next to the surface, not inside it.
-- A parent `UIScrollView` that starts panning cancels the touches. Gesture Handler and Worklets interplay are untested.
+- A parent `UIScrollView` that starts panning cancels the touches. Use a single gesture owner: native surface touch and Gesture Handler coordination on the same gesture has not been validated.
+- A known iOS interaction issue: a React Native button may not respond to a second finger while another finger is held down. Its cause is unresolved.
 - Observed on iOS: after a detach or `close()` the view keeps showing its last presented frame; it is not cleared. After `close()` the view stays mounted on the closed key until React unmounts it.
-- Besides the simulator, touch has run on one iPhone 12 Pro (iOS 26.7.1, release build): drag, two pointers, and opt-out, detach, hide, lock, background, resize, remount, close and reload during a gesture.
 
 ### Touch input (browser)
 
