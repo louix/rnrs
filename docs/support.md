@@ -6,17 +6,17 @@ its Rust dependencies must also support those targets.
 | Platform | Integration |
 | --- | --- |
 | React Native | React Native 0.88.x with the New Architecture and Hermes. |
-| Android | Gradle builds and links the Rust code for the app's selected ABIs. |
+| Android | Gradle links prebuilt modules for the app's selected ABIs. |
 | iOS | CocoaPods autolinking for device and simulator builds. See [iOS integration](ios.md). |
 | Browser | WebAssembly, initialized with `initRnrs` on the main thread. See [setup](setup.md#web-vite). |
 | Expo | SDK 58 with prebuild and a development or release build. Expo Go cannot load custom native modules. |
 
-Use the pinned toolchain in [setup](setup.md). Browser bindings currently target browser
-apps, not Node.js, workers or WASI.
+Apps consuming prebuilts need no Rust toolchain. See [setup](setup.md). Browser bindings target
+browser apps, not Node.js, workers or WASI.
 
 ## Rendering and Worklets
 
-[Rendering surfaces](surface.md) are experimental, with Android, iOS and browser backends.
+[Rendering surfaces](surface.md) have Android, iOS and browser backends.
 See each renderer’s README for its requirements.
 
 On Android and iOS, modules can opt in to Worklets / Reanimated endpoints for allow-listed

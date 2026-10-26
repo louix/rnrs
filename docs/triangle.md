@@ -266,4 +266,4 @@ npx vite preview
 WebGPU requires a secure context (HTTPS or localhost), a browser with WebGPU enabled,
 and an available adapter. There is no automatic Canvas 2D fallback. A successful build
 or GPU submission does not prove visible output: open the page and check the triangle,
-then unmount and remount it. See [surface lifecycle and failure rules](surface.md#browser-presentation).
+then unmount and remount it. See [surface lifecycle and failure rules](surface.md#platform-behavior).

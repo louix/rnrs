@@ -15,7 +15,7 @@ Source builds and `rnrs build-native --target ios` use:
 | Simulator | x86_64 | `x86_64-apple-ios` |
 
 - Set `NODE_BINARY`, `PATH` or `RNRS_CARGO` in `ios/.xcode.env.local` if Xcode cannot find your tools.
-- Commit `rnrs-ios.Cargo.lock`; set `RNRS_LOCKED=1` for CI ([lock files](packaging.md#lock-files)).
+- For source builds, commit `rnrs-ios.Cargo.lock`; set `RNRS_LOCKED=1` for CI ([lock files](packaging.md#lock-files)).
 - Use CocoaPods without `use_frameworks!`. Swift Package Manager integration is not provided.
 - Configure signing and permissions in your app, including permissions needed by Rust dependencies
   ([HTTP example](../packages/http/README.md#ios)).

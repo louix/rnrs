@@ -11,7 +11,7 @@ module authors don't need this page; start with the [quickstart](quickstart.md).
 | `packages/cli`, `tools/rnrs-gen` | `@rnrs/cli`: the `rnrs` command and the generator it ships. |
 | `packages/surface` | `@rnrs/surface`: the `SurfaceView` component and the `rnrs-surface` crate. |
 | `rust/rnrs-*` | Framework crates. `rnrs-android` is the native backend for **both** Android and iOS. |
-| `packages/*` | Example and lab module packages ([examples](support.md#example-modules)). The root `package.json` lists them in `rustNativeApp.packages` for `generate` and `check`. |
+| `packages/*` | Example and lab module packages ([examples](README.md)). The root `package.json` lists them in `rustNativeApp.packages` for `generate` and `check`. |
 | `apps/lab` | Android conformance and lifecycle app (an npm workspace; `npm start` and `npm run android` forward to it). |
 | `apps/lab/web` | Browser harness for the same suites, with its own app dependency graph (without `kv`). |
 | `native/tests` | Host tests for the shared JSI C++ (`scripts/test-native.sh`). |
@@ -43,7 +43,7 @@ install the toolchain there. Shells are described in [setup](setup.md#nix-shells
 
 The Android lab app runs the ownership and lifecycle suites on launch. Install its release APK, then
 run `node scripts/rnrs-device-test.mjs`. Native test hooks are compiled only with `RNRS_TEST_HOOKS`
-([iOS](ios.md#build-integration)); the lab enables them in `apps/lab/android/gradle.properties`.
+([iOS](ios.md)); the lab enables them in `apps/lab/android/gradle.properties`.
 
 On disposable CI runners without a working Chromium sandbox, set `RNRS_WEB_NO_SANDBOX=1`
 for browser harnesses. Local runs keep the sandbox enabled by default.
