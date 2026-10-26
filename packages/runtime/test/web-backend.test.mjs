@@ -16,7 +16,14 @@ if (!process.execArgv.includes(FLAG)) {
   test('web backend entries (web-backend.ts under the Node type transform)', () => {
     const run = spawnSync(
       process.execPath,
-      [FLAG, '--no-warnings', '--test', '--test-reporter=tap', fileURLToPath(import.meta.url)],
+      [
+        FLAG,
+        '--expose-gc',
+        '--no-warnings',
+        '--test',
+        '--test-reporter=tap',
+        fileURLToPath(import.meta.url),
+      ],
       // Without NODE_TEST_CONTEXT the inner run is a top-level test run whose exit status
       // reflects its own failures (inherited, it reports to this runner and exits 0).
       { encoding: 'utf8', env: { ...process.env, NODE_TEST_CONTEXT: undefined } },
@@ -36,7 +43,7 @@ if (!process.execArgv.includes(FLAG)) {
         context,
       ),
   });
-  const { installWebBackend } = await import('../src/web-backend.ts');
+  const { installWebBackend, WEB_ABI } = await import('../src/web-backend.ts');
 
   // Signatures by method index: [slot, argument kinds (2 bits each), result kind].
   const install = ({ signatures = {}, legacy = false } = {}) => {
@@ -74,7 +81,12 @@ if (!process.execArgv.includes(FLAG)) {
     if (!legacy)
       RnrsWebAdapter.prototype.scalar_signature = (index) =>
         signatures[index] && Uint32Array.from(signatures[index]);
-    const backend = installWebBackend({ RnrsWebAdapter, rnrs_release_slot() {} });
+    const backend = installWebBackend({
+      RnrsWebAdapter,
+      rnrs_release_slot() {},
+      rnrs_web_abi: () => 1,
+      rnrs_web_modules: () => ['M'],
+    });
     const adapter = backend.install('M', 'h', 4, () => {});
     return {
       log,
@@ -201,5 +213,96 @@ if (!process.execArgv.includes(FLAG)) {
     }
     assert.deepEqual(at(16, 4), [1, 2, 3, 4]);
     t.dispose();
+  });
+
+  test('independent Wasm instances: routing, per-instance wrapper identity, ABI and duplicate refusal', async () => {
+    const instance = (modules, released) => {
+      class RnrsWebAdapter {
+        generation = 1;
+        constructor(name, _hash, _max, _notify, helpers) {
+          this.name = name;
+          this.helpers = helpers;
+        }
+        teardown() {}
+      }
+      for (const m of ['call', 'call0', 'call1', 'call2', 'call3', 'call4'])
+        RnrsWebAdapter.prototype[m] = () => {};
+      return {
+        RnrsWebAdapter,
+        rnrs_release_slot: (slot, version) => released.push([slot, version]),
+        rnrs_web_abi: () => WEB_ABI,
+        rnrs_web_modules: () => modules,
+      };
+    };
+    const releasedA = [],
+      releasedB = [];
+    const a = instance(['A1', 'A2'], releasedA);
+    const b = instance(['B'], releasedB);
+    const created = [];
+    for (const w of [a, b]) {
+      const Base = w.RnrsWebAdapter;
+      w.RnrsWebAdapter = class extends Base {
+        constructor(...args) {
+          super(...args);
+          created.push({ instance: w, adapter: this });
+        }
+      };
+    }
+    const backend = installWebBackend([a, b]);
+    backend.install('A2', 'h', 4, () => {});
+    backend.install('B', 'h', 4, () => {});
+    assert.equal(created[0].instance, a, 'A2 is constructed by instance a');
+    assert.equal(created[1].instance, b, 'B is constructed by instance b');
+    const ha = created[0].adapter.helpers,
+      hb = created[1].adapter.helpers;
+    assert.notEqual(ha, hb, 'helpers are per instance');
+    const wrapper = ha.wrap(3, 7);
+    assert.deepEqual(ha.unwrap(wrapper), [3, 7]);
+    assert.equal(hb.unwrap(wrapper), null, "another instance's wrapper unwraps to nothing");
+    assert.throws(
+      () => backend.install('C', 'h', 4, () => {}),
+      /module C is not linked into this app \(linked: A1, A2, B\)/,
+    );
+    // A collected wrapper is released by the instance that created it, and only by it.
+    (() => ha.wrap(9, 1))();
+    for (let i = 0; i < 20 && releasedA.length === 0; i++) {
+      globalThis.gc();
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    assert.deepEqual(releasedA, [[9, 1]]);
+    assert.deepEqual(releasedB, []);
+    backend.dispose();
+    assert.throws(
+      () => installWebBackend([a, instance(['A1'], [])]),
+      /module A1 is provided by two Wasm instances/,
+    );
+    assert.throws(
+      () => installWebBackend([{ ...a, rnrs_web_abi: () => WEB_ABI + 1 }]),
+      new RegExp(`built for web ABI ${WEB_ABI + 1}, this @rnrs/runtime needs ${WEB_ABI}`),
+    );
+    const { rnrs_web_abi: _, ...old } = a;
+    assert.throws(
+      () => installWebBackend(old),
+      /built for web ABI \(none: an older @rnrs\/runtime\)/,
+    );
+  });
+
+  test('initRnrs refuses a surface bootstrap when every module is prebuilt (no source bundle)', async () => {
+    const { initRnrs } = await import('../src/web.ts');
+    const prebuilt = {
+      default: async () => {},
+      rnrs_web_abi: () => WEB_ABI,
+      rnrs_web_modules: () => ['P'],
+      rnrs_release_slot() {},
+      RnrsWebAdapter: class {},
+    };
+    let bootstrapped = false;
+    await assert.rejects(
+      initRnrs({ instances: [prebuilt], source: null }, undefined, {
+        bootstrap: () => ((bootstrapped = true), { dispose() {} }),
+      }),
+      /a bootstrap \(surfaces\) needs the app source bundle/,
+    );
+    assert.equal(bootstrapped, false);
   });
 }

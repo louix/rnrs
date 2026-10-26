@@ -39,7 +39,7 @@ The same filter applies to `tracing` events and to bridged `log` records, by the
 
 ## Managed install
 
-Generated bundles call `rnrs_log::install_for_bundle(filter, privacy)` first in their startup function, before registering modules: `rnrs_bundle_init` on Android and iOS (called once per process, on the first module use, so it also spans React Native reloads), the Wasm `start` function on the web.
+Generated bundles call `rnrs_log::install_for_bundle(filter, privacy)` first in their startup function, before any module code runs. On Android and iOS that is the binary's init function, which the framework's module registry calls once per process after validating the module tables (on the first module use, so it also spans React Native reloads). On the web it is the Wasm `start` function. Prebuilt module binaries contain no logging configuration: managed logging covers the modules in the app's source bundle.
 
 `rnrs_log::install` is serialized: the first call decides, concurrent callers wait and receive the same status. In order, each slot only if free:
 

@@ -17,9 +17,27 @@ static HOSTS_FREED: AtomicU64 = AtomicU64::new(0);
 
 pub(crate) static MODULES: OnceLock<&'static [&'static ModuleDef]> = OnceLock::new();
 
-/// Registers the app's generated modules (called once by the bundle crate's start hook).
+/// Registers the instance's generated modules (called once by the crate's start hook).
 pub fn register(modules: &'static [&'static ModuleDef]) {
     let _ = MODULES.set(modules);
+}
+
+/// Version of the contract between this Wasm instance's exports and the JS backend
+/// (`packages/runtime/src/web-backend.ts`, `WEB_ABI`): the adapter class and its methods, the
+/// helper protocol, settle and admission codes. Checked before any adapter is constructed; any
+/// change to that contract bumps it on both sides.
+pub const RNRS_WEB_ABI: u32 = 1;
+
+#[wasm_bindgen]
+pub fn rnrs_web_abi() -> u32 {
+    RNRS_WEB_ABI
+}
+
+/// The spec module names this instance provides: a prebuilt module's own, or every module of
+/// the app's source bundle. The backend routes each module to the instance that provides it.
+#[wasm_bindgen]
+pub fn rnrs_web_modules() -> Array {
+    MODULES.get().copied().unwrap_or(&[]).iter().map(|d| JsValue::from_str(d.name)).collect()
 }
 
 
@@ -488,7 +506,7 @@ impl RnrsWebAdapter {
         let modules = MODULES.get().copied().unwrap_or(&[]);
         let def = modules.iter().find(|d| d.name == name).ok_or_else(|| {
             let known: Vec<_> = modules.iter().map(|d| d.name).collect();
-            JsValue::from(js_sys::Error::new(&format!("module {name} is not in this app's Wasm bundle (bundled: {})", known.join(", "))))
+            JsValue::from(js_sys::Error::new(&format!("module {name} is not in this Wasm instance (it provides: {})", known.join(", "))))
         })?;
         if def.hash != hash {
             return Err(js_sys::Error::new(&format!(

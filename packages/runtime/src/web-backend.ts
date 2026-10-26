@@ -1,5 +1,14 @@
 // Browser backend (framework, module-independent) over the wasm-bindgen exports of
 // rust/rnrs-web. Everything runs on the page's JS thread.
+//
+// An app's modules live in one or more Wasm instances: each prebuilt module package ships its
+// own, and the app's source bundle holds the modules it builds from source. Every instance has
+// its own memory, allocator, native-object slab and executor; this backend is the shared
+// runtime. Wrapper identity is per instance: each has its own WeakMap and FinalizationRegistry,
+// so another instance's wrapper unwraps to nothing (a TypeError in Rust) and is released only by
+// the instance that created it. Unlike native tables, an instance's start function (module
+// registration, logging) runs when it is initialized, before its ABI can be read; the Wasm
+// sandbox confines it to its own memory, and nothing else of it is used before the check.
 import {
   bindThis,
   conversionHelpers,
@@ -109,8 +118,18 @@ function scalarEntry(
   }
 }
 
-/** The wasm-bindgen module of the app's Wasm bundle (web/pkg/web_bundle.js). */
+/** Version of the contract between rnrs-web's exports and this backend (RNRS_WEB_ABI in
+ *  rust/rnrs-web): the adapter class and methods, the helper protocol, and the settle,
+ *  admission and byte codes. tools/rnrs-gen/test/web-abi.test.mjs pins both sides. */
+export const WEB_ABI = 1;
+
+/** The wasm-bindgen module of one Wasm instance: a prebuilt module package's
+ *  (rnrs/native/web/rnrs_<crate>.js) or the app's source bundle (.rnrs/web/pkg/rnrs_bundle.js). */
 export interface RnrsWasm {
+  /** The instance's web ABI (WEB_ABI); absent in instances built by an older @rnrs/runtime. */
+  rnrs_web_abi?(): number;
+  /** The spec module names the instance provides. */
+  rnrs_web_modules?(): string[];
   RnrsWebAdapter: new (
     name: string,
     hash: string,
@@ -196,12 +215,27 @@ let installing = false;
  * Bootstrap factories register rollback actions before acquiring fallible resources; on
  * successful return their disposer owns cleanup. A failed install publishes no backend. */
 export function installWebBackend(
-  wasm: RnrsWasm,
+  wasm: RnrsWasm | readonly RnrsWasm[],
   bootstrap?: WebBootstrapFactory,
 ): Backend & { dispose(): void } {
   if (installing) throw new Error('Web backend installation is already in progress');
   installing = true;
   try {
+    // Checked before anything of an instance is used: its ABI, then the modules it provides.
+    const instances = (Array.isArray(wasm) ? wasm : [wasm]) as readonly RnrsWasm[];
+    const owners = new Map<string, RnrsWasm>();
+    for (const instance of instances) {
+      const abi = typeof instance.rnrs_web_abi === 'function' ? instance.rnrs_web_abi() : undefined;
+      if (abi !== WEB_ABI)
+        throw new Error(
+          `@rnrs/runtime: a Wasm instance was built for web ABI ${abi ?? '(none: an older @rnrs/runtime)'}, this @rnrs/runtime needs ${WEB_ABI}. Rebuild or reinstall it with the installed @rnrs/runtime (rnrs build --target web).`,
+        );
+      for (const name of instance.rnrs_web_modules?.() ?? []) {
+        if (owners.has(name))
+          throw new Error(`@rnrs/runtime: module ${name} is provided by two Wasm instances`);
+        owners.set(name, instance);
+      }
+    }
     disposeInstalled?.();
     let extension: WebBootstrap | undefined;
     let stopped = false;
@@ -228,7 +262,8 @@ export function installWebBackend(
     };
     const rollback: (() => void)[] = [];
     try {
-      extension = bootstrap?.(wasm, (cleanup) => {
+      // Framework extensions (surfaces) live in the source bundle, the first instance.
+      extension = bootstrap?.(instances[0], (cleanup) => {
         rollback.push(cleanup);
       });
       if (bootstrap && (!extension || typeof extension.dispose !== 'function'))
@@ -252,35 +287,48 @@ export function installWebBackend(
       throw error;
     }
     try {
-      const handles = new WeakMap<object, [number, number]>();
-      const registry = new FinalizationRegistry<[number, number]>(([slot, version]) =>
-        wasm.rnrs_release_slot(slot, version),
-      );
       // Captured now: later patches of WeakMap.prototype cannot change wrapper resolution.
       const weakGet = WeakMap.prototype.get,
         weakSet = WeakMap.prototype.set,
         apply = Reflect.apply;
-      const helpers = Object.freeze({
-        ...conversionHelpers,
-        numbers: readNumbers,
-        wrap(slot: number, version: number): object {
-          const wrapper = Object.freeze(Object.create(null));
-          apply(weakSet, handles, [wrapper, [slot, version]]);
-          registry.register(wrapper, [slot, version]);
-          return wrapper;
-        },
-        unwrap(value: unknown): [number, number] | null {
-          return (
-            (typeof value === 'object' && value !== null && apply(weakGet, handles, [value])) ||
-            null
-          );
-        },
-      });
+      // One wrapper identity per instance: its slab entries, its releases.
+      const helpersOf = new Map<RnrsWasm, object>();
+      for (const instance of instances) {
+        const handles = new WeakMap<object, [number, number]>();
+        const registry = new FinalizationRegistry<[number, number]>(([slot, version]) =>
+          instance.rnrs_release_slot(slot, version),
+        );
+        helpersOf.set(
+          instance,
+          Object.freeze({
+            ...conversionHelpers,
+            numbers: readNumbers,
+            wrap(slot: number, version: number): object {
+              const wrapper = Object.freeze(Object.create(null));
+              apply(weakSet, handles, [wrapper, [slot, version]]);
+              registry.register(wrapper, [slot, version]);
+              return wrapper;
+            },
+            unwrap(value: unknown): [number, number] | null {
+              return (
+                (typeof value === 'object' && value !== null && apply(weakGet, handles, [value])) ||
+                null
+              );
+            },
+          }),
+        );
+      }
       const backend: Backend & { dispose(): void } = {
         dispose,
         platform: 'web',
         install(name: string, hash: string, maxInFlight: number, settle: SettleFn): NativeAdapter {
           if (stopped) throw new Error('Web backend is disposed');
+          const wasm = owners.get(name);
+          if (!wasm)
+            throw new Error(
+              `@rnrs/runtime: module ${name} is not linked into this app (linked: ${[...owners.keys()].join(', ') || 'none'})`,
+            );
+          const helpers = helpersOf.get(wasm)!;
           let scheduled = false;
           // Called by Rust with its host lock held: only schedule, never re-enter.
           const adapter = new wasm.RnrsWebAdapter(

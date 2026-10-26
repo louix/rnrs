@@ -28,10 +28,9 @@
 
 #include "RnrsBindings.h"
 #include "RnrsPlatform.h"
+#include "RnrsRegistry.h"
 
 using namespace facebook;
-
-extern "C" bool rnrs_set_app_data_dir(const uint8_t* ptr, size_t len);  // rust/rnrs-android
 
 @interface RnrsRuntimeModule () <NativeRnrsRuntimeSpec, RCTTurboModuleWithJSIBindings, RCTInvalidating>
 @end
@@ -72,9 +71,9 @@ RCT_EXPORT_MODULE(RnrsRuntime)
   }
   NSString *dir = [base stringByAppendingPathComponent:@"rnrs"];
   const char *path = dir.fileSystemRepresentation;
-  if (!rnrs_set_app_data_dir(reinterpret_cast<const uint8_t *>(path), strlen(path))) {
-    rnrs::platform::log(
-        rnrs::platform::LogLevel::Error, "application data directory not set (already set to another path?): %s", path);
+  // Every linked module binary gets it; refusals are logged per module by the registry.
+  if (!rnrs::setAppDataDir(path)) {
+    rnrs::platform::log(rnrs::platform::LogLevel::Error, "application data directory not set in every module: %s", path);
   }
 }
 

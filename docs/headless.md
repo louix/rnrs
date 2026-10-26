@@ -129,13 +129,20 @@ mod tests {
   state that changes in place, the [`counter` example package](../packages/counter) uses a `Mutex`.
 - **Errors.** `Err(String)` throws in JS. Panics abort the process.
 
-Run the Rust test, check the package and create the archive:
+Run the Rust test, check the package, build the prebuilt binaries for the targets it declares,
+and create the archive:
 
 ```sh
 npx rnrs test
 npx rnrs check
+npx rnrs build-native --target android   # all four Android ABIs; needs the Android NDK
+npx rnrs build-native --target ios       # on macOS
+npx rnrs build-native --target web       # needs the pinned wasm-bindgen CLI
 npm pack                # → demo-counter-0.1.0.tgz
 ```
+
+Apps that install the archive then need no Rust ([prebuilt binaries](packaging.md#prebuilt-binaries)).
+`npm pack` warns about declared targets without binaries; `npm publish` refuses them.
 
 ## Use it from JS
 

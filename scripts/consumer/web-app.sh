@@ -39,6 +39,8 @@ for m in $MODULES; do tarballs+=("$PACK/rnrs-$m-0.2.0.tgz"); done
 (cd "$APP" && npm install --no-audit --no-fund "${tarballs[@]}")
 # Optional Rust logging configuration (RNRS_APP_LOGGING, JSON for rustNativeApp.logging).
 if [ -n "${RNRS_APP_LOGGING:-}" ]; then node "$ROOT/scripts/consumer/app-logging.mjs" "$APP" "$RNRS_APP_LOGGING"; fi
+# Every module compiled from source (rustNativeApp.sourceBuild): this script checks source bundles.
+node "$ROOT/scripts/consumer/source-build.mjs" "$APP" "*"
 
 export RUSTUP_HOME="${RUSTUP_HOME:-$ROOT/.generated/rustup}"
 export CARGO_HOME="${CARGO_HOME:-$ROOT/.generated/cargo}"

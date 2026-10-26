@@ -96,7 +96,11 @@ function manifestFields(n, targets) {
       },
       './package.json': './package.json',
     },
-    scripts: { prepack: 'rnrs generate . && rnrs pack-js .', test: 'rnrs test .' },
+    scripts: {
+      prepack: 'rnrs generate . && rnrs pack-js .',
+      prepublishOnly: 'rnrs check-native .',
+      test: 'rnrs test .',
+    },
     // Apps provide the runtime; the author develops against it and runs the rnrs CLI.
     peerDependencies: { '@rnrs/runtime': runtimeVersion() },
     devDependencies: { '@rnrs/cli': runtimeVersion(), '@rnrs/runtime': runtimeVersion() },

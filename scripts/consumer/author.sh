@@ -65,6 +65,7 @@ printf '{"name": "author-app", "version": "0.0.0", "private": true, "type": "mod
 printf '<!doctype html>\n<meta charset="utf-8">\n<script type="module" src="./main.ts"></script>\n' > index.html
 cp "$ROOT/fixtures/author/smoke.ts" main.ts
 npm install --no-audit --no-fund "$PACK/rnrs-cli-0.2.0.tgz" "$PACK/rnrs-runtime-0.2.0.tgz" "$tarball"
+node "$ROOT/scripts/consumer/source-build.mjs" . "*"  # the author's package ships no prebuilt binary
 npx rnrs build --target web --app .
 npx vite build --logLevel warn
 RNRS_WEB_ROOT="$APP/dist" node "$ROOT/scripts/web-test.mjs" $OUT_JSON

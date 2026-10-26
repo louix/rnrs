@@ -21,3 +21,9 @@ clang++ -std=c++20 -g -O1 -fsanitize=thread -Wall -Wextra -I "$cpp" \
 clang++ -std=c++20 -g -O1 -fsanitize=thread -Wall -Wextra -I "$cpp" \
   native/tests/rnrs_delivery_test.cpp -o "$out/rnrs_delivery_test"
 "$out/rnrs_delivery_test"
+# Module registry (RnrsRegistry.cpp) with fake module tables (native/tests/registry/): refusal
+# of other ABIs and sizes before use, duplicates, init order, app data dir broadcast. ASan + UBSan.
+clang++ -std=c++20 -g -O1 -fsanitize=address,undefined -fno-sanitize-recover=all -Wall -Wextra -I "$cpp" \
+  -I native/tests/registry native/tests/rnrs_registry_test.cpp "$cpp/RnrsRegistry.cpp" "$cpp/RnrsPlatform.cpp" \
+  -o "$out/rnrs_registry_test"
+"$out/rnrs_registry_test"

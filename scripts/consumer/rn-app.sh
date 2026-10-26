@@ -68,6 +68,11 @@ while IFS= read -r t; do [ -n "$t" ] && tarballs+=("$t"); done <<< "${EXTRA_TARB
 (cd "$APP" && npm install --no-audit --no-fund "${tarballs[@]}")
 # Optional Rust logging configuration (RNRS_APP_LOGGING, JSON for rustNativeApp.logging).
 if [ -n "${RNRS_APP_LOGGING:-}" ]; then node "$ROOT/scripts/consumer/app-logging.mjs" "$APP" "$RNRS_APP_LOGGING"; fi
+# Modules compiled from source, rustNativeApp.sourceBuild (RNRS_SOURCE_BUILD: "*", the default,
+# or a comma-separated list of package names). This script builds and checks source bundles
+# (the app's Cargo lock below), so it needs at least one.
+node "$ROOT/scripts/consumer/source-build.mjs" "$APP" "${RNRS_SOURCE_BUILD-*}"
+
 
 # Rust toolchain for the framework's Gradle task (cargo, the Android target).
 export RUSTUP_HOME="${RUSTUP_HOME:-$ROOT/.generated/rustup}"
@@ -100,14 +105,14 @@ mkdir -p "$MOVED"
 (cd "$APP" && tar --exclude=./.rnrs --exclude=./android/app/build --exclude=./android/build --exclude=./android/.gradle \
   --exclude=./node_modules/@rnrs/runtime/android/build --exclude=./node_modules/@rnrs/runtime/android/.cxx -cf - .) | (cd "$MOVED" && tar -xf -)
 (cd "$MOVED/android" && ./gradlew --no-daemon --init-script "$ROOT/scripts/consumer/nix-sdk.init.gradle" \
-  ":rnrs_runtime:configureCMakeRelWithDebInfo[arm64-v8a]" -x :rnrs_runtime:rnrsBuildRustBundle -PreactNativeArchitectures=arm64-v8a) 2>&1 | tee "$C/$NAME-cmake-without-bundle.log" | grep -i "rnrs:" || true
-grep -q "is not built yet" "$C/$NAME-cmake-without-bundle.log"
+  ":rnrs_runtime:configureCMakeRelWithDebInfo[arm64-v8a]" -x :rnrs_runtime:rnrsLinkModules -PreactNativeArchitectures=arm64-v8a) 2>&1 | tee "$C/$NAME-cmake-without-bundle.log" | grep -i "rnrs:" || true
+grep -q "is not generated yet" "$C/$NAME-cmake-without-bundle.log"
 grep -q "BUILD SUCCESSFUL" "$C/$NAME-cmake-without-bundle.log"
 (cd "$MOVED/android" && ./gradlew --no-daemon --init-script "$ROOT/scripts/consumer/nix-sdk.init.gradle" assembleRelease \
   -PreactNativeArchitectures=arm64-v8a -Prnrs.locked=true)
 cmp "$APP/rnrs-android.Cargo.lock" "$MOVED/rnrs-android.Cargo.lock"
 rm "$MOVED/rnrs-android.Cargo.lock"
-if (cd "$MOVED/android" && ./gradlew --no-daemon -q --init-script "$ROOT/scripts/consumer/nix-sdk.init.gradle" :rnrs_runtime:rnrsBuildRustBundle \
+if (cd "$MOVED/android" && ./gradlew --no-daemon -q --init-script "$ROOT/scripts/consumer/nix-sdk.init.gradle" :rnrs_runtime:rnrsLinkModules \
   -PreactNativeArchitectures=arm64-v8a -Prnrs.locked=true > "$C/$NAME-locked-missing.log" 2>&1); then
   echo "-Prnrs.locked=true accepted a missing lock" >&2; exit 1
 fi

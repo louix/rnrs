@@ -65,6 +65,7 @@ web)
   cp "$FIX/web-main.ts" main.ts
   cp "$FIX/smoke.ts" smoke.ts
   npm install --no-audit --no-fund "$PACK/rnrs-cli-0.2.0.tgz" "$PACK/rnrs-runtime-0.2.0.tgz" "$C/demo-crc-0.1.0.tgz"
+  node "$ROOT/scripts/consumer/source-build.mjs" . "*"  # the fresh package ships no prebuilt binary
   npx rnrs build --target web --app .
   npx vite build --logLevel warn
   RNRS_WEB_ROOT="$APP/dist" node "$ROOT/scripts/web-test.mjs" $OUT_JSON
@@ -77,7 +78,7 @@ android)
   NODE_BINARY="$NODE_DIR/node" FIXTURE=fresh-crc MODULES="" NAME=fresh-rn EXTRA_TARBALLS="$C/demo-crc-0.1.0.tgz" \
     bash "$ROOT/scripts/consumer/rn-app.sh"
   grep -q "cli/run.mjs build --target android" "$NODE_DIR/used" || { echo "the Gradle task did not run NODE_BINARY" >&2; exit 1; }
-  echo "rnrsBuildRustBundle ran NODE_BINARY ($NODE_DIR/node)"
+  echo "rnrsLinkModules ran NODE_BINARY ($NODE_DIR/node)"
   ;;
 *) echo "unknown mode $MODE" >&2; exit 2 ;;
 esac

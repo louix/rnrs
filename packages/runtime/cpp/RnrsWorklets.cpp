@@ -5,8 +5,9 @@
 //   module and its objects are Send + Sync (rnrs-core's NativeObject bound); generated glue
 //   for sync methods only reads the module instance.
 // - R4: sync only. Async methods are refused when the endpoint is created; nothing settles.
-// - R5: a boxed handle owns its own NativeBox (rnrs_native_share), released by its destructor
-//   on whatever thread finalizes the last JS object holding it, with no JSI.
+// - R5: a boxed handle owns its own NativeBox (the table's nativeShare), released through the
+//   module's table by its destructor on whatever thread finalizes the last JS object holding
+//   it, with no JSI.
 // - Retention: every endpoint and box holds the whole Adapter (`owner`), so the Rust adapter
 //   and its module instance stay allocated after teardown until the last endpoint or box is
 //   finalized, which can be the UI runtime's GC or destruction, on the UI or a finalizer
@@ -82,7 +83,7 @@ class WorkletBox : public jsi::HostObject, public std::enable_shared_from_this<W
   ~WorkletBox() override {
     gBoxesReleased++;
     if (platform::currentThread() != creator) gBoxesReleasedOffCreator++;
-    rnrs_native_release(native);  // thread-safe; no JSI
+    ep->adapter.table->nativeRelease(native);  // thread-safe; no JSI; the creating binary
   }
   jsi::Value get(jsi::Runtime& rt, const jsi::PropNameID& name) override;
   std::vector<jsi::PropNameID> getPropertyNames(jsi::Runtime& rt) override;
@@ -139,16 +140,16 @@ const JsiVTable kWorkletVTable = {
     [](void* raw, uint32_t v) -> uint32_t {
       try {
         auto& c = W(raw);
-        if (v == c.receiver) return 7;  // its slot holds an undefined placeholder
+        if (v == c.receiver) return abi::kKindObject;  // its slot holds an undefined placeholder
         auto& x = c.at(v);
-        if (x.isUndefined()) return 0;
-        if (x.isNull()) return 1;
-        if (x.isBool()) return 2;
-        if (x.isNumber()) return 3;
-        if (isBox(c.rt, x)) return 7;
-        return 8;  // strings, records, arrays, functions: unsupported here
+        if (x.isUndefined()) return abi::kKindUndefined;
+        if (x.isNull()) return abi::kKindNull;
+        if (x.isBool()) return abi::kKindBoolean;
+        if (x.isNumber()) return abi::kKindNumber;
+        if (isBox(c.rt, x)) return abi::kKindObject;
+        return abi::kKindOther;  // strings, records, arrays, functions: unsupported here
       } catch (...) {
-        return 8;
+        return abi::kKindOther;
       }
     },
     [](void* raw, uint32_t v) -> double { auto& x = W(raw).at(v); return x.isNumber() ? x.getNumber() : 0; },
@@ -177,8 +178,8 @@ const JsiVTable kWorkletVTable = {
         auto& x = c.at(v);
         if (!isBox(c.rt, x)) return 1;
         auto box = x.getObject(c.rt).getHostObject<WorkletBox>(c.rt);
-        if (box->ep->adapter.module != c.ep.adapter.module) return 1;
-        if (box->ep->adapter.generation != c.ep.adapter.generation || !c.ep.adapter.alive->load()) return 2;
+        if (box->ep->adapter.table != c.ep.adapter.table) return abi::kUnwrapNotNative;  // another module's object
+        if (box->ep->adapter.generation != c.ep.adapter.generation || !c.ep.adapter.alive->load()) return abi::kUnwrapClosed;
         *out = box->native;  // the box is rooted by its JS object in this call's slots
         return 0;
       } catch (...) {
@@ -188,7 +189,7 @@ const JsiVTable kWorkletVTable = {
     [](void* raw, uint32_t, uint8_t* (*)(void*, size_t), void*) -> uint32_t { W(raw).refused = true; return 1; },
     // newBytes: the storage is ours now; release it and refuse.
     [](void* raw, uint8_t* ptr, size_t len, size_t cap, uint32_t* out) {
-      rnrs_bytes_free(ptr, len, cap);
+      W(raw).ep.adapter.table->bytesFree(ptr, len, cap);
       *out = W(raw).refuse();
     },
     [](void* raw, uint32_t, uint8_t* (*)(void*, size_t), void*) -> size_t { W(raw).refused = true; return 0; },
@@ -225,7 +226,7 @@ jsi::Value invoke(jsi::Runtime& rt, const EndpointState& ep, const Method& m, co
   uint32_t out = 0, kind = 0;
   char error[256];
   error[0] = 0;
-  uint32_t status = rnrs_adapter_call(ep.adapter.rust, &kWorkletVTable, &c, c.epoch, m.index, self, args, n, &out, &kind, error, sizeof error);
+  uint32_t status = ep.adapter.table->adapterCall(ep.adapter.rust, &kWorkletVTable, &c, c.epoch, m.index, self, args, n, &out, &kind, error, sizeof error);
 #ifdef RNRS_TEST_HOOKS
   if (offCreator) {
     auto ns = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - started).count());
@@ -303,7 +304,7 @@ jsi::Object createWorkletEndpoint(jsi::Runtime& rt, WorkletAdapterRef adapter, c
     auto name = v.getString(rt).utf8(rt);
     uint32_t index = 0;
     bool isAsync = false;
-    if (!rnrs_adapter_method_find(ep->adapter.rust, name.data(), name.size(), &index, &isAsync))
+    if (!ep->adapter.table->adapterMethodFind(ep->adapter.rust, name.data(), name.size(), &index, &isAsync))
       throwCoded(rt, "TypeError", "workletEndpoint: " + ep->adapter.name + " has no method " + name, "ERR_RNRS_WORKLET_SHAPE");
     if (isAsync)
       throwCoded(rt, "TypeError", "workletEndpoint: " + name + " is async; worklet endpoints are sync-only (no Promises off the React Native runtime)", "ERR_RNRS_WORKLET_ASYNC");
@@ -325,18 +326,19 @@ jsi::Object createWorkletEndpoint(jsi::Runtime& rt, WorkletAdapterRef adapter, c
 
 jsi::Object createWorkletBox(jsi::Runtime& rt, const WorkletAdapterRef& adapter, const jsi::Value& endpoint, void* shared) {
   struct Owned {
+    const RnrsModuleV1* table;
     void* p;
     ~Owned() {
-      if (p) rnrs_native_release(p);
+      if (p) table->nativeRelease(p);
     }
-  } owned{shared};
+  } owned{adapter.table, shared};
   if (!endpoint.isObject() || !endpoint.getObject(rt).isHostObject<WorkletEndpoint>(rt))
     throwCoded(rt, "TypeError", "workletBox: expected a worklet endpoint of this module", "ERR_RNRS_WORKLET_SHAPE");
   auto ep = endpoint.getObject(rt).getHostObject<WorkletEndpoint>(rt)->ep;
-  if (ep->adapter.module != adapter.module || ep->adapter.generation != adapter.generation)
+  if (ep->adapter.table != adapter.table || ep->adapter.generation != adapter.generation)
     throwCoded(rt, "TypeError", "workletBox: the endpoint belongs to another module or adapter generation", "ERR_RNRS_WORKLET_SHAPE");
   size_t len = 0;
-  const char* specName = rnrs_native_spec_name(shared, &len);
+  const char* specName = adapter.table->nativeSpecName(shared, &len);
   std::string spec(specName, len);
   bool any = false;
   for (const auto& m : ep->methods) any = any || m.spec == spec;

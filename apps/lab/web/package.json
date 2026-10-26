@@ -12,5 +12,8 @@
     "@rnrs/labs-meter": "file:../../../packages/meter",
     "@rnrs/labs-values": "file:../../../packages/values",
     "@rnrs/runtime": "file:../../../packages/runtime"
+  },
+  "rustNativeApp": {
+    "sourceBuild": "*"
   }
 }

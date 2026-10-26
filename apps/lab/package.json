@@ -26,5 +26,8 @@
     "@rnrs/runtime": "file:../../packages/runtime",
     "react": "19.3.0",
     "react-native": "0.88.0"
+  },
+  "rustNativeApp": {
+    "sourceBuild": "*"
   }
 }

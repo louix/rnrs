@@ -95,10 +95,14 @@ test('generated bundles: nothing for default off; rnrs-log, build check and inst
         /let filter = "info,sled=warn";\n\s+if let Err\(error\) = filter.parse::<tracing_subscriber::filter::Targets>\(\)/,
       );
       const lib = readFileSync(path.join(crateDir, 'src/lib.rs'), 'utf8');
-      // Installed before the modules are registered, so before any module code runs.
+      // Installed before any module code runs: in the web start function before the modules
+      // are registered; natively in the binary's init, which the framework registry runs
+      // before any other entry of the binary's tables.
       assert.match(
         lib,
-        /rnrs_log::install_for_bundle\("info,sled=warn", rnrs_log::Privacy::Public\);\n\s+rnrs_(android|web)::register\(MODULES\);/,
+        target === 'web'
+          ? /rnrs_log::install_for_bundle\("info,sled=warn", rnrs_log::Privacy::Public\);\n\s+rnrs_web::register\(MODULES\);/
+          : /extern "C" fn rnrs_binary_init\(\) \{\n\s+static ONCE: std::sync::Once = std::sync::Once::new\(\);\n\s+ONCE.call_once\(\|\| \{\n\s+rnrs_log::install_for_bundle\("info,sled=warn", rnrs_log::Privacy::Public\);\n\s+\}\);\n\}/,
       );
     });
     withApp({ mode: 'external' }, (dir) => {

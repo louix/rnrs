@@ -1,7 +1,8 @@
 // @rnrs/runtime Android library: lifecycle TurboModule (codegen spec in ../src/specs), the
-// generic JSI adapter (librnrs.so), and the app's generated Rust bundle. Applications add
-// nothing: autolinking includes this project, and the Rust bundle is generated from the app's
-// npm dependencies by the rnrsBuildRustBundle task below.
+// generic JSI adapter (librnrs.so), and the app's Rust modules. Applications add nothing:
+// autolinking includes this project, and the rnrsLinkModules task below links the modules found
+// in the app's npm dependencies: their prebuilt binaries, or (only for modules the app lists in
+// rustNativeApp.sourceBuild) a source bundle built with cargo.
 apply plugin: "com.android.library"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
@@ -31,7 +32,7 @@ android {
     minSdkVersion minSdk
     externalNativeBuild {
       cmake {
-        arguments "-DANDROID_STL=c++_shared", "-DRNRS_BUNDLE_TARGET_DIR=${new File(rnrsOut, "target").absolutePath}",
+        arguments "-DANDROID_STL=c++_shared", "-DRNRS_LINK_DIR=${rnrsOut.absolutePath}",
             "-DRNRS_TEST_HOOKS=${testHooks ? "ON" : "OFF"}", "-DRNRS_DIAGNOSTICS=${diagnostics ? "ON" : "OFF"}"
         abiFilters(*architectures)
       }
@@ -57,14 +58,18 @@ dependencies {
 def triples = ["arm64-v8a": "aarch64-linux-android", "armeabi-v7a": "armv7-linux-androideabi", "x86": "i686-linux-android", "x86_64": "x86_64-linux-android"]
 def clangPrefix = ["arm64-v8a": "aarch64-linux-android", "armeabi-v7a": "armv7a-linux-androideabi", "x86": "i686-linux-android", "x86_64": "x86_64-linux-android"]
 
-// Generates the app's Rust bundle crate from its dependency graph and builds it per ABI.
-// Requires node, cargo and the Rust Android targets (rustup target add ...) on PATH; set
-// RNRS_CARGO to use another cargo, and -Prnrs.node=/path/to/node or NODE_BINARY another node. Always runs: cargo itself decides what is up to date.
-// Uses the app's rnrs-android.Cargo.lock (created on the first build if absent). CI:
-// -Prnrs.locked=true (or RNRS_LOCKED=1) fails if that lock is missing or stale.
-def rnrsBuildRustBundle = tasks.register("rnrsBuildRustBundle", Exec) {
+// Checks the prebuilt binaries of the app's modules (from its dependency graph) and writes the
+// module registry and archive list for CMake; needs only node (-Prnrs.node=/path/to/node or
+// NODE_BINARY selects another). Modules listed in the app's rustNativeApp.sourceBuild are built
+// from source into one bundle per ABI, which also needs cargo and the Rust Android targets
+// (rustup target add ...; RNRS_CARGO selects another cargo) and uses the app's
+// rnrs-android.Cargo.lock (created on the first build if absent; CI: -Prnrs.locked=true or
+// RNRS_LOCKED=1 fails if it is missing or stale). Without such modules cargo never runs.
+// Always runs (conservative: the selection lives in package.json and node_modules): the node
+// step rewrites its outputs only when they change, and cargo decides what is up to date.
+def rnrsLinkModules = tasks.register("rnrsLinkModules", Exec) {
   group = "rnrs"
-  description = "Generate and build the app's Rust module bundle"
+  description = "Link the app's Rust modules (prebuilt binaries; source builds where selected)"
   workingDir appRoot
   if (diagnostics) environment "RNRS_BUNDLE_FEATURES", "rnrs-android/diagnostics"
   doFirst {
@@ -91,12 +96,13 @@ def rnrsBuildRustBundle = tasks.register("rnrsBuildRustBundle", Exec) {
       throw new GradleException("rnrs: node executable '${node}' (from -Prnrs.node or NODE_BINARY) does not exist or is not executable")
   }
   commandLine([node, new File(projectDir, "../cli/run.mjs").absolutePath, "build", "--target", "android",
-      "--app", appRoot.absolutePath, "--out", rnrsOut.absolutePath, "--abi", architectures.join(",")] + locked)
+      "--app", appRoot.absolutePath, "--out", rnrsOut.absolutePath, "--abi", architectures.join(","),
+      "--min-sdk", minSdk.toString()] + locked)
 }
-preBuild.dependsOn rnrsBuildRustBundle
+preBuild.dependsOn rnrsLinkModules
 // CMake configure/build tasks are not necessarily ordered after preBuild; make
-// the bundle a direct prerequisite. (An IDE sync can configure CMake without this task; the
-// CMake script then warns instead of failing, and the first Gradle build builds the bundle.)
+// the link step a direct prerequisite. (An IDE sync can configure CMake without this task; the
+// CMake script then warns instead of failing, and the first Gradle build runs the task.)
 tasks.configureEach { task ->
-  if (task.name.startsWith("configureCMake") || task.name.startsWith("buildCMake")) task.dependsOn rnrsBuildRustBundle
+  if (task.name.startsWith("configureCMake") || task.name.startsWith("buildCMake")) task.dependsOn rnrsLinkModules
 }

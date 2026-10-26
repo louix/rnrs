@@ -629,13 +629,18 @@ impl<'a> Call<'a> {
     }
 }
 
+/// Admission failure codes shared with the JS runtime (`AdmitFailure`).
+pub const ADMIT_CLOSED: f64 = -1.0;
+pub const ADMIT_OVERLOADED: f64 = -2.0;
+pub const ADMIT_SATURATED: f64 = -3.0;
+
 /// `{code, message}` with the Rust error text: -1 closed, -2 module overloaded, -3 executor
 /// budget full (the message carries the budget snapshot taken at refusal).
 pub fn admit_failure(env: &mut dyn Env, error: AdmitError) -> Result<Val, BindError> {
     let code = match error {
-        AdmitError::Closed => -1.0,
-        AdmitError::Overloaded => -2.0,
-        AdmitError::Saturated(_) => -3.0,
+        AdmitError::Closed => ADMIT_CLOSED,
+        AdmitError::Overloaded => ADMIT_OVERLOADED,
+        AdmitError::Saturated(_) => ADMIT_SATURATED,
     };
     let object = env.object();
     let code = env.number(code);

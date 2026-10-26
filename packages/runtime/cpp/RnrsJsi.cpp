@@ -17,9 +17,16 @@
 //   or dispose() releases it (thread-safe). In-flight operations hold their own owners.
 // - Teardown (lifecycle scope invalidation, the explicit test hook, a refused registration,
 //   or the destructor fallback) is idempotent and never blocks.
+// - Modules are reached only through their binary's table (RnrsAbi.h). Every pointer a module
+//   hands out (adapter, NativeBox, ArrayBuffer storage) is kept with that table and released
+//   through it, so it returns to the allocator and code that created it, even in a finalizer
+//   after the adapter is gone. Identity is (table, serial): the serial is process-unique across
+//   all binaries (each binary numbers its own Rust generations), so wrappers, settlements and
+//   worklet boxes of one module can never be taken for another's.
 #include "RnrsJsi.h"
 #include "RnrsAbi.h"
 #include "RnrsDelivery.h"
+#include "RnrsRegistry.h"
 #include "RnrsRuntimeIdentityJsi.h"
 #include "RnrsWorklets.h"
 #include "Utf8Encoder.h"
@@ -36,8 +43,10 @@ using namespace facebook;
 
 namespace rnrs {
 namespace {
-constexpr uint32_t kTeardownExplicit = 0, kTeardownLifecycle = 1, kTeardownDestructor = 2, kTeardownRefused = 3;
-constexpr uint32_t kCallOk = 0, kCallError = 1, kCallThrown = 2;
+using namespace abi;
+static_assert(kDeliveryResultQueued == kDeliveryQueued && kDeliveryResultRunning == kDeliveryRunning &&
+                  kDeliveryResultDone == kDeliveryDone && kDeliveryResultDropped == kDeliveryDropped,
+              "RnrsDelivery.h values are the ABI's delivery results");
 constexpr double kMaxSafeInteger = 9007199254740991.0;
 
 // Diagnostics: which thread runs NativeState finalizers relative to the JS thread.
@@ -59,23 +68,28 @@ std::atomic<uint64_t> gDiagContexts{0}, gDiagHelperLookups{0}, gDiagHelperUses{0
 // collected or the runtime is destroyed, possibly off the JS thread; the release is a
 // thread-safe Rust drop. JS may read and write the bytes; Rust keeps no access to them.
 struct RustBytes : jsi::MutableBuffer {
+  const RnrsModuleV1* table;  // the binary that allocated the storage
   uint8_t* ptr;
   size_t len, cap;
   platform::ThreadId jsThread = platform::currentThread();
-  RustBytes(uint8_t* p, size_t l, size_t c) : ptr(p), len(l), cap(c) {}
+  RustBytes(const RnrsModuleV1* t, uint8_t* p, size_t l, size_t c) : table(t), ptr(p), len(l), cap(c) {}
   ~RustBytes() override {
     if (platform::currentThread() != jsThread) gBytesFinalizedOffJsThread++;
-    rnrs_bytes_free(ptr, len, cap);
+    table->bytesFree(ptr, len, cap);
   }
   size_t size() const override { return len; }
   uint8_t* data() override { return ptr; }
 };
 std::atomic<uint32_t> gEpoch{1};
+// Adapter serials: process-unique across every module binary (exposed to JS as `generation`).
+std::atomic<uint64_t> gNextSerial{1};
 
 struct Adapter {
+  const RnrsModuleV1* table = nullptr;  // the module's binary; static for the process
   RnrsAdapter* rust = nullptr;
-  uint32_t module = 0;  // bundle index: wrappers of other modules are a type mismatch
-  uint64_t generation = 0;
+  // Process-unique serial of this adapter (JS `generation`): wrappers of other modules or
+  // other adapters of this module are a mismatch.
+  uint64_t generation = gNextSerial.fetch_add(1);
   std::string name;
   std::vector<RnrsScalarBinding> scalars;
   std::shared_ptr<RuntimeScope> scope;
@@ -94,30 +108,31 @@ struct Adapter {
   // Any thread; no JSI.
   bool teardown(uint32_t reason) {
     if (!alive.exchange(false)) return false;
-    rnrs_adapter_teardown(rust, reason);
+    table->adapterTeardown(rust, reason);
     return true;
   }
   ~Adapter() {
     noteAdapterDestroyed(*scope);
     if (rust) {
       teardown(kTeardownDestructor);  // fallback only: normally already torn down
-      rnrs_adapter_free(rust);
+      table->adapterFree(rust);
     }
   }
   void drain(jsi::Runtime& rt);
 };
 
-// A wrapper's ownership of one Rust NativeBox.
+// A wrapper's ownership of one Rust NativeBox, released through the table of the binary that
+// created it (never through an adapter, which may be freed before this finalizer runs).
 struct HandleState : jsi::NativeState {
   void* native;
-  uint32_t module;
-  uint64_t generation;
+  const RnrsModuleV1* table;
+  uint64_t generation;  // the creating adapter's serial
   platform::ThreadId jsThread = platform::currentThread();  // constructed on the JS thread
-  HandleState(void* n, uint32_t m, uint64_t g) : native(n), module(m), generation(g) {}
+  HandleState(void* n, const RnrsModuleV1* t, uint64_t g) : native(n), table(t), generation(g) {}
   ~HandleState() override {
     gFinalizers++;
     if (platform::currentThread() != jsThread) gFinalizersOffJsThread++;
-    if (native) rnrs_native_release(native);  // thread-safe
+    if (native) table->nativeRelease(native);  // thread-safe
   }
 };
 
@@ -241,21 +256,21 @@ const JsiVTable kVTable = {
      try {
       auto& c = C(raw);
       auto& x = c.at(v);
-      if (x.isUndefined()) return 0;
-      if (x.isNull()) return 1;
-      if (x.isBool()) return 2;
-      if (x.isNumber()) return 3;
-      if (x.isString()) return 4;
+      if (x.isUndefined()) return kKindUndefined;
+      if (x.isNull()) return kKindNull;
+      if (x.isBool()) return kKindBoolean;
+      if (x.isNumber()) return kKindNumber;
+      if (x.isString()) return kKindString;
       if (x.isObject()) {
         auto o = x.getObject(c.rt);
-        if (o.isArray(c.rt)) return 5;
-        if (o.isFunction(c.rt)) return 6;
+        if (o.isArray(c.rt)) return kKindArray;
+        if (o.isFunction(c.rt)) return kKindFunction;
         // Array.isArray semantics (proxies of arrays are arrays); a throwing check (a revoked
         // proxy) reads as an unsupported value.
         try {
-          if (c.helper(c.isArray, "isArray").call(c.rt, jsi::Value(c.rt, x)).getBool()) return 5;
+          if (c.helper(c.isArray, "isArray").call(c.rt, jsi::Value(c.rt, x)).getBool()) return kKindArray;
         } catch (const std::exception&) {
-          return 8;
+          return kKindOther;
         }
         return 7;
       }
@@ -335,7 +350,7 @@ const JsiVTable kVTable = {
       // Once HandleState exists it owns the box, so no failure may report "not adopted".
       return noUnwind("wrapNative", [&] {
         jsi::Object wrapper(c.rt);
-        wrapper.setNativeState(c.rt, std::make_shared<HandleState>(native, c.adapter.module, c.adapter.generation));
+        wrapper.setNativeState(c.rt, std::make_shared<HandleState>(native, c.adapter.table, c.adapter.generation));
         *out = c.push(std::move(wrapper));
         return true;
       });
@@ -348,9 +363,9 @@ const JsiVTable kVTable = {
       auto o = x.getObject(c.rt);
       if (!o.hasNativeState<HandleState>(c.rt)) return 1;
       auto state = o.getNativeState<HandleState>(c.rt);
-      if (state->module != c.adapter.module) return 1;
-      if (state->generation != c.adapter.generation || !c.adapter.alive.load()) return 2;
-      if (!state->native) return 3;
+      if (state->table != c.adapter.table) return kUnwrapNotNative;  // another module's object
+      if (state->generation != c.adapter.generation || !c.adapter.alive.load()) return kUnwrapClosed;
+      if (!state->native) return kUnwrapDisposed;
       *out = state->native;  // owned by the wrapper, which the arena keeps alive
       return 0;
      } catch (...) {
@@ -364,19 +379,19 @@ const JsiVTable kVTable = {
         // after it no JS runs until the copy is complete, so JS cannot change the buffer
         // in between. Writers outside JS (native code holding the storage) are not excluded.
         auto status = c.helper(c.bufferKind, "bufferKind").call(c.rt, jsi::Value(c.rt, c.at(v)));
-        if (!status.isNumber()) return 1;
+        if (!status.isNumber()) return kBytesNotArrayBuffer;
         auto code = static_cast<uint32_t>(status.getNumber());
-        if (code != 0) return code;
+        if (code != kBytesOk) return code;
         auto& x = c.at(v);
-        if (!x.isObject() || !x.getObject(c.rt).isArrayBuffer(c.rt)) return 1;  // must agree with the helper
+        if (!x.isObject() || !x.getObject(c.rt).isArrayBuffer(c.rt)) return kBytesNotArrayBuffer;  // must agree with the helper
         auto buffer = x.getObject(c.rt).getArrayBuffer(c.rt);
         size_t n = buffer.size(c.rt);
         uint8_t* src = n ? buffer.data(c.rt) : nullptr;
-        if (n && !src) return 4;  // no storage: treat as detached
+        if (n && !src) return kBytesDetached;  // no storage: treat as detached
         uint8_t* dst = alloc(allocCtx, n);
-        if (n && !dst) return 7;  // the copy's storage could not be allocated
+        if (n && !dst) return kBytesTooLarge;  // the copy's storage could not be allocated
         if (n) std::memcpy(dst, src, n);  // never memcpy with a null pointer, even for 0 bytes
-        return 0;
+        return kBytesOk;
       } catch (const jsi::JSError& e) {
         c.thrown = e;
       } catch (const std::exception& e) {
@@ -384,13 +399,13 @@ const JsiVTable kVTable = {
       } catch (...) {
         try { c.thrown = jsi::JSError(c.rt, "ArrayBuffer conversion failed"); } catch (...) {}
       }
-      return 6;
+      return kBytesThrown;
     },
     [](void* raw, uint8_t* ptr, size_t len, size_t cap, uint32_t* out) {
       auto& c = C(raw);
       noUnwind("newBytes", [&] {
         // From here the storage belongs to RustBytes (released exactly once by its destructor).
-        auto owned = std::make_shared<RustBytes>(ptr, len, cap);
+        auto owned = std::make_shared<RustBytes>(c.adapter.table, ptr, len, cap);
         try {
           if (gForceBytesCopyOut.load()) throw std::runtime_error("copy fallback forced (test hook)");
           *out = c.push(jsi::ArrayBuffer(c.rt, owned));
@@ -439,7 +454,7 @@ const JsiVTable kVTable = {
     [](void* raw, uint32_t a, uint32_t length,
        double* (*alloc)(void*, size_t, size_t), void* allocCtx, uint32_t* badIndex, uint32_t* badValue) -> uint32_t {
       auto& c = C(raw);
-      uint32_t status = 0;
+      uint32_t status = kNumbersOk;
       if (!guarded(c, [&] {
         // This call owns the handle. Reentrant host calls have separate CallCtxs.
         auto array = c.objectAt(a);
@@ -450,7 +465,7 @@ const JsiVTable kVTable = {
           if (!value.isNumber()) {
             *badIndex = i;
             *badValue = c.push(std::move(value));
-            status = 1;
+            status = kNumbersInvalid;
             return;
           }
           if (i == capacity) {
@@ -459,7 +474,7 @@ const JsiVTable kVTable = {
           }
           data[i] = value.getNumber();
         }
-      })) return 2;
+      })) return kNumbersThrown;
       return status;
     },
 };
@@ -495,7 +510,7 @@ inline void requireOwnRuntime(jsi::Runtime& rt, const Adapter& adapter) {
 }
 
 WorkletAdapterRef workletRef(const std::shared_ptr<Adapter>& adapter) {
-  return WorkletAdapterRef{adapter, adapter->rust, &adapter->alive, adapter->module, adapter->generation, adapter->name};
+  return WorkletAdapterRef{adapter, adapter->table, adapter->rust, &adapter->alive, adapter->generation, adapter->name};
 }
 
 // Runs method `index` with arguments already pushed into `c`'s arena (both call entries).
@@ -503,7 +518,7 @@ jsi::Value invokeAdapter(jsi::Runtime& rt, Adapter& adapter, CallCtx& c, uint32_
   uint32_t out = 0, kind = 0;
   char error[512];
   error[0] = 0;  // Rust writes a terminated message only for kCallError
-  switch (rnrs_adapter_call(adapter.rust, &kVTable, &c, c.epoch, index, self, args, count, &out, &kind, error, sizeof error)) {
+  switch (adapter.table->adapterCall(adapter.rust, &kVTable, &c, c.epoch, index, self, args, count, &out, &kind, error, sizeof error)) {
     case kCallOk: return std::move(c.at(out));
     case kCallThrown:
       if (c.thrown) throw *c.thrown;
@@ -535,7 +550,7 @@ jsi::Value invokeAdapter(jsi::Runtime& rt, Adapter& adapter, CallCtx& c, uint32_
   uint32_t kind = 0;
   char error[512];
   error[0] = 0;
-  if (rnrs_scalar_call(adapter.rust, &binding, inputs, &out, &kind, error, sizeof error) != kCallOk) [[unlikely]]
+  if (adapter.table->scalarCall(adapter.rust, &binding, inputs, &out, &kind, error, sizeof error) != kCallOk) [[unlikely]]
     throw jsi::JSError(rt, makeError(rt, kind, error));
   return true;
 }
@@ -575,7 +590,7 @@ void Adapter::drain(jsi::Runtime& rt) {
       auto helpers = c.settle->getProperty(rt, "helpers");
       if (helpers.isObject()) c.helpers = helpers.getObject(rt);
     }
-    size_t n = rnrs_adapter_drain(rust, &kVTable, &c, c.epoch, 16, settleTrampoline);
+    size_t n = table->adapterDrain(rust, &kVTable, &c, c.epoch, 16, settleTrampoline);
     if (n == 0) return;
     // Outcomes (and their admission slots) are released either way; make a loss visible.
     if (!c.settle)
@@ -636,30 +651,23 @@ void releaseContext(void* raw) noexcept { delete static_cast<NotifyContext*>(raw
 
 }  // namespace
 
-void initBundle() {
-  static std::once_flag once;
-  std::call_once(once, [] { rnrs_bundle_init(); });
-}
-
 jsi::Object installModuleAdapter(
     jsi::Runtime& rt, std::shared_ptr<react::CallInvoker> invoker, std::shared_ptr<RuntimeScope> scope,
     const std::string& name, const std::string& hash, double maxInFlight) {
   if (!(maxInFlight >= 1 && maxInFlight <= 1024 && std::floor(maxInFlight) == maxInFlight))
     throw jsi::JSError(rt, makeError(rt, 1, "maxInFlight must be an integer from 1 to 1024"));
-  initBundle();
+  std::string missing;
+  const RnrsModuleV1* table = findModule(name, hash, missing);
+  if (!table) throw jsi::JSError(rt, makeError(rt, 2, missing.c_str()));
   char error[256] = {0};
-  uint32_t module = 0;
-  if (rnrs_module_find(name.data(), name.size(), hash.data(), hash.size(), &module, error, sizeof error) != 0)
-    throw jsi::JSError(rt, makeError(rt, 2, error));
   auto adapter = std::make_shared<Adapter>();
+  adapter->table = table;
   adapter->scope = scope;
   adapter->name = name;
-  adapter->module = module;
   adapter->runtime.emplace(bindRuntime(rt));
   auto* ctx = new NotifyContext{std::move(invoker), adapter};
-  adapter->rust = rnrs_adapter_new(module, static_cast<uint32_t>(maxInFlight), notifyFromAnyThread, deliveryOf, releaseContext, ctx, error, sizeof error);
+  adapter->rust = table->adapterNew(table, static_cast<uint32_t>(maxInFlight), notifyFromAnyThread, deliveryOf, releaseContext, ctx, error, sizeof error);
   if (!adapter->rust) throw jsi::JSError(rt, makeError(rt, 2, error));  // release() already freed ctx
-  adapter->generation = rnrs_adapter_generation(adapter->rust);
   // The scope observes the adapter weakly; the host functions below own it. If the scope
   // was invalidated first, nothing was registered: tear down now and fail. `adapter` is the
   // only owner here, so the adapter is freed as this throw unwinds, not at some later GC.
@@ -676,7 +684,7 @@ jsi::Object installModuleAdapter(
   for (size_t i = 0;; ++i) {
     uint32_t method;
     RnrsScalarBinding binding;
-    if (!rnrs_adapter_scalar(adapter->rust, i, &method, &binding)) break;
+    if (!table->adapterScalar(adapter->rust, i, &method, &binding)) break;
     if (adapter->scalars.size() <= method) adapter->scalars.resize(static_cast<size_t>(method) + 1);
     adapter->scalars[method] = binding;
   }
@@ -772,7 +780,7 @@ jsi::Object installModuleAdapter(
     if (n < 1 || !a[0].isObject() || !a[0].getObject(rt).hasNativeState<HandleState>(rt))
       throw jsi::JSError(rt, makeError(rt, 0, "expected a native object"));
     auto state = a[0].getObject(rt).getNativeState<HandleState>(rt);
-    if (state->native) rnrs_native_release(std::exchange(state->native, nullptr));
+    if (state->native) state->table->nativeRelease(std::exchange(state->native, nullptr));
     return jsi::Value::undefined();
   });
   bind("cancel", 1, [adapter](jsi::Runtime& rt, const jsi::Value&, const jsi::Value* a, size_t n) -> jsi::Value {
@@ -781,7 +789,7 @@ jsi::Object installModuleAdapter(
     double id = a[0].getNumber();
     // Only exact integers in 1..Number.MAX_SAFE_INTEGER; anything else would be UB or alias.
     if (!adapter->alive || !std::isfinite(id) || id < 1 || id > kMaxSafeInteger || std::floor(id) != id) return false;
-    return rnrs_adapter_cancel(adapter->rust, static_cast<uint64_t>(id));
+    return adapter->table->adapterCancel(adapter->rust, static_cast<uint64_t>(id));
   });
   bind("teardown", 0, [adapter](jsi::Runtime& rt, const jsi::Value&, const jsi::Value*, size_t) -> jsi::Value {
     requireOwnRuntime(rt, *adapter);
@@ -804,20 +812,22 @@ jsi::Object installModuleAdapter(
     if (n < 2 || !a[1].isObject() || !a[1].getObject(rt).hasNativeState<HandleState>(rt))
       throw jsi::JSError(rt, makeError(rt, 0, "workletBox(endpoint, handle) needs a native object of this module"));
     auto state = a[1].getObject(rt).getNativeState<HandleState>(rt);
-    if (state->module != adapter->module) throw jsi::JSError(rt, makeError(rt, 0, "workletBox: the native object belongs to another module"));
+    if (state->table != adapter->table) throw jsi::JSError(rt, makeError(rt, 0, "workletBox: the native object belongs to another module"));
     if (state->generation != adapter->generation || !adapter->alive.load())
       throw jsi::JSError(rt, makeError(rt, 2, "workletBox: the native object belongs to a closed runtime adapter"));
     if (!state->native) throw jsi::JSError(rt, makeError(rt, 2, "workletBox: the native object is disposed"));
-    return createWorkletBox(rt, workletRef(adapter), a[0], rnrs_native_share(state->native));
+    return createWorkletBox(rt, workletRef(adapter), a[0], adapter->table->nativeShare(state->native));
   });
   bind("stats", 1, [adapter](jsi::Runtime& rt, const jsi::Value&, const jsi::Value* a, size_t n) -> jsi::Value {
     requireOwnRuntime(rt, *adapter);
     CallCtx c(rt, *adapter);
     if (n < 1 || !a[0].isObject()) throw jsi::JSError(rt, makeError(rt, 0, "stats(helpers) needs the conversion helpers"));
     c.helpers = a[0].getObject(rt);
-    jsi::Value v = std::move(c.at(rnrs_adapter_stats(adapter->rust, &kVTable, &c, c.epoch)));
+    jsi::Value v = std::move(c.at(adapter->table->adapterStats(adapter->rust, &kVTable, &c, c.epoch)));
     if (!v.isObject()) return v;
     auto s = v.getObject(rt);
+    // The adapter's identity as JS sees it (the Rust host's own generation counts per binary).
+    s.setProperty(rt, "generation", static_cast<double>(adapter->generation));
     s.setProperty(rt, "nativeFinalizers", static_cast<double>(gFinalizers.load()));
     s.setProperty(rt, "nativeFinalizersOffJsThread", static_cast<double>(gFinalizersOffJsThread.load()));
     s.setProperty(rt, "bytesFinalizedOffJsThread", static_cast<double>(gBytesFinalizedOffJsThread.load()));
@@ -825,7 +835,7 @@ jsi::Object installModuleAdapter(
     s.setProperty(rt, "scopeId", static_cast<double>(adapter->scope->id()));
 #ifdef RNRS_DIAGNOSTICS
     uint64_t rust[10] = {0};
-    rnrs_diagnostics(rust);
+    if (adapter->table->diagnostics) adapter->table->diagnostics(rust);  // this module's binary
     s.setProperty(rt, "diagRustAllocations", static_cast<double>(rust[0]));
     s.setProperty(rt, "diagRustAllocatedBytes", static_cast<double>(rust[1]));
     s.setProperty(rt, "diagRustCalls", static_cast<double>(rust[6]));

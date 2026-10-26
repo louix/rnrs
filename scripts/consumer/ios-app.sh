@@ -124,6 +124,11 @@ else
 fi
 # Optional Rust logging configuration (RNRS_APP_LOGGING, JSON for rustNativeApp.logging).
 if [ -n "${RNRS_APP_LOGGING:-}" ]; then node "$ROOT/scripts/consumer/app-logging.mjs" "$APP" "$RNRS_APP_LOGGING"; fi
+# Modules compiled from source, rustNativeApp.sourceBuild (RNRS_SOURCE_BUILD: "*", the default,
+# or a comma-separated list of package names). This script builds and checks source bundles
+# (the app's Cargo lock below), so it needs at least one.
+node "$ROOT/scripts/consumer/source-build.mjs" "$APP" "${RNRS_SOURCE_BUILD-*}"
+
 
 # Rust toolchain for the framework's script phase (cargo with the iOS targets), project-local.
 export RUSTUP_HOME="${RUSTUP_HOME:-$ROOT/.generated/rustup}"

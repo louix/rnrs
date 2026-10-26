@@ -1,7 +1,9 @@
 #!/bin/bash
-# Xcode script phase of the RnrsRuntime pod: generates the app's Rust bundle crate from its npm
-# dependencies and builds it for the SDK and architectures being built, into
-# <app>/.rnrs/ios/lib/$PLATFORM_NAME/librnrs_bundle.a (linked by the app target).
+# Xcode script phase of the RnrsRuntime pod, present only when the app lists modules in
+# rustNativeApp.sourceBuild: rewrites the module registry (<app>/.rnrs/ios/rnrs_registry.inc)
+# and builds those modules from source for the SDK and architectures being built, into
+# <app>/.rnrs/ios/lib/$PLATFORM_NAME/librnrs_bundle.a (linked by the app target). Prebuilt
+# modules are linked from their XCFrameworks without this script.
 #
 # Needs node and cargo (with the Rust iOS targets: rustup target add aarch64-apple-ios
 # aarch64-apple-ios-sim, plus x86_64-apple-ios for simulator builds that include Intel). Like

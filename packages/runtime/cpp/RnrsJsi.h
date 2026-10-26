@@ -7,8 +7,8 @@
 #include "RnrsScope.h"
 
 namespace rnrs {
-// Framework JSI adapter, generic over modules: creates one adapter generation of the
-// generated module `name` (checked against the JS wrapper's IR `hash`) bound to this
+// Framework JSI adapter, generic over modules: creates one adapter generation of the linked
+// module `name` (checked against the JS wrapper's IR `hash`, see RnrsRegistry.h) bound to this
 // runtime and registered with its lifecycle scope. Module code never touches JSI; it
 // converts values through the vtable in RnrsJsi.cpp (see rust/rnrs-android).
 facebook::jsi::Object installModuleAdapter(
@@ -19,9 +19,6 @@ facebook::jsi::Object installModuleAdapter(
 // Framework host functions bound to one runtime call this, before touching any state, when
 // a copy of them is called from another runtime.
 [[noreturn]] void throwForeignRuntime(facebook::jsi::Runtime& rt, const std::string& what);
-
-// Registers the bundled generated modules with the Rust backend (idempotent).
-void initBundle();
 
 #ifdef RNRS_TEST_HOOKS
 // Test hook: make ArrayBuffer results take the copy fallback, as if the engine refused

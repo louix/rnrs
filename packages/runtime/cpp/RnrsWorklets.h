@@ -15,13 +15,13 @@ namespace rnrs {
 // What the endpoint needs of a module adapter. `owner` keeps the adapter (and so `rust`,
 // `alive` and the Rust module instance) allocated while any endpoint or boxed handle exists,
 // past teardown; the last release, possibly on a UI or finalizer thread, needs no JSI but runs
-// the module's Drop there (see RnrsWorklets.cpp).
+// the module's Drop there (see RnrsWorklets.cpp). `table` is the module binary's (static).
 struct WorkletAdapterRef {
   std::shared_ptr<const void> owner;
+  const RnrsModuleV1* table = nullptr;
   RnrsAdapter* rust = nullptr;
   const std::atomic<bool>* alive = nullptr;  // cleared by the adapter's teardown (reload)
-  uint32_t module = 0;
-  uint64_t generation = 0;
+  uint64_t generation = 0;  // the adapter's process-unique serial
   std::string name;
 };
 
@@ -30,8 +30,8 @@ struct WorkletAdapterRef {
 facebook::jsi::Object createWorkletEndpoint(
     facebook::jsi::Runtime& rt, WorkletAdapterRef adapter, const facebook::jsi::Array& methods);
 
-// RN runtime only. Takes ownership of `shared` (a NativeBox from rnrs_native_share, of this
-// adapter's module and generation) and returns a boxed handle whose allow-listed object
+// RN runtime only. Takes ownership of `shared` (a NativeBox from this adapter's table's
+// nativeShare, of its module and generation) and returns a boxed handle whose allow-listed object
 // methods are callable from any runtime. `endpoint` must come from createWorkletEndpoint for
 // the same adapter generation, else this throws TypeError (and releases `shared`).
 facebook::jsi::Object createWorkletBox(

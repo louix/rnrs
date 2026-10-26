@@ -86,42 +86,48 @@ Apps install `@rnrs/runtime` and the module package, for example a module archiv
 npm install @rnrs/runtime /absolute/path/to/demo-crc-0.1.0.tgz
 ```
 
-The first build writes `rnrs-<target>.Cargo.lock` in the app root; commit it. Add `.rnrs/` to the
+Android and iOS apps link modules' prebuilt binaries and need no Rust. Modules without one
+are built from source when the app lists them in `rustNativeApp.sourceBuild`
+([app builds](packaging.md#app-builds)). The first source build
+writes `rnrs-<target>.Cargo.lock` in the app root; commit it. Add `.rnrs/` to the
 app's `.gitignore`. CI builds should use `rnrs build --locked`, `RNRS_LOCKED=1` or Gradle
 `-Prnrs.locked=true` ([lock files](packaging.md#lock-files)).
 
 ### Web (Vite)
 
-Build the Rust bundle into the app, then initialize it once before any module call:
+Write the app's module registry, then initialize it once before any module call:
 
 ```ts
 import {initRnrs} from '@rnrs/runtime/web';
-import * as bundle from './.rnrs/web/pkg/rnrs_bundle.js';
+import * as modules from './.rnrs/web/rnrs.js';
 
-initRnrs(bundle).then(() => { /* call modules */ });
+initRnrs(modules).then(() => { /* call modules */ });
 ```
 
 ```sh
-npx rnrs build --target web --app .    # needs cargo, the wasm32 target and the pinned wasm-bindgen CLI
+npx rnrs build --target web --app .    # Node only, unless rustNativeApp.sourceBuild lists modules
 npx vite build
 ```
 
-Rebuild the bundle after installing or updating a module. `RNRS_WASM_BINDGEN` selects another
+Modules with prebuilt Wasm binaries are imported from their packages. Modules listed in
+`rustNativeApp.sourceBuild` are built into one bundle, which needs cargo, the wasm32 target and
+the pinned wasm-bindgen CLI. Rerun `rnrs build` after installing or updating a module. `RNRS_WASM_BINDGEN` selects another
 `wasm-bindgen` CLI. Modules run on the browser main thread; workers are not supported.
 
 ### Android
 
 Use a React Native **0.88.0** app (`npx @react-native-community/cli@20.2.0 init App --version 0.88.0`).
-Install the packages, then build as usual; the framework's Gradle task builds the Rust bundle:
+Install the packages, then build as usual; the framework's Gradle task links the modules (and
+builds those listed in `rustNativeApp.sourceBuild`):
 
 ```sh
 cd android && ./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a
 ```
 
 - **Nix SDK:** it has only build-tools 37.0.0. Add `--init-script "$REPO/scripts/consumer/nix-sdk.init.gradle"`, which sets library modules' `buildToolsVersion` without editing the app.
-- **Tools outside the shell:** the Gradle task runs `node` and `cargo`. If they are not on Gradle's `PATH` (Android Studio started from the desktop), set `NODE_BINARY` or `-Prnrs.node=/absolute/path/to/node`, and `RNRS_CARGO` with the matching `RUSTC`. Relative paths are rejected.
+- **Tools outside the shell:** the Gradle task runs `node`, and `cargo` only for source builds. If they are not on Gradle's `PATH` (Android Studio started from the desktop), set `NODE_BINARY` or `-Prnrs.node=/absolute/path/to/node`, and `RNRS_CARGO` with the matching `RUSTC`. Relative paths are rejected.
 - **ABIs:** select the architectures your app needs with `reactNativeArchitectures`; the integration maps `arm64-v8a`, `armeabi-v7a`, `x86` and `x86_64` to Rust targets. Your module dependencies must build for the selected targets.
-- Android Studio sync warns that the bundle is not built yet; the first Gradle build builds it.
+- Android Studio sync warns that the module list is not generated yet; the first Gradle build writes it.
 
 ### iOS
 
@@ -131,9 +137,10 @@ Use a React Native 0.88.0 app, on a Mac. The module needs `ios` in its targets.
 cd ios && RCT_USE_RN_DEP=1 RCT_USE_PREBUILT_RNCORE=1 pod install
 ```
 
-Build with Xcode, or `xcodebuild` from the same shell; a pod script phase builds the Rust bundle.
-If Xcode cannot find node or cargo, set them in `ios/.xcode.env.local`. Cargo settings must be
-exported:
+`pod install` runs node to check and link the modules' prebuilt binaries. Then build with Xcode,
+or `xcodebuild` from the same shell. Only for modules listed in `rustNativeApp.sourceBuild`, a pod
+script phase builds them with cargo. If Xcode cannot find node or cargo, set them in
+`ios/.xcode.env.local`. Cargo settings must be exported:
 
 ```sh
 export NODE_BINARY=/absolute/path/to/node

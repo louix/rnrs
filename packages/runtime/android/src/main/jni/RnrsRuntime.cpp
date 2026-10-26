@@ -1,12 +1,11 @@
 #include "RnrsRuntime.h"
 #include "RnrsBindings.h"
 #include "RnrsPlatform.h"
+#include "RnrsRegistry.h"
 #include <ReactCommon/BindingsInstallerHolder.h>
 #include <fbjni/fbjni.h>
 
 using namespace facebook;
-
-extern "C" bool rnrs_set_app_data_dir(const uint8_t* ptr, size_t len);  // rust/rnrs-android
 
 namespace rnrs {
 
@@ -74,12 +73,12 @@ class JRuntimeScope : public jni::HybridClass<JRuntimeScope> {
 };
 
 // The application's private data directory for module implementations
-// (rnrs_core::platform::app_data_dir), set by the Kotlin module before modules exist.
+// (rnrs_core::platform::app_data_dir), set by the Kotlin module before modules exist, in every
+// linked module binary (false if any refused it).
 struct JRnrsPlatform : jni::JavaClass<JRnrsPlatform> {
   static constexpr auto kJavaDescriptor = "Ldev/rustjsilab/rnrs/RnrsPlatform;";
   static jboolean setAppDataDir(jni::alias_ref<jclass>, jni::alias_ref<jni::JString> path) {
-    auto value = path->toStdString();
-    return rnrs_set_app_data_dir(reinterpret_cast<const uint8_t*>(value.data()), value.size());
+    return ::rnrs::setAppDataDir(path->toStdString());  // the registry, not this method
   }
 };
 

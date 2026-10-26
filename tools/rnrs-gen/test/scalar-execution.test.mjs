@@ -77,7 +77,8 @@ impl rnrs_interface::ProbeModule for Probe {
 mod tests {
     use rnrs_android::*;
     use std::{ffi::c_void, mem::MaybeUninit};
-    static MODULES: [&rnrs_core::bind::ModuleDef; 1] = [&super::generated::MODULE];
+    extern "C" fn no_init() {}
+    static TABLE: ModuleTable = ModuleTable::new(&super::generated::MODULE, no_init);
     extern "C" fn noop(_: *mut c_void) {}
     extern "C" fn queued(_: *mut c_void) -> u8 { 0 }
     #[test]
@@ -86,9 +87,8 @@ mod tests {
         assert_eq!(defs.len(), 2);
         assert_eq!((defs[0].method, defs[0].args, defs[0].result), (0, 25, 1));
         assert_eq!((defs[1].method, defs[1].args, defs[1].result), (1, 102, 2));
-        register(&MODULES);
         let mut error = [0u8; 512];
-        let adapter = unsafe { rnrs_adapter_new(0, 4, noop, queued, noop, std::ptr::null_mut(), error.as_mut_ptr(), error.len()) };
+        let adapter = unsafe { (TABLE.adapter_new)(&TABLE, 4, noop, queued, noop, std::ptr::null_mut(), error.as_mut_ptr(), error.len()) };
         assert!(!adapter.is_null());
         let invoke = |index, args: [f64; 4]| {
             let mut binding = MaybeUninit::uninit();

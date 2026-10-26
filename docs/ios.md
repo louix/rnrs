@@ -1,9 +1,12 @@
 # iOS integration
 
-Install the module package, run `pod install`, and build your app. CocoaPods autolinking
-builds and links the Rust code. See [setup](setup.md#ios) for prerequisites.
+Install the module package, run `pod install`, and build your app. CocoaPods autolinking links
+the modules' prebuilt XCFrameworks. Modules listed in `rustNativeApp.sourceBuild` are built from
+source by a pod script phase ([app builds](packaging.md#app-builds)). See [setup](setup.md#ios) for prerequisites.
 
 ## Build configuration
+
+Source builds and `rnrs build-native --target ios` use:
 
 | SDK | Architecture | Rust target |
 | --- | --- | --- |

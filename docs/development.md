@@ -75,12 +75,15 @@ Xcode) and runs one script; run it from the repository root after `npm ci --igno
 | Job | Local command | Covers |
 | --- | --- | --- |
 | `host` | `nix develop .#host --command bash scripts/ci/host.sh` | format, lint, types, `npm test` with cargo required, `rnrs:check`, the [release check](releasing.md), Rust workspace tests, generation reliability, sanitizer C++ tests |
-| `web` | `nix develop .#web --command bash scripts/ci/web.sh` | browser harness; clean Vite, author and `rnrs init` consumers in headless Chromium |
-| `android` | `nix develop --command bash scripts/ci/android.sh` | clean consumer APK, relocated `--locked` build, 16 KB alignment |
+| `web` | `nix develop .#web --command bash scripts/ci/web.sh` | browser harness; clean Vite, author and `rnrs init` consumers in headless Chromium; binary-first prebuilt and mixed consumers |
+| `android` | `nix develop --command bash scripts/ci/android.sh` | clean consumer APK, relocated `--locked` build, 16 KB alignment; binary-first: modules prebuilt for all four ABIs, a consumer built without Rust (four ABIs) and a mixed one |
 | `ios` | `nix develop .#ios --command bash scripts/ci/ios.sh` (Mac) | clean simulator consumer and its smoke run on a temporary simulator (CI: Xcode 26.6) |
 
 `host`, `web` and `android` need x86_64 Linux and `ios` needs a Mac; no machine runs all four.
 All jobs, including `ios`, run on every pull request and every release; manual runs can skip
-`ios`. CI caches the Nix store, rustup, cargo downloads and Gradle, not build outputs, and sets
+`ios`. The binary-first consumers (`scripts/consumer/binary-first.sh android|web`) build module
+binaries as an author would, then build apps with cargo, rustc, rustup, wasm-bindgen and nix
+replaced by failing tripwires, and a mixed app with one module from source. No CI job covers
+prebuilt iOS binaries; that check is manual on a Mac. CI caches the Nix store, rustup, cargo downloads and Gradle, not build outputs, and sets
 `RNRS_WEB_NO_SANDBOX=1` for `web` only. Device suites (`rnrs-device-test.mjs`, `rn-smoke.mjs`,
 `ios-device-test.mjs`, the GPU and touch runners) stay manual.

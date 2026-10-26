@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Module packages can ship prebuilt Android binaries, iOS XCFrameworks and browser Wasm modules (`rnrs build-native`).
+  Apps link them without Rust. Modules listed in `rustNativeApp.sourceBuild` are compiled from
+  source instead, explicitly; there is no automatic fallback.
+- The native boundary is a versioned C table per module (`RnrsAbi.h`, ABI 1). The executor
+  budget and Tokio runtime are per module binary.
+- Apps whose modules have no prebuilt binary must list them in `rustNativeApp.sourceBuild`.
+- Web apps initialize with the registry `rnrs build --target web` writes:
+  `import * as modules from './.rnrs/web/rnrs.js'; await initRnrs(modules)`.
+
 ## 0.2.0
 
 - Faster scalar calls and numeric-array input conversion on native and web.

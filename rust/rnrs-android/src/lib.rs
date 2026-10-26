@@ -1,7 +1,9 @@
 //! Framework Android backend (handwritten, module-independent).
 //!
-//! The C++ JSI adapter (`android/app/src/main/jni/RnrsJsi.cpp`) installs one adapter per
-//! `(module, runtime generation)` and calls into it through this C ABI. Generated module
+//! The C++ JSI adapter (`packages/runtime/cpp/RnrsJsi.cpp`) installs one adapter per
+//! `(module, runtime generation)` and calls into it through the module's [`ModuleTable`], the
+//! only thing a module binary exports (`RnrsAbi.h`). Each binary, a prebuilt module or the
+//! app's source bundle, has its own copy of this crate and its own Tokio runtime and budget. Generated module
 //! glue never sees JSI: it converts values through [`JsiEnv`], which forwards each
 //! operation to the C++ call context through a function table. Values cross as indices
 //! into that context's per-call arena; strings as UTF-8 byte ranges; native objects as
@@ -41,6 +43,10 @@ pub type Callback = extern "C" fn(*mut c_void);
 /// Reports the latest posted wake's state (RnrsDelivery.h: 0 queued, 1 running, 2 done,
 /// 3 dropped). Called under the host lock; only reads an atomic.
 pub type DeliveryCallback = extern "C" fn(*mut c_void) -> u8;
+pub const RNRS_DELIVERY_QUEUED: u8 = 0;
+pub const RNRS_DELIVERY_RUNNING: u8 = 1;
+pub const RNRS_DELIVERY_DONE: u8 = 2;
+pub const RNRS_DELIVERY_DROPPED: u8 = 3;
 
 /// Wakes the JS thread. The adapter guarantees `notify` may be called from any thread and
 /// only schedules work, and that `ctx` stays valid until `release` is called once.
@@ -62,10 +68,10 @@ impl Notify for Notifier {
 
     fn delivery(&self) -> Delivery {
         match (self.delivery)(self.ctx) {
-            0 => Delivery::Queued,
-            1 => Delivery::Running,
-            2 => Delivery::Done,
-            3 => Delivery::Dropped,
+            RNRS_DELIVERY_QUEUED => Delivery::Queued,
+            RNRS_DELIVERY_RUNNING => Delivery::Running,
+            RNRS_DELIVERY_DONE => Delivery::Done,
+            RNRS_DELIVERY_DROPPED => Delivery::Dropped,
             _ => Delivery::Unobserved,
         }
     }
@@ -92,17 +98,6 @@ fn spawner() -> Option<&'static Spawner> {
 pub fn budget() -> &'static Budget {
     static BUDGET: OnceLock<Budget> = OnceLock::new();
     BUDGET.get_or_init(|| Budget::new(RNRS_EXECUTOR_BUDGET))
-}
-
-static MODULES: OnceLock<&'static [&'static ModuleDef]> = OnceLock::new();
-
-/// Registers the app's generated modules (called once by the bundle crate).
-pub fn register(modules: &'static [&'static ModuleDef]) {
-    let _ = MODULES.set(modules);
-}
-
-fn modules() -> &'static [&'static ModuleDef] {
-    MODULES.get().copied().unwrap_or(&[])
 }
 
 static HOSTS_CREATED: AtomicU64 = AtomicU64::new(0);
@@ -184,6 +179,104 @@ impl Drop for RnrsAdapter {
     fn drop(&mut self) {
         self.teardown(RNRS_TEARDOWN_DESTRUCTOR);
         HOSTS_FREED.fetch_add(1, Ordering::SeqCst);
+    }
+}
+
+// ---- The module table: the binary boundary -------------------------------------------
+
+/// Version of the C boundary (`ModuleTable`, `JsiVTable`, `ScalarBinding`, callbacks and
+/// status codes) mirrored by packages/runtime/cpp/RnrsAbi.h. The framework C++ accepts a table
+/// only with exactly this number and the struct sizes it was compiled with; any change to
+/// the boundary bumps it, and the exported symbol names carry it (`rnrs_module_v1_<crate>`).
+pub const RNRS_ABI: u32 = 1;
+
+/// What one binary exports per module: identity, version data and every entry point the C++
+/// runtime calls for that module. Tables are immutable statics; the binary is linked
+/// statically and never unloaded, so a table pointer is valid for the whole process (the
+/// C++ side keeps it in wrappers, ArrayBuffers and worklet boxes to release them later,
+/// possibly after the adapter is freed). Every pointer a module hands out is released only
+/// through the table of the binary that allocated it.
+///
+/// Built by generated code: `static T: ModuleTable = ModuleTable::new(&glue::x::MODULE, init);`
+/// plus `#[no_mangle] extern "C" fn rnrs_module_v1_<crate>() -> &'static ModuleTable`.
+#[repr(C)]
+pub struct ModuleTable {
+    pub abi: u32,
+    pub size: u32,
+    pub vtable_size: u32,
+    pub scalar_binding_size: u32,
+    pub name: *const u8,
+    pub name_len: usize,
+    pub hash: *const u8,
+    pub hash_len: usize,
+    pub build: *const u8,
+    pub build_len: usize,
+    /// Opaque to C++: this binary's `ModuleDef`, read back only by `adapter_new`.
+    pub def: *const ModuleDef,
+    /// Once per process before any other entry (the generated binary's startup: logging).
+    /// Idempotent, so every table of one binary may point at the same function.
+    pub init: extern "C" fn(),
+    pub set_app_data_dir: unsafe extern "C" fn(*const u8, usize) -> bool,
+    pub adapter_new: unsafe extern "C" fn(*const ModuleTable, u32, Callback, DeliveryCallback, Callback, *mut c_void, *mut u8, usize) -> *mut RnrsAdapter,
+    pub adapter_scalar: unsafe extern "C" fn(*const RnrsAdapter, usize, *mut u32, *mut ScalarBinding) -> bool,
+    pub scalar_call: unsafe extern "C" fn(*const RnrsAdapter, *const ScalarBinding, *const [f64; 4], *mut f64, *mut u32, *mut u8, usize) -> u32,
+    pub adapter_call: unsafe extern "C" fn(*const RnrsAdapter, *const JsiVTable, *mut c_void, u32, u32, u32, *const u32, usize, *mut u32, *mut u32, *mut u8, usize) -> u32,
+    pub adapter_drain: unsafe extern "C" fn(*const RnrsAdapter, *const JsiVTable, *mut c_void, u32, usize, SettleFn) -> usize,
+    pub adapter_stats: unsafe extern "C" fn(*const RnrsAdapter, *const JsiVTable, *mut c_void, u32) -> u32,
+    pub adapter_cancel: unsafe extern "C" fn(*const RnrsAdapter, u64) -> bool,
+    pub adapter_teardown: unsafe extern "C" fn(*const RnrsAdapter, u32) -> u32,
+    pub adapter_free: unsafe extern "C" fn(*mut RnrsAdapter),
+    pub adapter_method_find: unsafe extern "C" fn(*const RnrsAdapter, *const u8, usize, *mut u32, *mut bool) -> bool,
+    pub native_share: unsafe extern "C" fn(*const c_void) -> *mut c_void,
+    pub native_spec_name: unsafe extern "C" fn(*const c_void, *mut usize) -> *const u8,
+    pub native_release: extern "C" fn(*mut c_void),
+    pub bytes_free: unsafe extern "C" fn(*mut u8, usize, usize),
+    /// Attribution counters; null unless built with the `diagnostics` feature.
+    pub diagnostics: Option<unsafe extern "C" fn(*mut u64)>,
+}
+
+// SAFETY: immutable static data (string literals, a static ModuleDef, function pointers).
+unsafe impl Sync for ModuleTable {}
+
+/// Diagnostics only: the backend version this binary was built with (the target, rustc and
+/// sources are recorded in the package's native manifest).
+const BUILD: &str = concat!("rnrs-android ", env!("CARGO_PKG_VERSION"));
+
+impl ModuleTable {
+    pub const fn new(def: &'static ModuleDef, init: extern "C" fn()) -> Self {
+        Self {
+            abi: RNRS_ABI,
+            size: std::mem::size_of::<ModuleTable>() as u32,
+            vtable_size: std::mem::size_of::<JsiVTable>() as u32,
+            scalar_binding_size: std::mem::size_of::<ScalarBinding>() as u32,
+            name: def.name.as_ptr(),
+            name_len: def.name.len(),
+            hash: def.hash.as_ptr(),
+            hash_len: def.hash.len(),
+            build: BUILD.as_ptr(),
+            build_len: BUILD.len(),
+            def,
+            init,
+            set_app_data_dir: rnrs_set_app_data_dir,
+            adapter_new: rnrs_adapter_new,
+            adapter_scalar: rnrs_adapter_scalar,
+            scalar_call: rnrs_scalar_call,
+            adapter_call: rnrs_adapter_call,
+            adapter_drain: rnrs_adapter_drain,
+            adapter_stats: rnrs_adapter_stats,
+            adapter_cancel: rnrs_adapter_cancel,
+            adapter_teardown: rnrs_adapter_teardown,
+            adapter_free: rnrs_adapter_free,
+            adapter_method_find: rnrs_adapter_method_find,
+            native_share: rnrs_native_share,
+            native_spec_name: rnrs_native_spec_name,
+            native_release: rnrs_native_release,
+            bytes_free: rnrs_bytes_free,
+            #[cfg(feature = "diagnostics")]
+            diagnostics: Some(rnrs_diagnostics),
+            #[cfg(not(feature = "diagnostics"))]
+            diagnostics: None,
+        }
     }
 }
 
@@ -296,7 +389,6 @@ extern "C" fn alloc_bytes(ctx: *mut c_void, len: usize) -> *mut u8 {
 ///
 /// # Safety
 /// `(ptr, len, cap)` come from one `Vec<u8>` passed to `new_bytes`, released once.
-#[no_mangle]
 pub unsafe extern "C" fn rnrs_bytes_free(ptr: *mut u8, len: usize, cap: usize) {
     drop(unsafe { Vec::from_raw_parts(ptr, len, cap) });
     BYTES_RELEASED.fetch_add(1, Ordering::SeqCst);
@@ -324,6 +416,17 @@ impl<'a> JsiEnv<'a> {
     }
 }
 
+/// `JsiVTable::unwrap_native` results.
+pub const RNRS_UNWRAP_OK: u32 = 0;
+pub const RNRS_UNWRAP_NOT_NATIVE: u32 = 1;
+pub const RNRS_UNWRAP_CLOSED: u32 = 2;
+pub const RNRS_UNWRAP_DISPOSED: u32 = 3;
+/// `JsiVTable::number_array` results (2: JS threw).
+pub const RNRS_NUMBERS_OK: u32 = 0;
+pub const RNRS_NUMBERS_INVALID: u32 = 1;
+pub const RNRS_NUMBERS_THROWN: u32 = 2;
+
+/// `JsiVTable::kind` results are indices into this table.
 const KINDS: [Kind; 9] = [Kind::Undefined, Kind::Null, Kind::Boolean, Kind::Number, Kind::String, Kind::Array, Kind::Function, Kind::Object, Kind::Other];
 
 impl Env for JsiEnv<'_> {
@@ -457,9 +560,9 @@ impl Env for JsiEnv<'_> {
             // a boxed-handle HostObject in the call's slots, or the receiver box held by the
             // calling host function) is rooted for the whole call, so the box outlives this
             // borrow; no JS runs while it is borrowed.
-            0 if !ptr.is_null() => Ok(unsafe { &*(ptr as *const NativeBox) }),
-            0 | 1 => Err(UnwrapError::NotNative),
-            2 => Err(UnwrapError::Closed),
+            RNRS_UNWRAP_OK if !ptr.is_null() => Ok(unsafe { &*(ptr as *const NativeBox) }),
+            RNRS_UNWRAP_OK | RNRS_UNWRAP_NOT_NATIVE => Err(UnwrapError::NotNative),
+            RNRS_UNWRAP_CLOSED => Err(UnwrapError::Closed),
             _ => Err(UnwrapError::Disposed),
         }
     }
@@ -467,15 +570,20 @@ impl Env for JsiEnv<'_> {
 
 // ---- C ABI -------------------------------------------------------------------------------
 
-pub const RNRS_FIND_OK: u32 = 0;
-pub const RNRS_FIND_UNKNOWN: u32 = 1;
-pub const RNRS_FIND_STALE: u32 = 2;
-
 pub const RNRS_CALL_OK: u32 = 0;
 pub const RNRS_CALL_ERROR: u32 = 1;
 pub const RNRS_CALL_THROWN: u32 = 2;
 
 pub type SettleFn = extern "C" fn(*mut c_void, u64, u32, u32, *const u8, usize);
+
+/// The `errorKind` a failed call reports (RnrsAbi.h `kErrorType`, `kErrorRange`, `kErrorPlain`).
+fn error_kind_code(kind: ErrorKind) -> u32 {
+    match kind {
+        ErrorKind::TypeError => 0,
+        ErrorKind::RangeError => 1,
+        ErrorKind::Error => 2,
+    }
+}
 
 fn write_message(out: *mut u8, cap: usize, text: &str) {
     if out.is_null() || cap == 0 {
@@ -511,44 +619,18 @@ unsafe fn str_arg<'a>(ptr: *const u8, len: usize) -> &'a str {
     std::str::from_utf8(unsafe { slice_or_empty(ptr, len) }).unwrap_or("")
 }
 
-/// Finds a registered module by name and checks the JS wrapper's IR hash.
+/// Creates an adapter generation of `table`'s module; null on failure (message in `error`).
 ///
 /// # Safety
-/// Pointers are valid for the given lengths; `out_index` is writable; `error` points to
-/// `error_cap` writable bytes.
-#[no_mangle]
-pub unsafe extern "C" fn rnrs_module_find(
-    name: *const u8, name_len: usize, hash: *const u8, hash_len: usize, out_index: *mut u32, error: *mut u8, error_cap: usize,
-) -> u32 {
-    let (name, hash) = unsafe { (str_arg(name, name_len), str_arg(hash, hash_len)) };
-    let Some((index, def)) = modules().iter().enumerate().find(|(_, d)| d.name == name) else {
-        let known: Vec<_> = modules().iter().map(|d| d.name).collect();
-        write_message(error, error_cap, &format!("module {name} is not in this app's native bundle (bundled: {})", known.join(", ")));
-        return RNRS_FIND_UNKNOWN;
-    };
-    if def.hash != hash {
-        write_message(error, error_cap, &format!(
-            "module {name}: JS wrapper (IR {hash}) and native glue (IR {}) were generated from different specs; rebuild both", def.hash));
-        return RNRS_FIND_STALE;
-    }
-    unsafe { out_index.write(index as u32) };
-    RNRS_FIND_OK
-}
-
-/// Creates an adapter generation; null on failure (message in `error`).
-///
-/// # Safety
-/// As for `rnrs_module_find`; `ctx` stays valid until `release` is called once.
-#[no_mangle]
+/// `table` is a table built by [`ModuleTable::new`] in this binary; `error` points to
+/// `error_cap` writable bytes; `ctx` stays valid until `release` is called once.
 pub unsafe extern "C" fn rnrs_adapter_new(
-    module: u32, max_in_flight: u32, notify: Callback, delivery: DeliveryCallback, release: Callback, ctx: *mut c_void,
+    table: *const ModuleTable, max_in_flight: u32, notify: Callback, delivery: DeliveryCallback, release: Callback, ctx: *mut c_void,
     error: *mut u8, error_cap: usize,
 ) -> *mut RnrsAdapter {
     let notifier = Notifier { notify, delivery, release, ctx };
-    let Some(def) = modules().get(module as usize) else {
-        write_message(error, error_cap, "unknown module index");
-        return std::ptr::null_mut();
-    };
+    // SAFETY: tables are immutable statics whose `def` is a `&'static ModuleDef` of this binary.
+    let def = unsafe { &*(*table).def };
     match RnrsAdapter::new(def, max_in_flight as usize, budget().clone(), notifier) {
         Ok(adapter) => Box::into_raw(Box::new(adapter)),
         Err(message) => {
@@ -556,13 +638,6 @@ pub unsafe extern "C" fn rnrs_adapter_new(
             std::ptr::null_mut()
         }
     }
-}
-
-/// # Safety
-/// `adapter` comes from `rnrs_adapter_new` and has not been freed.
-#[no_mangle]
-pub unsafe extern "C" fn rnrs_adapter_generation(adapter: *const RnrsAdapter) -> u64 {
-    unsafe { &*adapter }.adapter.generation()
 }
 
 /// Private immutable binding borrowed by C++ for the owning adapter's lifetime.
@@ -576,7 +651,6 @@ pub struct ScalarBinding {
 
 /// # Safety
 /// Adapter is live; out points to writable storage. Binding must not outlive adapter.
-#[no_mangle]
 pub unsafe extern "C" fn rnrs_adapter_scalar(adapter: *const RnrsAdapter, index: usize, method: *mut u32, out: *mut ScalarBinding) -> bool {
     let adapter = &unsafe { &*adapter }.adapter;
     let Some(def) = adapter.def().scalars.get(index) else { return false };
@@ -591,7 +665,6 @@ pub unsafe extern "C" fn rnrs_adapter_scalar(adapter: *const RnrsAdapter, index:
 /// Binding belongs to live adapter; args contains four initialized scalar slots with
 /// validated types/boolean representations. No JS may run during this synchronous call.
 /// Output/error buffers are writable with the stated capacity, as in rnrs_adapter_call.
-#[no_mangle]
 pub unsafe extern "C" fn rnrs_scalar_call(adapter: *const RnrsAdapter, binding: *const ScalarBinding, args: *const [f64; 4], out: *mut f64,
     error_kind: *mut u32, error: *mut u8, error_cap: usize) -> u32 {
     let adapter = unsafe { &*adapter };
@@ -606,7 +679,7 @@ pub unsafe extern "C" fn rnrs_scalar_call(adapter: *const RnrsAdapter, binding: 
     match result {
         Ok(value) => { unsafe { out.write(value) }; RNRS_CALL_OK }
         Err(BindError::Js { kind, message }) => {
-            unsafe { error_kind.write(match kind { ErrorKind::TypeError => 0, ErrorKind::RangeError => 1, ErrorKind::Error => 2 }) };
+            unsafe { error_kind.write(error_kind_code(kind)) };
             write_message(error, error_cap, &message);
             RNRS_CALL_ERROR
         }
@@ -620,7 +693,6 @@ pub unsafe extern "C" fn rnrs_scalar_call(adapter: *const RnrsAdapter, binding: 
 /// # Safety
 /// `adapter` is live; `vt`/`ctx` form a live call context on the calling runtime's thread
 /// (see the module docs); `args` points to `nargs` value indices of that context; `out`, `error_kind` are writable; `error` has `error_cap` bytes.
-#[no_mangle]
 pub unsafe extern "C" fn rnrs_adapter_call(
     adapter: *const RnrsAdapter, vt: *const JsiVTable, ctx: *mut c_void, epoch: u32, method: u32, this: u32, args: *const u32,
     nargs: usize, out: *mut u32, error_kind: *mut u32, error: *mut u8, error_cap: usize,
@@ -650,7 +722,7 @@ pub unsafe extern "C" fn rnrs_adapter_call(
         }
         Err(BindError::Thrown) => RNRS_CALL_THROWN,
         Err(BindError::Js { kind, message }) => {
-            unsafe { error_kind.write(match kind { ErrorKind::TypeError => 0, ErrorKind::RangeError => 1, ErrorKind::Error => 2 }) };
+            unsafe { error_kind.write(error_kind_code(kind)) };
             write_message(error, error_cap, &message);
             RNRS_CALL_ERROR
         }
@@ -662,7 +734,6 @@ pub unsafe extern "C" fn rnrs_adapter_call(
 ///
 /// # Safety
 /// As for `rnrs_adapter_call`.
-#[no_mangle]
 pub unsafe extern "C" fn rnrs_adapter_drain(
     adapter: *const RnrsAdapter, vt: *const JsiVTable, ctx: *mut c_void, epoch: u32, max: usize, settle: SettleFn,
 ) -> usize {
@@ -677,7 +748,6 @@ pub unsafe extern "C" fn rnrs_adapter_drain(
 ///
 /// # Safety
 /// As for `rnrs_adapter_call`.
-#[no_mangle]
 pub unsafe extern "C" fn rnrs_adapter_stats(adapter: *const RnrsAdapter, vt: *const JsiVTable, ctx: *mut c_void, epoch: u32) -> u32 {
     let adapter = unsafe { &*adapter };
     let mut env = unsafe { JsiEnv::new(&*vt, ctx, epoch) };
@@ -693,7 +763,6 @@ fn vt_ref<'a>(vt: *const JsiVTable) -> &'a JsiVTable {
 
 /// # Safety
 /// `adapter` is live.
-#[no_mangle]
 pub unsafe extern "C" fn rnrs_adapter_cancel(adapter: *const RnrsAdapter, id: u64) -> bool {
     unsafe { &*adapter }.adapter.cancel(id)
 }
@@ -702,7 +771,6 @@ pub unsafe extern "C" fn rnrs_adapter_cancel(adapter: *const RnrsAdapter, id: u6
 ///
 /// # Safety
 /// `adapter` is live.
-#[no_mangle]
 pub unsafe extern "C" fn rnrs_adapter_teardown(adapter: *const RnrsAdapter, reason: u32) -> u32 {
     unsafe { &*adapter }.teardown(reason)
 }
@@ -712,7 +780,6 @@ pub unsafe extern "C" fn rnrs_adapter_teardown(adapter: *const RnrsAdapter, reas
 ///
 /// # Safety
 /// `adapter` is live and not used afterwards.
-#[no_mangle]
 pub unsafe extern "C" fn rnrs_adapter_free(adapter: *mut RnrsAdapter) {
     drop(unsafe { Box::from_raw(adapter) });
 }
@@ -722,7 +789,6 @@ pub unsafe extern "C" fn rnrs_adapter_free(adapter: *mut RnrsAdapter) {
 ///
 /// # Safety
 /// `adapter` is live; `(name, len)` is readable; `index` and `is_async` are writable.
-#[no_mangle]
 pub unsafe extern "C" fn rnrs_adapter_method_find(adapter: *const RnrsAdapter, name: *const u8, len: usize, index: *mut u32, is_async: *mut bool) -> bool {
     let name = unsafe { str_arg(name, len) };
     let def = unsafe { &*adapter }.adapter.def();
@@ -743,7 +809,6 @@ pub unsafe extern "C" fn rnrs_adapter_method_find(adapter: *const RnrsAdapter, n
 ///
 /// # Safety
 /// `native` is a live `NativeBox` pointer (from `wrap_native` or this function).
-#[no_mangle]
 pub unsafe extern "C" fn rnrs_native_share(native: *const c_void) -> *mut c_void {
     let boxed = unsafe { &*(native as *const NativeBox) };
     Box::into_raw(Box::new(boxed.share())) as *mut c_void
@@ -753,7 +818,6 @@ pub unsafe extern "C" fn rnrs_native_share(native: *const c_void) -> *mut c_void
 ///
 /// # Safety
 /// `native` is a live `NativeBox` pointer; `len` is writable.
-#[no_mangle]
 pub unsafe extern "C" fn rnrs_native_spec_name(native: *const c_void, len: *mut usize) -> *const u8 {
     let name = unsafe { &*(native as *const NativeBox) }.spec_name;
     unsafe { len.write(name.len()) };
@@ -763,7 +827,6 @@ pub unsafe extern "C" fn rnrs_native_spec_name(native: *const c_void, len: *mut 
 /// Releases a native object owned by a JS wrapper. Thread-safe: `NativeBox` holds a
 /// `Native<T>` with `T: Send + Sync`, so the final drop may run on any thread (Hermes
 /// finalizes wrappers off the JS thread during runtime destruction).
-#[no_mangle]
 pub extern "C" fn rnrs_native_release(native: *mut c_void) {
     if !native.is_null() {
         drop(unsafe { Box::from_raw(native as *mut NativeBox) });
@@ -815,7 +878,8 @@ mod tests {
         static METHODS: [MethodDef; 0] = [];
         static TYPES: [NativeTypeDef; 0] = [];
         static DEF: ModuleDef = ModuleDef { name: "TeardownHookProbe", hash: "test", methods: &METHODS, scalars: &[], native_types: &TYPES, instantiate, call };
-        static DEFS: [&ModuleDef; 1] = [&DEF];
+        extern "C" fn no_init() {}
+        static TABLE: ModuleTable = ModuleTable::new(&DEF, no_init);
 
         extern "C" fn noop(_: *mut c_void) {}
         extern "C" fn queued(_: *mut c_void) -> u8 {
@@ -823,10 +887,8 @@ mod tests {
         }
 
         fn new_adapter() -> (*mut RnrsAdapter, Arc<Resource>) {
-            register(&DEFS);
-            let index = modules().iter().position(|d| d.name == DEF.name).expect("registered") as u32;
             let mut error = [0u8; 256];
-            let adapter = unsafe { rnrs_adapter_new(index, 4, noop, queued, noop, std::ptr::null_mut(), error.as_mut_ptr(), error.len()) };
+            let adapter = unsafe { (TABLE.adapter_new)(&TABLE, 4, noop, queued, noop, std::ptr::null_mut(), error.as_mut_ptr(), error.len()) };
             assert!(!adapter.is_null());
             let resource = CREATED.lock().unwrap().last().cloned().expect("instantiated");
             (adapter, resource)
@@ -895,7 +957,6 @@ mod tests {
 /// # Safety
 /// `out` points to 10 writable u64.
 #[cfg(feature = "diagnostics")]
-#[no_mangle]
 pub unsafe extern "C" fn rnrs_diagnostics(out: *mut u64) {
     let snapshot = rnrs_core::diagnostics::snapshot();
     unsafe { std::ptr::copy_nonoverlapping(snapshot.as_ptr(), out, snapshot.len()) };
@@ -936,7 +997,6 @@ mod utf8_tests {
 ///
 /// # Safety
 /// `(ptr, len)` is a readable byte range for the duration of the call.
-#[no_mangle]
 pub unsafe extern "C" fn rnrs_set_app_data_dir(ptr: *const u8, len: usize) -> bool {
     let bytes = if len == 0 { &[][..] } else { std::slice::from_raw_parts(ptr, len) };
     match std::str::from_utf8(bytes) {
@@ -998,5 +1058,85 @@ mod scalar_tests {
         assert_eq!(&error[..26], b"runtime adapter is closed\0");
         drop(adapter);
         assert_eq!(DROPS.load(Ordering::SeqCst), 1);
+    }
+}
+
+/// The ABI contract, pinned identically by the static_asserts in packages/runtime/cpp/RnrsAbi.h.
+/// Changing anything here (order, size, a constant) requires bumping RNRS_ABI in both places.
+#[cfg(test)]
+mod abi_contract {
+    use super::*;
+    use std::mem::{offset_of, size_of};
+
+    const P: usize = size_of::<usize>();
+
+    #[test]
+    fn module_table_layout() {
+        assert_eq!(RNRS_ABI, 1);
+        assert_eq!((offset_of!(ModuleTable, abi), offset_of!(ModuleTable, size)), (0, 4), "frozen prefix");
+        assert_eq!((offset_of!(ModuleTable, vtable_size), offset_of!(ModuleTable, scalar_binding_size)), (8, 12));
+        let slots = [
+            offset_of!(ModuleTable, name), offset_of!(ModuleTable, name_len), offset_of!(ModuleTable, hash),
+            offset_of!(ModuleTable, hash_len), offset_of!(ModuleTable, build), offset_of!(ModuleTable, build_len),
+            offset_of!(ModuleTable, def), offset_of!(ModuleTable, init), offset_of!(ModuleTable, set_app_data_dir),
+            offset_of!(ModuleTable, adapter_new), offset_of!(ModuleTable, adapter_scalar), offset_of!(ModuleTable, scalar_call),
+            offset_of!(ModuleTable, adapter_call), offset_of!(ModuleTable, adapter_drain), offset_of!(ModuleTable, adapter_stats),
+            offset_of!(ModuleTable, adapter_cancel), offset_of!(ModuleTable, adapter_teardown), offset_of!(ModuleTable, adapter_free),
+            offset_of!(ModuleTable, adapter_method_find), offset_of!(ModuleTable, native_share),
+            offset_of!(ModuleTable, native_spec_name), offset_of!(ModuleTable, native_release), offset_of!(ModuleTable, bytes_free),
+            offset_of!(ModuleTable, diagnostics),
+        ];
+        for (i, offset) in slots.into_iter().enumerate() {
+            assert_eq!(offset, 16 + i * P, "ModuleTable slot {i}");
+        }
+        assert_eq!(size_of::<ModuleTable>(), 16 + 24 * P);
+    }
+
+    #[test]
+    fn vtable_and_binding_layout() {
+        let slots = [
+            offset_of!(JsiVTable, kind), offset_of!(JsiVTable, to_number), offset_of!(JsiVTable, to_bool),
+            offset_of!(JsiVTable, get_property), offset_of!(JsiVTable, array_length), offset_of!(JsiVTable, get_index),
+            offset_of!(JsiVTable, undefined), offset_of!(JsiVTable, null), offset_of!(JsiVTable, number),
+            offset_of!(JsiVTable, boolean), offset_of!(JsiVTable, string), offset_of!(JsiVTable, object),
+            offset_of!(JsiVTable, set_property), offset_of!(JsiVTable, array), offset_of!(JsiVTable, set_index),
+            offset_of!(JsiVTable, wrap_native), offset_of!(JsiVTable, unwrap_native), offset_of!(JsiVTable, to_bytes),
+            offset_of!(JsiVTable, new_bytes), offset_of!(JsiVTable, to_string_into), offset_of!(JsiVTable, number_array),
+        ];
+        for (i, offset) in slots.into_iter().enumerate() {
+            assert_eq!(offset, i * P, "JsiVTable slot {i}");
+        }
+        assert_eq!(size_of::<JsiVTable>(), 21 * P);
+        assert_eq!(
+            (offset_of!(ScalarBinding, args), offset_of!(ScalarBinding, result), offset_of!(ScalarBinding, definition), offset_of!(ScalarBinding, instance)),
+            (0, 4, 8, 8 + P)
+        );
+        assert_eq!(size_of::<ScalarBinding>(), 8 + 2 * P);
+    }
+
+    #[test]
+    fn exchanged_values() {
+        use rnrs_core::bind::{BytesError, ADMIT_CLOSED, ADMIT_OVERLOADED, ADMIT_SATURATED, SETTLE_CANCELLED, SETTLE_FAILED, SETTLE_LOST, SETTLE_OK};
+        // kind(): kKind* in RnrsAbi.h.
+        assert_eq!(KINDS, [Kind::Undefined, Kind::Null, Kind::Boolean, Kind::Number, Kind::String, Kind::Array, Kind::Function, Kind::Object, Kind::Other]);
+        // toBytes(): kBytes* (1 and anything unknown: not an ArrayBuffer).
+        assert_eq!(BytesError::from_status(0), None);
+        assert_eq!(
+            (1..=7).map(|s| BytesError::from_status(s).unwrap()).collect::<Vec<_>>(),
+            [BytesError::NotArrayBuffer, BytesError::Shared, BytesError::Resizable, BytesError::Detached, BytesError::View, BytesError::Thrown, BytesError::TooLarge]
+        );
+        assert_eq!((RNRS_NUMBERS_OK, RNRS_NUMBERS_INVALID, RNRS_NUMBERS_THROWN), (0, 1, 2));
+        assert_eq!((RNRS_UNWRAP_OK, RNRS_UNWRAP_NOT_NATIVE, RNRS_UNWRAP_CLOSED, RNRS_UNWRAP_DISPOSED), (0, 1, 2, 3));
+        assert_eq!((RNRS_DELIVERY_QUEUED, RNRS_DELIVERY_RUNNING, RNRS_DELIVERY_DONE, RNRS_DELIVERY_DROPPED), (0, 1, 2, 3));
+        // Values the binary produces for the JS runtime (settle status, admission failure code).
+        assert_eq!((SETTLE_OK, SETTLE_CANCELLED, SETTLE_FAILED, SETTLE_LOST), (0, 1, 2, 3));
+        assert_eq!((ADMIT_CLOSED, ADMIT_OVERLOADED, ADMIT_SATURATED), (-1.0, -2.0, -3.0));
+    }
+
+    #[test]
+    fn status_codes() {
+        assert_eq!((RNRS_CALL_OK, RNRS_CALL_ERROR, RNRS_CALL_THROWN), (0, 1, 2));
+        assert_eq!((RNRS_TEARDOWN_EXPLICIT, RNRS_TEARDOWN_LIFECYCLE, RNRS_TEARDOWN_DESTRUCTOR, RNRS_TEARDOWN_REFUSED), (0, 1, 2, 3));
+        assert_eq!([ErrorKind::TypeError, ErrorKind::RangeError, ErrorKind::Error].map(error_kind_code), [0, 1, 2]);
     }
 }

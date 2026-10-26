@@ -33,6 +33,8 @@ done
 cp "$ROOT/fixtures/worklets-lab/App.tsx" "$ROOT/fixtures/worklets-lab/GestureLab.tsx" "$ROOT/fixtures/worklets-lab/smoke.ts" "$ROOT/fixtures/worklets-lab/babel.config.js" "$APP/"
 (cd "$APP" && npm install --no-audit --no-fund --save-exact "${PINS[@]}" \
   "$C/../pack/rnrs-cli-0.2.0.tgz" "$C/../pack/rnrs-runtime-0.2.0.tgz" "$C/../pack/rnrs-labs-worklets-probe-0.2.0.tgz")
+# The probe module is compiled from source (rustNativeApp.sourceBuild).
+node "$ROOT/scripts/consumer/source-build.mjs" "$APP" "*"
 for pin in "${PINS[@]}"; do
   name="${pin%@*}" want="${pin##*@}"
   got=$(node -p "require('$APP/node_modules/$name/package.json').version")

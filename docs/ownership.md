@@ -9,7 +9,7 @@ The [type map](types.md) defines conversion semantics; [surface](surface.md) cov
 | Module | `counterModule()` returns the runtime's single instance. The framework tears it down with the JS runtime (reload, destroy); never tear it down yourself. |
 | Native objects | Call `obj.dispose()`. GC finalization is only a fallback, and in-flight async calls hold their own reference. |
 | Async | A `Promise<T>` result maps to Rust `async fn` + `CancelToken`. Cancel with `method(args…, {signal})`, which rejects with `AbortError`. Cancellation is cooperative. |
-| Back-pressure | `maxInFlight` per module (default 8, set in `rustNative`), plus a process-wide budget of 32 on Android and iOS. Overflow rejects with `RnrsError` code `overloaded`. |
+| Back-pressure | `maxInFlight` per module (default 8, set in `rustNative`), plus an executor budget of 32 on Android and iOS, shared by the modules of one binary: the app's source bundle, or each prebuilt module ([packaging](packaging.md#prebuilt-binaries)). Overflow rejects with `RnrsError` code `overloaded`. |
 | Errors | `Err(String)` throws (sync) or rejects (async). Codes: `cancelled`, `overloaded`, `closed`, `failed`, `lost`. Panics abort. |
 | Threads | Sync methods run on the JS thread. Async work runs on the framework's Tokio runtime (native) or as browser-local futures (web). |
 | Logging | Module and library crates only emit `tracing`/`log` events and must not install a global subscriber; the app chooses ([logging](logging.md)). |

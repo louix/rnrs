@@ -175,6 +175,11 @@ for (const m of MODULES) {
       /^rust\/Cargo\.toml$/,
       /^rust\/src\/[\w/-]+\.rs$/,
       /^rnrs\/(index|web)\.ts$/,
+      // Prebuilt binaries (rnrs build-native), when the package was built with them.
+      /^rnrs\/native\/(manifest\.json|Cargo\.lock)$/,
+      /^rnrs\/native\/android\/(arm64-v8a|armeabi-v7a|x86|x86_64)\/librnrs_\w+\.a$/,
+      /^rnrs\/native\/ios\/rnrs_\w+\.xcframework\/(Info\.plist|ios-[\w-]+\/librnrs_\w+\.a)$/,
+      /^rnrs\/native\/web\/rnrs_\w+(\.js|_bg\.wasm)$/,
     ],
   );
   if (!info.files.some((f) => f.path === 'rust/src/rnrs_interface.rs'))

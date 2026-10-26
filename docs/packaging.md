@@ -25,9 +25,50 @@ See the [quickstart](quickstart.md) for authoring and [setup](setup.md#local-fra
 
 `rustNative.targets` declares supported platforms. rnrs does not detect them or check that the crate's dependencies build for them. A module without `web` cannot be bundled for the browser, and its web entry throws.
 
+## Prebuilt binaries
+
+Module packages can ship compiled Android, iOS and browser binaries, so apps that use them need no Rust. Before `npm pack`, the author runs:
+
+- `npx rnrs build-native --target android [--abi arm64-v8a,armeabi-v7a,x86,x86_64]` on any host. This needs Rust 1.90.0 with the Android targets and the Android NDK (`--ndk`, `ANDROID_NDK_HOME` or `ANDROID_HOME/ndk`).
+- `npx rnrs build-native --target ios [--sim-arch arm64,x86_64]` on macOS. This needs Xcode, Rust 1.90.0 with `aarch64-apple-ios`, `aarch64-apple-ios-sim` (and `x86_64-apple-ios`), and Rust's `llvm-tools` component (`rustup component add llvm-tools`). `IPHONEOS_DEPLOYMENT_TARGET` defaults to 15.1.
+- `npx rnrs build-native --target web` on any host. This needs Rust's wasm32 target and the pinned wasm-bindgen CLI.
+
+The targets can be built on different machines. A run keeps the other targets' binaries only if they were built from the same sources, lock, spec and framework; otherwise it removes them. It writes `rnrs/native/`:
+
+- `manifest.json`: the binary ABI, module name and spec IR hash, symbol, framework source hash, and a hash of every Rust source file the package ships. Per target it records rustc, minSdk (24) with link libraries and ABIs, or the iOS deployment target with the XCFramework slices.
+- `android/<abi>/librnrs_<crate>.a`: one sealed object per ABI. Only `rnrs_module_v1_<crate>` stays global. Its std, Tokio, framework backend and dependencies are local, so any number of prebuilt modules link into one app.
+- `ios/rnrs_<crate>.xcframework`: a static library per SDK (device arm64; simulator arm64 and x86_64), sealed the same way. Mach-O unwind info also needs the personality routine to be external, so it is exported as `rnrs_eh_personality_<crate>`. That symbol is unique to the module like the table.
+- `web/rnrs_<crate>.js` and `web/rnrs_<crate>_bg.wasm`: the module as its own Wasm instance with its wasm-bindgen glue. Each instance has its own memory, allocator and native objects. The browser runtime checks the instance's web ABI, and an object from one instance passed to another is a `TypeError`.
+- `Cargo.lock`: the dependency versions the binary was built with. The app's lock does not govern prebuilt modules: a dependency fix needs a module release.
+
+`build-native --target android` builds all four ABIs React Native builds by default; `--abi` selects fewer.
+
+A package must ship binaries matching it. `npm pack` (through `rnrs pack-js` in the package's `prepack`) fails if they were built from other Rust sources, another spec or another rnrs ABI, and warns about declared targets without binaries. `rnrs check-native` also fails on those (`--target` checks only the given targets, for an author building one platform per machine). `rnrs init` makes it the package's `prepublishOnly`, so `npm publish` refuses a package that lacks a declared target's binaries: all four Android ABIs, both iOS slices, or the web files. `npm publish <tarball>` runs no package scripts, and neither does a package without that script, so run `rnrs check-native` yourself in those cases. Modules that need `rnrs-surface` cannot be prebuilt yet. `check-native` reports them as source-only, and every app using one must list it in `rustNativeApp.sourceBuild` and build it with Rust.
+
+Each run rebuilds every listed ABI or slice of its target and replaces earlier ones. Shipped archives carry no debug info: native crash stacks show Rust function names but no file or line. The same objects with debug info stay in the package's ignored `.rnrs/native-build/seal/` for the publisher's records. Packaging them for symbolication is not provided yet.
+
+Only headless modules can be prebuilt: a module whose crate needs a framework library crate (`rnrs-surface`) is refused. The native boundary is a versioned C table per module (`packages/runtime/cpp/RnrsAbi.h`). The app's `@rnrs/runtime` must have the same ABI number, otherwise the build fails before linking.
+
+Each prebuilt module carries its own copy of the Rust standard library and framework backend, and natively its own Rust runtime: Tokio with 2 worker threads (started on first use) and the executor budget of 32 (see [ownership](ownership.md)). Rust logging (`rustNativeApp.logging`) applies to source-built modules only.
+
 ## App builds
 
-Android's Gradle task and iOS's pod script generate and compile one Rust bundle for the app. Autolinking installs the native integration; module authors write no platform glue. Browser apps build with `rnrs build --target web` and call `await initRnrs(bundle)` before using modules.
+Android's Gradle task (`rnrsLinkModules`) and iOS's `pod install` run a Node-only step, `rnrs link`. It checks every module's prebuilt binary against the installed framework and the package's own files, then links them. It fails, naming the package, in any of these cases:
+
+- a binary is missing for a selected ABI or SDK;
+- the binary has another ABI number;
+- the binary needs a higher minSdk or iOS version than the app (on iOS, React Native's minimum);
+- the package's Rust sources differ from those the binary was built from (a `patch-package` edit, for example).
+
+Nothing falls back to a source build on its own. On iOS the app target links each module's XCFramework slice for the SDK being built. Rerun `pod install` after adding modules or changing `sourceBuild`.
+
+To compile modules from their installed sources instead, list them in the app's `package.json`:
+
+```json
+"rustNativeApp": { "sourceBuild": ["@acme/crc"] }
+```
+
+`"*"` selects every module. Listed modules are built into one bundle with cargo (Rust and the platform's targets required; on iOS by a pod script phase that exists only then), and their prebuilt binaries are not linked. Other modules stay prebuilt in the same app. Autolinking installs the native integration; module authors write no platform glue. Browser apps run `rnrs build --target web`. It checks the prebuilt binaries the same way, builds the source bundle if `sourceBuild` lists modules, and writes `.rnrs/web/rnrs.js`, which imports the source bundle and each prebuilt module's Wasm glue. Apps pass that file to `await initRnrs(modules)` before using modules; bundlers handle the `.wasm` files. Only Vite is tested.
 
 Generated glue lives in the ignored `.rnrs/<target>/bundle/`. It references the installed module crates and patches framework crates to the copies shipped with the npm packages. Resolution checks reject a different framework copy, keeping a single runtime and surface registry per bundle.
 

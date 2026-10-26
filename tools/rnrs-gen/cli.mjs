@@ -533,10 +533,22 @@ Module packages (an author's package with a TypeScript spec and a Rust crate):
                        (further arguments go to cargo test; a filter needs the dir first:
                        rnrs test . my_test)
   pack-js [dir]        write the JS wrapper rnrs/{index,web}.ts (npm pack runs it via prepack)
+  build-native [dir] [--target android|ios|web] [--abi arm64-v8a,armeabi-v7a,x86,x86_64] [--ndk DIR] [--sim-arch arm64,x86_64]
+                       build the module's prebuilt binaries and rnrs/native/manifest.json (Rust,
+                       and the Android NDK, on macOS Xcode, or the wasm-bindgen CLI required;
+                       npm pack ships them)
+  check-native [dir] [--target android,ios,web]
+                       fail unless every declared target (or those given) has current prebuilt binaries
+                       (rnrs init makes it the package's prepublishOnly script)
 
 Apps:
-  build --target android|ios|web [--app DIR] [--locked] [--offline]
-                       generate and build the app's Rust bundle (Android/iOS builds run this)
+  build --target android|ios|web [--app DIR] [--abi ...] [--min-sdk N] [--locked] [--offline]
+                       link the modules' prebuilt binaries (Android/iOS: run by the native builds;
+                       web: writes .rnrs/web/rnrs.js for initRnrs) and build the modules the app
+                       selects for source builds (cargo and, on web, wasm-bindgen run only for those)
+  link --target android|ios|web [--app DIR] [--abi ...] [--min-sdk N] [--ios-deployment-target V] [--json]
+                       only check the prebuilt binaries and write the registry (never runs cargo);
+                       --json prints the modules and (iOS) the libraries to link
   bundle --target T [--app DIR]     only generate the bundle crate
   lock --target T [--app DIR] [--update | --check]
                        write or check the app's rnrs-T.Cargo.lock
@@ -552,13 +564,24 @@ const COMMANDS = [
   'check',
   'test',
   'pack-js',
+  'build-native',
+  'check-native',
   'build',
+  'link',
   'bundle',
   'lock',
   'ir',
   'build-outputs',
 ];
-const PACKAGE_COMMANDS = ['init', 'generate', 'check', 'test', 'pack-js'];
+const PACKAGE_COMMANDS = [
+  'init',
+  'generate',
+  'check',
+  'test',
+  'pack-js',
+  'build-native',
+  'check-native',
+];
 
 export async function main(argv) {
   const [command] = argv;
@@ -615,19 +638,112 @@ export async function main(argv) {
         console.error(problems.join('\n'));
         return 1;
       }
+      // Prebuilt binaries in the package must match it; missing ones only warn here (the
+      // package's prepublishOnly runs rnrs check-native, which requires them).
+      const { checkPackageBinaries } = await import('./native.mjs');
+      const binaries = checkPackageBinaries(dir);
+      for (const w of binaries.warnings) console.warn(`rnrs: warning: ${w}`);
+      if (binaries.errors.length) {
+        console.error(binaries.errors.map((e) => `rnrs: ${e}`).join('\n'));
+        return 1;
+      }
       return code;
     }
-    if (command === 'bundle' || command === 'build' || command === 'lock') {
+    if (command === 'check-native') {
+      const { checkPackageBinaries } = await import('./native.mjs');
+      const dir = path.resolve(arg ?? '.');
+      const target = option(argv, '--target');
+      const { errors, notes } = checkPackageBinaries(dir, {
+        require: true,
+        targets: target ? target.split(',') : undefined,
+      });
+      for (const n of notes) console.log(`rnrs: ${n}`);
+      if (errors.length) {
+        console.error(errors.map((e) => `rnrs: ${e}`).join('\n'));
+        return 1;
+      }
+      if (!notes.length)
+        console.log('rnrs: prebuilt binaries are current for every declared target');
+      return 0;
+    }
+    if (command === 'build-native') {
+      const { buildNative } = await import('./native.mjs');
+      const dir = path.resolve(arg ?? '.');
+      const { ANDROID_ABIS } = await import('./native.mjs');
+      const abis = (option(argv, '--abi') ?? ANDROID_ABIS.join(',')).split(',').filter(Boolean);
+      const target = option(argv, '--target') ?? 'android';
+      const simArchs = (option(argv, '--sim-arch') ?? 'arm64,x86_64').split(',').filter(Boolean);
+      const { manifest } = buildNative(dir, {
+        target,
+        abis,
+        simArchs,
+        ndk: option(argv, '--ndk'),
+        offline: argv.includes('--offline'),
+      });
+      const built =
+        target === 'android'
+          ? Object.keys(manifest.android.abis).join(', ')
+          : target === 'ios'
+            ? Object.keys(manifest.ios.slices).join(', ')
+            : manifest.web.wasm;
+      console.log(
+        `rnrs: ${manifest.module} prebuilt for ${target} ${built} (${manifest.symbol}, ABI ${manifest.abi}); manifest ${path.relative(process.cwd(), path.join(dir, 'rnrs/native/manifest.json'))}`,
+      );
+      return 0;
+    }
+    if (command === 'link' || command === 'build') {
+      const target = option(argv, '--target');
+      if (!['android', 'ios', 'web'].includes(target))
+        throw new GenError('--target must be android, ios or web');
+      const app = path.resolve(option(argv, '--app') ?? '.');
+      const out = path.resolve(option(argv, '--out') ?? path.join(app, '.rnrs', target));
+      const abis = (option(argv, '--abi') ?? 'arm64-v8a').split(',').filter(Boolean);
+      const minSdk =
+        option(argv, '--min-sdk') === undefined ? undefined : Number(option(argv, '--min-sdk'));
+      const { linkModules } = await import('./native.mjs');
+      const iosDeploymentTarget = option(argv, '--ios-deployment-target');
+      const { prebuilt, source, slices } = linkModules(app, target, {
+        out,
+        abis,
+        minSdk,
+        iosDeploymentTarget,
+      });
+      if (command === 'link' && argv.includes('--json')) {
+        console.log(
+          JSON.stringify({
+            prebuilt: prebuilt.map((p) => p.crate),
+            source: [...source].map((p) => p.crate),
+            slices,
+          }),
+        );
+        return 0;
+      }
+      console.log(
+        `rnrs: ${target}: ${prebuilt.length} prebuilt module(s)${prebuilt.length ? ` (${prebuilt.map((p) => p.crate).join(', ')})` : ''}, ${source.size} built from source${source.size ? ` (${[...source].map((p) => p.crate).join(', ')})` : ''}`,
+      );
+      if (command === 'link' || source.size === 0) return 0;
+      const { buildBundle } = await import('./bundle.mjs');
+      const sourceDirs = new Set([...source].map((p) => p.dir));
+      const result = buildBundle(app, target, {
+        out,
+        abis,
+        sdk: option(argv, '--sdk') ?? 'iphoneos',
+        archs: (option(argv, '--arch') ?? 'arm64').split(',').filter(Boolean),
+        offline: argv.includes('--offline'),
+        // Packages selected again by the bundle build: match them by directory.
+        only: (p) => sourceDirs.has(p.dir),
+        ...(argv.includes('--locked') ? { locked: true } : {}),
+      });
+      console.log(`rnrs: source bundle crate ${path.relative(process.cwd(), result.crateDir)}`);
+      return 0;
+    }
+    if (command === 'bundle' || command === 'lock') {
       const target = option(argv, '--target');
       const app = path.resolve(option(argv, '--app') ?? '.');
       if (!['android', 'ios', 'web'].includes(target))
         throw new GenError('--target must be android, ios or web');
       const out = path.resolve(option(argv, '--out') ?? path.join(app, '.rnrs', target));
-      const { generateBundle, buildBundle, lockBundle } = await import('./bundle.mjs');
-      const abis = (option(argv, '--abi') ?? 'arm64-v8a').split(',');
-      // iOS: the Xcode SDK (PLATFORM_NAME) and architectures (ARCHS) being built.
-      const sdk = option(argv, '--sdk') ?? 'iphoneos';
-      const archs = (option(argv, '--arch') ?? 'arm64').split(',').filter(Boolean);
+      const { generateBundle, lockBundle } = await import('./bundle.mjs');
       const offline = argv.includes('--offline');
       if (command === 'lock') {
         const check = argv.includes('--check');
@@ -645,17 +761,7 @@ export async function main(argv) {
         );
         return 0;
       }
-      const result =
-        command === 'bundle'
-          ? generateBundle(app, target, out)
-          : buildBundle(app, target, {
-              out,
-              abis,
-              sdk,
-              archs,
-              offline,
-              ...(argv.includes('--locked') ? { locked: true } : {}),
-            });
+      const result = generateBundle(app, target, out);
       console.log(
         `rnrs: ${target} bundle with ${result.modules.length} module(s): ${result.modules.map((m) => `${m.ir.module} (${m.chain.join(' -> ')})`).join(', ') || 'none'}`,
       );
