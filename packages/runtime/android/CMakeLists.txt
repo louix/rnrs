@@ -23,8 +23,11 @@ endif()
 # Sets RNRS_MODULE_ARCHIVES (this ABI's prebuilt archives), RNRS_MODULE_LINK_LIBRARIES and
 # RNRS_SOURCE_BUNDLE. Not fatal at configure time: an IDE sync can configure CMake before the
 # Gradle task ran (every Gradle build runs it before the CMake tasks; compiling without it
-# fails in RnrsRegistry.cpp). CMake reconfigures when the generated file changes.
+# fails in RnrsRegistry.cpp). CMake reconfigures when the generated file changes, and through
+# the CONFIGURE_DEPENDS glob (re-checked by every build) when it appears or disappears: include()
+# alone tracks only a file that existed at configure time.
 set(RNRS_MODULES_CMAKE "${RNRS_LINK_DIR}/modules.cmake")
+file(GLOB rnrs_modules_cmake CONFIGURE_DEPENDS "${RNRS_MODULES_CMAKE}")
 if(EXISTS "${RNRS_MODULES_CMAKE}")
   include("${RNRS_MODULES_CMAKE}")
 else()
