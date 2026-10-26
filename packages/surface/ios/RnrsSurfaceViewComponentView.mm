@@ -47,7 +47,7 @@
 #import <react/renderer/components/RnrsSurfaceSpec/Props.h>
 #import <react/renderer/components/RnrsSurfaceSpec/RCTComponentViewHelpers.h>
 
-#import "RnrsSurfaceRust.h"
+#import <RnrsRuntime/RnrsSurfaceEntry.h>
 
 using namespace facebook::react;
 

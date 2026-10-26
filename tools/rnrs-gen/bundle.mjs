@@ -330,7 +330,10 @@ export function generateBundle(appDir, target, outDir, { only } = {}) {
 
 /** The ABI number of the native module tables this generator emits (RNRS_ABI in
  *  packages/runtime/cpp/RnrsAbi.h and rust/rnrs-android; the symbol names carry it). */
-export const NATIVE_ABI = 1;
+export const NATIVE_ABI = 2;
+/** The surface table ABI (RNRS_SURFACE_ABI in RnrsAbi.h, SURFACE_ABI in rnrs-surface's host.rs)
+ *  this framework's surface host accepts; prebuilt surface modules record theirs. */
+export const NATIVE_SURFACE_ABI = 1;
 /** The symbol a native binary exports for module crate `crate`. */
 export const tableSymbol = (crate) => `rnrs_module_v${NATIVE_ABI}_${crate.replace(/-/g, '_')}`;
 
@@ -362,9 +365,19 @@ export function writeBundleCrate({ modules, libraries, target, outDir, logging, 
     ...(target === 'web' ? [`wasm-bindgen = "=${wasmBindgenVersion()}"`] : []),
     ...modules.map((p) => `${p.crate} = { path = ${toml(p.cratePath)} }`),
   ];
-  const webSurface =
-    target === 'web' ? libraries.find((p) => p.crate === 'rnrs-surface') : undefined;
-  if (webSurface) deps.push(`rnrs-surface = { path = ${toml(webSurface.cratePath)} }`);
+  // Native: modules that render to surfaces point their table at this binary's rnrs-surface
+  // table (rnrs_surface::host). Web: the surface exports are kept for the bootstrap.
+  const surfaceLib = libraries.find((p) => p.crate === 'rnrs-surface');
+  const surfaceModules = new Set(
+    native ? modules.filter((p) => frameworkNeeds(p).has('rnrs-surface')).map((p) => p.crate) : [],
+  );
+  if (surfaceModules.size && !surfaceLib)
+    throw new BundleError(
+      `${[...surfaceModules].join(', ')} render to surfaces, but no @rnrs/surface package was given to the bundle`,
+    );
+  const webSurface = target === 'web' ? surfaceLib : undefined;
+  if (webSurface || surfaceModules.size)
+    deps.push(`rnrs-surface = { path = ${toml(surfaceLib.cratePath)} }`);
   // Rust logging (off unless the app opts in): rnrs-log for managed and external modes; in
   // managed mode the build script validates the filter with the same Targets parser.
   if (logging) deps.push(`rnrs-log = { path = ${toml(path.join(FRAMEWORK_RUST, 'rnrs-log'))} }`);
@@ -411,6 +424,7 @@ panic = "abort"
     const ident = p.crate.replace(/-/g, '_');
     return {
       ident,
+      surface: surfaceModules.has(p.crate),
       file: `glue/${ident}.rs`,
       content: emitGlue(p.ir, { crate: ident, moduleType: p.moduleType }),
     };
@@ -440,7 +454,7 @@ ${install.replace(/^ {4}/gm, '        ')}    });
 ${mods
   .map(
     (m) => `
-static ${m.ident.toUpperCase()}: rnrs_android::ModuleTable = rnrs_android::ModuleTable::new(&glue::${m.ident}::MODULE, rnrs_binary_init);
+static ${m.ident.toUpperCase()}: rnrs_android::ModuleTable = rnrs_android::ModuleTable::new(&glue::${m.ident}::MODULE, rnrs_binary_init)${m.surface ? '.with_surface(rnrs_surface::host::table())' : ''};
 /// The module table of ${m.ident} (packages/runtime/cpp/RnrsAbi.h); returns a static address only.
 #[no_mangle]
 pub extern "C" fn ${tableSymbol(m.ident)}() -> &'static rnrs_android::ModuleTable {

@@ -1,5 +1,6 @@
-// The rnrs-surface Rust entry points (packages/surface/rust/src/ios.rs), linked from the
-// app's Rust bundle (librnrs_bundle.a). Main thread only.
+// The surface entry points @rnrs/surface's iOS view calls (a public header of the RnrsRuntime
+// pod; defined in RnrsSurfaceEntry.mm): each forwards to the module binary that owns the
+// surface key. Main thread only.
 #pragma once
 #include <stdbool.h>
 #include <stdint.h>

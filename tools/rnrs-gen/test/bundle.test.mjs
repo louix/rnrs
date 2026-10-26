@@ -94,11 +94,11 @@ test('discovery follows dependencies transitively, dedupes, and ignores dev/peer
       // One module table per module, the only exported symbols (RnrsAbi.h).
       assert.match(
         lib,
-        /static VALUES: rnrs_android::ModuleTable = rnrs_android::ModuleTable::new\(&glue::values::MODULE, rnrs_binary_init\);\n[^\n]*\n#\[no_mangle\]\npub extern "C" fn rnrs_module_v1_values\(\) -> &'static rnrs_android::ModuleTable \{\n    &VALUES\n\}/,
+        /static VALUES: rnrs_android::ModuleTable = rnrs_android::ModuleTable::new\(&glue::values::MODULE, rnrs_binary_init\);\n[^\n]*\n#\[no_mangle\]\npub extern "C" fn rnrs_module_v2_values\(\) -> &'static rnrs_android::ModuleTable \{\n    &VALUES\n\}/,
       );
       assert.match(
         lib,
-        /pub extern "C" fn rnrs_module_v1_counter\(\) -> &'static rnrs_android::ModuleTable \{\n    &COUNTER\n\}/,
+        /pub extern "C" fn rnrs_module_v2_counter\(\) -> &'static rnrs_android::ModuleTable \{\n    &COUNTER\n\}/,
       );
       assert.equal(lib.match(/#\[no_mangle\]/g).length, 2);
       assert.doesNotMatch(lib, /MODULES|rnrs_bundle_init|register/);
@@ -222,7 +222,7 @@ test('ios packages generate, check and bundle as a native staticlib', async () =
         assert.match(cargo, /^rnrs-android = \{ path = /m);
         assert.match(
           readFileSync(path.join(crateDir, 'src/lib.rs'), 'utf8'),
-          /pub extern "C" fn rnrs_module_v1_ios_pkg\(\) -> &'static rnrs_android::ModuleTable/,
+          /pub extern "C" fn rnrs_module_v2_ios_pkg\(\) -> &'static rnrs_android::ModuleTable/,
         );
         if (!targets.includes('android'))
           assert.throws(
@@ -426,7 +426,7 @@ test('library packages are selected and target-checked, patched by crate name, a
         /^\/\/ Library crates: rnrs-surface-test \(app -> renderer -> @rnrs\/surface-test\)$/m,
       );
       // The library crate registers no module: only counter has a table.
-      assert.deepEqual(lib.match(/fn rnrs_module_v1_\w+/g), ['fn rnrs_module_v1_counter']);
+      assert.deepEqual(lib.match(/fn rnrs_module_v2_\w+/g), ['fn rnrs_module_v2_counter']);
       assert.throws(
         () => selectModules(app, 'web'),
         /app -> renderer -> @rnrs\/surface-test: surface-test declares rustNative.targets \[android\] and cannot be bundled for web/,

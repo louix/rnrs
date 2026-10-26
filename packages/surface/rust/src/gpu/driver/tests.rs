@@ -33,9 +33,6 @@ impl PlatformWindow for Window {
     fn raw_display_handle(&self) -> RawDisplayHandle {
         RawDisplayHandle::Android(AndroidDisplayHandle::new())
     }
-    fn identity(&self) -> usize {
-        self.0
-    }
 }
 static NEXT_WINDOW: AtomicUsize = AtomicUsize::new(0x9000);
 fn attach(surface: &Surface, extent: Extent) -> u64 {

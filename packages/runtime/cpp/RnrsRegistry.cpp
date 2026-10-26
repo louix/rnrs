@@ -4,6 +4,8 @@
 // symbol and never called again; the other modules keep working.
 #include "RnrsRegistry.h"
 #include "RnrsPlatform.h"
+#include "RnrsSurfaceHost.h"
+#include <algorithm>
 #include <cstring>
 #include <mutex>
 #include <string_view>
@@ -21,8 +23,10 @@ namespace rnrs {
 namespace {
 
 struct Registry {
-  std::vector<const RnrsModuleV1*> modules;
+  std::vector<const RnrsModuleV2*> modules;
   std::vector<std::string> refused;
+  // Bound surface tables; owner n is surfaces[n - 1].
+  std::vector<const RnrsSurfaceV1*> surfaces;
 };
 
 std::string_view text(const char* p, size_t n) { return n ? std::string_view(p, n) : std::string_view(); }
@@ -32,11 +36,11 @@ const Registry& registry() {
   static std::once_flag once;
   std::call_once(once, [] {
     for (const RnrsModuleEntry* e = kRnrsModules; e->getter; ++e) {
-      const RnrsModuleV1* t = e->getter();
+      const RnrsModuleV2* t = e->getter();
       std::string why;
       if (!t) {
         why = "returned no table";
-      } else if (t->abi != RNRS_ABI || t->size != sizeof(RnrsModuleV1)) {
+      } else if (t->abi != RNRS_ABI || t->size != sizeof(RnrsModuleV2)) {
         why = "was built for rnrs ABI " + std::to_string(t->abi) + " (table size " + std::to_string(t->size) +
               "); this @rnrs/runtime uses ABI " + std::to_string(RNRS_ABI) + ". Install versions of the module and @rnrs/runtime built for the same ABI";
       } else if (t->vtableSize != sizeof(JsiVTable) || t->scalarBindingSize != sizeof(RnrsScalarBinding)) {
@@ -54,6 +58,42 @@ const Registry& registry() {
       }
       r.modules.push_back(t);
     }
+    // Surface tables, after every module table is validated and before any init: each distinct
+    // table (one per binary) is checked, then bound once to the next owner number. A module whose
+    // table is refused or cannot be bound is refused with it; a table shared by several modules
+    // of one binary is bound once.
+    std::vector<const RnrsSurfaceV1*> unusable;
+    const auto has = [](const auto& list, const RnrsSurfaceV1* s) { return std::find(list.begin(), list.end(), s) != list.end(); };
+    const auto bind = [&](const RnrsSurfaceV1* s) -> std::string {
+      if (!s || has(r.surfaces, s)) return {};
+      if (has(unusable, s)) return "shares a surface table that was refused";
+      std::string why;
+      if (s->abi != RNRS_SURFACE_ABI || s->size != sizeof(RnrsSurfaceV1))
+        why = "was built with rnrs-surface ABI " + std::to_string(s->abi) + " (table size " + std::to_string(s->size) +
+              "); this @rnrs/runtime uses surface ABI " + std::to_string(RNRS_SURFACE_ABI) +
+              ". Install versions of the module and @rnrs/surface built for the same ABI";
+      else if (r.surfaces.size() + 1 >= abi::kSurfaceOwnerLimit)
+        why = "has a surface table beyond the owner limit";
+      else if (!s->bind(static_cast<uint32_t>(r.surfaces.size() + 1), surface::releaseClaim))
+        why = "has a surface table that was already bound (linked twice?)";
+      if (why.empty())
+        r.surfaces.push_back(s);
+      else
+        unusable.push_back(s);
+      return why;
+    };
+    std::vector<const RnrsModuleV2*> accepted;
+    for (const auto* t : r.modules) {
+      const std::string why = bind(t->surface);
+      if (why.empty()) {
+        accepted.push_back(t);
+        continue;
+      }
+      const std::string name(text(t->name, t->nameLen));
+      r.refused.push_back("module " + name + " " + why);
+      platform::log(platform::LogLevel::Error, "module %s %s", name.c_str(), why.c_str());
+    }
+    r.modules = std::move(accepted);
     // After every table is validated, before any other entry: each binary's startup (idempotent).
     for (const auto* t : r.modules) t->init();
   });
@@ -62,7 +102,7 @@ const Registry& registry() {
 
 }  // namespace
 
-const RnrsModuleV1* findModule(const std::string& name, const std::string& hash, std::string& error) {
+const RnrsModuleV2* findModule(const std::string& name, const std::string& hash, std::string& error) {
   const auto& r = registry();
   for (const auto* t : r.modules) {
     if (text(t->name, t->nameLen) != name) continue;
@@ -78,6 +118,11 @@ const RnrsModuleV1* findModule(const std::string& name, const std::string& hash,
   error = "module " + name + " is not linked into this app (linked: " + (known.empty() ? "none" : known) + ")";
   for (const auto& why : r.refused) error += "; refused: " + why;
   return nullptr;
+}
+
+const RnrsSurfaceV1* surfaceOwner(uint32_t owner) {
+  const auto& surfaces = registry().surfaces;
+  return owner >= 1 && owner <= surfaces.size() ? surfaces[owner - 1] : nullptr;
 }
 
 bool setAppDataDir(const std::string& path) {

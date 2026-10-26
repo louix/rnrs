@@ -59,7 +59,7 @@ function setup(touchInput: 'none' | 'rust' = 'rust') {
   let boot!: ReturnType<typeof createSurfaceBootstrap>;
   const backend = installWebBackend(
     wasm as unknown as RnrsWasm,
-    (same) => (boot = createSurfaceBootstrap(same)),
+    (instances) => (boot = createSurfaceBootstrap(instances)),
   );
   const module = createTouchProbeModuleForTesting(8);
   const probe = module.create();

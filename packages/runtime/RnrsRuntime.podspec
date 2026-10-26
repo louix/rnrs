@@ -11,7 +11,8 @@ require "pathname"
 
 package = JSON.parse(File.read(File.join(__dir__, "package.json")))
 
-# The app's modules for this pod install: {"prebuilt", "source", "slices" => {sdk => [paths]}}.
+# The app's modules for this pod install: {"prebuilt", "source", "slices" => {sdk => [paths]},
+# "frameworks", "libraries"} (what the prebuilt slices link against).
 rnrs_link_modules = lambda do |app_root, deployment_target|
   node = ENV["NODE_BINARY"].to_s.empty? ? "node" : ENV["NODE_BINARY"]
   cmd = [node, File.join(__dir__, "cli/run.mjs"), "link", "--target", "ios", "--app", app_root.to_s,
@@ -56,10 +57,12 @@ Pod::Spec.new do |s|
     pod_xcconfig["GCC_PREPROCESSOR_DEFINITIONS"] = "$(inherited) RNRS_TEST_HOOKS=1"
   end
   s.pod_target_xcconfig = pod_xcconfig
-  # Each prebuilt module's XCFramework slice for the SDK being built, plus the source bundle.
+  # Each prebuilt module's XCFramework slice for the SDK being built, the system frameworks and
+  # libraries those slices need (surface modules: Metal and friends), plus the source bundle.
+  system_libs = linked["frameworks"].map { |f| " -framework #{f}" }.join + linked["libraries"].map { |l| " -l#{l}" }.join
   s.user_target_xcconfig = {
-    "OTHER_LDFLAGS[sdk=iphoneos*]" => "$(inherited) #{linked["slices"]["iphoneos"].map(&from_pods).join(" ")}#{bundle_lib}",
-    "OTHER_LDFLAGS[sdk=iphonesimulator*]" => "$(inherited) #{linked["slices"]["iphonesimulator"].map(&from_pods).join(" ")}#{bundle_lib}",
+    "OTHER_LDFLAGS[sdk=iphoneos*]" => "$(inherited) #{linked["slices"]["iphoneos"].map(&from_pods).join(" ")}#{system_libs}#{bundle_lib}",
+    "OTHER_LDFLAGS[sdk=iphonesimulator*]" => "$(inherited) #{linked["slices"]["iphonesimulator"].map(&from_pods).join(" ")}#{system_libs}#{bundle_lib}",
   }
 
   if source_build

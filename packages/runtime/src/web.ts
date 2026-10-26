@@ -31,8 +31,8 @@ let initializedBootstrap: WebBootstrapFactory | undefined;
 /** Loads the app's modules: its registry (every Wasm instance it lists), or one bundle. Calls with
  * the same registry/bundle and bootstrap share initialization; failed loads or bootstrap
  * creation can retry. `wasm` overrides the location of a single bundle's .wasm file. The
- * optional framework bootstrap receives the source bundle (the first instance), without adding
- * a surface dependency to headless applications.
+ * optional framework bootstrap receives every instance (prebuilt or source-built), without
+ * adding a surface dependency to headless applications.
  * Low-level installWebBackend replaces the one active backend in this JS realm; do not
  * mix that testing/framework replacement API with memoized application initRnrs calls. */
 export function initRnrs(
@@ -58,11 +58,6 @@ export function initRnrs(
         if (wasm !== undefined)
           throw new Error(
             '@rnrs/runtime: a .wasm location applies to a single bundle, not to a module registry',
-          );
-        // Framework extensions live in the source bundle; never hand them a prebuilt instance.
-        if (options.bootstrap && (!bundle.source || bundle.source !== bundle.instances[0]))
-          throw new Error(
-            '@rnrs/runtime: a bootstrap (surfaces) needs the app source bundle, but every module of this registry is prebuilt; list the surface modules in rustNativeApp.sourceBuild',
           );
         await Promise.all(bundle.instances.map((instance) => instance.default()));
         installWebBackend(bundle.instances, options.bootstrap);

@@ -8,12 +8,17 @@
 //! a view.
 //!
 //! # Identities
-//! Keys come from a process-wide counter and are never reused, so a key from a disposed
-//! surface or an earlier JS runtime matches nothing. Each attachment gets its own number,
-//! so a late resize or detach for an earlier attachment is ignored. A platform window is
-//! owned by at most one attachment process-wide: its identity stays reserved until the last
-//! reference to that attachment's [`WindowCell`] is dropped (exactly once), so a second key
-//! cannot attach the same window while an old renderer may still use it.
+//! Every module binary links its own copy of this crate. The app's surface host (the framework
+//! C++, packages/runtime/cpp/RnrsSurfaceHost.h) binds each copy to an *owner* number
+//! ([`host`]), and a key is `owner * 2^32 + local`: it names the binary that owns the surface,
+//! and the host routes every platform call by it. Local keys come from a counter of this copy
+//! and are never reused, so a key from a disposed surface or an earlier JS runtime matches
+//! nothing. Each attachment gets its own number, so a late resize or detach for an earlier
+//! attachment is ignored. A platform window is owned by at most one attachment process-wide:
+//! the host claims it before handing it to a binary, and the binary returns the claim when the
+//! last reference to that attachment's [`WindowCell`] is dropped (exactly once, after the window
+//! itself), so no surface of any binary can attach the same window while an old renderer may
+//! still use it.
 //!
 //! # Admission protocol (detach and revocation)
 //! Renderers reach the window only through a [`WindowLease`]. Each GPU operation on the
@@ -35,21 +40,19 @@
 //! the timeout; it is not a non-blocking operation.
 //!
 //! # Lock order
-//! Each lock is taken alone: the surface registry, a surface's state, a surface's touch queue,
-//! a cell's admission state, and the window-ownership registry are never nested. Wakers run, and cells,
-//! windows and surfaces are dropped, only with no lock held (the window-ownership registry
-//! is locked by [`WindowCell`]'s `Drop`).
+//! Each lock is taken alone: the surface registry, a surface's state, a surface's touch queue
+//! and a cell's admission state are never nested. Wakers run, and cells, windows and surfaces
+//! are dropped, only with no lock held (dropping a cell returns its window claim to the host,
+//! which takes the host's own claim lock).
 //!
 //! Native paths never call JS. Browser close/detach may notify a main-thread framework
 //! listener after unlocking; that listener only queues work. [`Surface::close`] never waits.
 use std::collections::HashMap;
 #[cfg(not(target_arch = "wasm32"))]
-use std::collections::HashSet;
-#[cfg(not(target_arch = "wasm32"))]
 use std::ffi::c_void;
 #[cfg(not(target_arch = "wasm32"))]
 use std::ptr::NonNull;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, Weak};
 #[cfg(not(target_arch = "wasm32"))]
 use std::sync::Condvar;
@@ -63,6 +66,8 @@ use raw_window_handle::{DisplayHandle, HandleError, HasDisplayHandle, HasWindowH
 mod android;
 #[cfg(target_os = "ios")]
 pub mod ios;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod host;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod layer;
 /// Android and iOS views and the browser host (web_host) deliver touches into this queue.
@@ -82,10 +87,6 @@ pub trait PlatformWindow: Send + Sync + 'static {
     /// thread) returns an error, and renderers use [`PlatformWindow::metal_layer`] instead.
     fn raw_window_handle(&self) -> Result<RawWindowHandle, HandleError>;
     fn raw_display_handle(&self) -> RawDisplayHandle;
-    /// Identifies the underlying platform window object (for Android, its address). Stable
-    /// while `self` holds its reference, so two live values with equal identity are the same
-    /// window.
-    fn identity(&self) -> usize;
     /// The window's `CAMetalLayer` (iOS), valid for as long as `self` is alive; None elsewhere.
     fn metal_layer(&self) -> Option<NonNull<c_void>> {
         None
@@ -113,8 +114,7 @@ pub struct Counters {
     pub attaches: u64,
     pub detaches: u64,
     pub resizes: u64,
-    /// Attach requests refused: another window attached to this surface, the window owned by
-    /// another attachment, or the surface closed.
+    /// Attach requests refused: another window attached to this surface, or the surface closed.
     pub refused_attaches: u64,
     /// Detaches that returned before every lease was dropped.
     pub detach_timeouts: u64,
@@ -150,12 +150,11 @@ struct Admission {
     retiring_since: Option<Instant>,
 }
 
-/// One attachment of one platform window. Owns the window reference and its process-wide
-/// identity reservation; both are released when the last `Arc` is dropped.
+/// One attachment of one platform window. Owns the window reference (and, through it, the
+/// host's claim on the window, [`host`]); both are released when the last `Arc` is dropped.
 #[cfg(not(target_arch = "wasm32"))]
 pub struct WindowCell {
     window: Box<dyn PlatformWindow>,
-    identity: usize,
     admission: Mutex<Admission>,
     /// Signalled when a lease is dropped.
     released: Condvar,
@@ -175,12 +174,9 @@ impl WindowCell {
 #[cfg(not(target_arch = "wasm32"))]
 impl Drop for WindowCell {
     fn drop(&mut self) {
-        let mut windows = owned_windows();
-        windows.remove(&self.identity);
-        drop(windows);
         WINDOW_RELEASES.fetch_add(1, Ordering::SeqCst);
-        // Retirement after an asynchronous revocation: process-wide atomics only, so no lock
-        // is taken here besides the window-ownership registry above (taken alone).
+        // Retirement after an asynchronous revocation: atomics only, so no lock is taken here.
+        // The window (then its claim) is dropped after this, with the cell's fields.
         let since = self.admission.get_mut().unwrap_or_else(|e| e.into_inner()).retiring_since;
         if let Some(since) = since {
             let elapsed = since.elapsed();
@@ -249,9 +245,20 @@ impl Drop for Inner {
     }
 }
 
-/// Keys start at 1 (0 means "no surface" on the platform side) and stay below 2^53, so they
-/// are exact JS numbers.
+/// Version of the contract between this crate and the app's surface host, recorded in a surface
+/// module's manifest: the native [`host::SurfaceTable`] (`RNRS_SURFACE_ABI` in RnrsAbi.h; the host
+/// accepts a table only with exactly this number and its own struct size) and the browser exports
+/// (`web_exports`, checked by @rnrs/surface's bootstrap). Any change to the table, its callback,
+/// its codes or those exports bumps it everywhere.
+pub const SURFACE_ABI: u32 = 1;
+
+/// Local keys start at 1 (0 means "no surface" on the platform side) and stay below 2^32; with
+/// the owner (< 2^21) in the high bits, keys stay below 2^53, so they are exact JS numbers.
 static NEXT_KEY: AtomicU64 = AtomicU64::new(1);
+/// Bits of a key below the owner number.
+pub const OWNER_SHIFT: u32 = 32;
+/// Owner numbers stay below this.
+pub const OWNER_LIMIT: u32 = 1 << 21;
 static NEXT_ATTACHMENT: AtomicU64 = AtomicU64::new(1);
 #[cfg(not(target_arch = "wasm32"))]
 static WINDOW_RELEASES: AtomicU64 = AtomicU64::new(0);
@@ -261,10 +268,48 @@ fn registry() -> MutexGuard<'static, HashMap<u64, Weak<Inner>>> {
     REGISTRY.get_or_init(Default::default).lock().unwrap_or_else(|e| e.into_inner())
 }
 
-#[cfg(not(target_arch = "wasm32"))]
-fn owned_windows() -> MutexGuard<'static, HashSet<usize>> {
-    static WINDOWS: OnceLock<Mutex<HashSet<usize>>> = OnceLock::new();
-    WINDOWS.get_or_init(Default::default).lock().unwrap_or_else(|e| e.into_inner())
+/// The browser owner number of this Wasm instance ([`bind_web`]), 0 until bound.
+#[cfg(target_arch = "wasm32")]
+static WEB_OWNER: AtomicU32 = AtomicU32::new(0);
+
+/// Browser: binds this instance to `owner`, a number the app's surface bootstrap allocated,
+/// unless it is already bound (by an earlier installation of the same instance, possibly through
+/// another JS object for it). Returns the owner the instance is bound to: `owner`, the earlier
+/// one, or 0 if it is unbound and `owner` is out of range. The binding never changes.
+#[cfg(target_arch = "wasm32")]
+pub(crate) fn bind_web(owner: u32) -> u32 {
+    bind_once(&WEB_OWNER, owner)
+}
+
+/// [`bind_web`]'s rule on any cell (tested natively): stores `owner` if the cell is still 0 and
+/// `owner` is in range; returns what the cell holds afterwards.
+#[cfg_attr(not(any(target_arch = "wasm32", test)), allow(dead_code))]
+fn bind_once(cell: &AtomicU32, owner: u32) -> u32 {
+    if owner == 0 || owner >= OWNER_LIMIT {
+        return cell.load(Ordering::SeqCst);
+    }
+    match cell.compare_exchange(0, owner, Ordering::SeqCst, Ordering::SeqCst) {
+        Ok(_) => owner,
+        Err(bound) => bound,
+    }
+}
+
+/// This copy's owner number for new keys (native: [`host::bind`]; browser: [`bind_web`]).
+/// Android, iOS and the browser refuse to create a surface before the app's host bound this
+/// binary, so an ordering bug fails loudly instead of producing keys no view can attach; host
+/// tests use owner 0.
+fn owner() -> Result<u64, String> {
+    #[cfg(not(target_arch = "wasm32"))]
+    let owner = host::owner();
+    #[cfg(target_arch = "wasm32")]
+    let owner = WEB_OWNER.load(Ordering::SeqCst);
+    if owner == 0 && cfg!(target_arch = "wasm32") {
+        return Err("rnrs-surface: this Wasm instance is not bound to the app's surface host; pass createSurfaceBootstrap (@rnrs/surface/browser) to initRnrs before creating surfaces".into());
+    }
+    if owner == 0 && cfg!(any(target_os = "android", target_os = "ios")) {
+        return Err("rnrs-surface: this module binary is not bound to the app's surface host (packages/runtime/cpp/RnrsSurfaceHost.h); surfaces can be created only by modules the runtime registry has loaded".into());
+    }
+    Ok(owner.into())
 }
 
 fn lookup(key: u64) -> Option<Arc<Inner>> {
@@ -286,16 +331,15 @@ pub struct Surface {
 }
 
 impl Surface {
-    /// Fails only if the process has used 2^53 keys.
+    /// Fails if this binary has used 2^32 keys or, on Android and iOS, if the app's surface
+    /// host has not bound it ([`host`]; it binds every binary before any module code runs).
     pub fn new() -> Result<Self, String> {
-        #[cfg(target_os = "android")]
-        android::keep_entry_points();
-        #[cfg(target_os = "ios")]
-        ios::keep_entry_points();
-        let key = NEXT_KEY.fetch_add(1, Ordering::Relaxed);
-        if key >= 1 << 53 {
+        let owner = owner()?;
+        let local = NEXT_KEY.fetch_add(1, Ordering::Relaxed);
+        if local >= 1 << OWNER_SHIFT {
             return Err("surface keys exhausted".into());
         }
+        let key = (owner << OWNER_SHIFT) | local;
         let inner = Arc::new(Inner {
             key,
             state: Mutex::new(State {
@@ -481,7 +525,7 @@ impl Drop for WindowLease {
             a.leases -= 1;
             cell.released.notify_all();
         }
-        // Possibly the last reference: releases the window and its identity, no lock held.
+        // Possibly the last reference: releases the window and its claim, no lock held.
         drop(cell);
     }
 }
@@ -503,8 +547,9 @@ impl HasDisplayHandle for WindowLease {
     }
 }
 
-/// Entry points for the platform view (the Android JNI functions call these). Every function
-/// is safe to call with stale keys or attachments: they are refused or ignored, never errors.
+/// Entry points for the platform view, reached through this binary's surface table ([`host`]).
+/// Every function is safe to call with stale keys or attachments: they are refused or ignored,
+/// never errors.
 #[cfg(not(target_arch = "wasm32"))]
 pub mod platform {
     use super::*;
@@ -517,9 +562,6 @@ pub mod platform {
         /// This surface already has a window attached (first attached wins). The platform
         /// retries later; see the Kotlin view.
         SurfaceBusy,
-        /// This window is still owned by another (possibly detached but not yet released)
-        /// attachment. The platform retries later.
-        WindowBusy,
     }
 
     #[derive(Debug, PartialEq, Eq)]
@@ -534,18 +576,11 @@ pub mod platform {
     }
 
     /// Attaches `window` (whose ownership passes here; released if refused). Returns the new
-    /// attachment's number, always nonzero.
+    /// attachment's number, always nonzero. That no other attachment of any binary holds the
+    /// same window is the host's to check before (its claim travels inside `window`, [`host`]).
     pub fn attach(key: u64, window: Box<dyn PlatformWindow>, extent: Extent) -> Result<u64, AttachError> {
         let Some(inner) = lookup(key) else { return Err(AttachError::UnknownKey) };
-        let identity = window.identity();
-        // Reserve the window identity first (its own lock, taken alone). From here on the
-        // cell owns the reservation and its Drop releases it.
-        if !owned_windows().insert(identity) {
-            inner.lock().counters.refused_attaches += 1;
-            drop(window);
-            return Err(AttachError::WindowBusy);
-        }
-        let cell = Arc::new(WindowCell { window, identity, admission: Mutex::new(Admission::default()), released: Condvar::new() });
+        let cell = Arc::new(WindowCell { window, admission: Mutex::new(Admission::default()), released: Condvar::new() });
         let result = {
             let mut s = inner.lock();
             if s.closed || s.window.is_some() {
@@ -560,7 +595,7 @@ pub mod platform {
                 Ok((attachment, s.waker.clone()))
             }
         };
-        drop(cell); // a refused cell releases its window and reservation here, no lock held
+        drop(cell); // a refused cell releases its window and claim here, no lock held
         let (attachment, waker) = result?;
         inner.touch().begin(attachment, extent);
         wake(waker);
@@ -625,7 +660,7 @@ pub mod platform {
             drop(s);
             log::warn!("rnrs-surface: surface {key}: leases still held {timeout:?} after detach ({in_flight} admitted operation(s) in flight); attachment revoked, window retained until released");
         }
-        drop(cell); // releases the window and its identity if this was the last reference
+        drop(cell); // releases the window and its claim if this was the last reference
         outcome
     }
 
@@ -719,11 +754,6 @@ pub mod platform {
     /// Number of live surfaces in the registry (diagnostics and tests).
     pub fn live_surfaces() -> usize {
         registry().values().filter(|w| w.strong_count() > 0).count()
-    }
-
-    /// Windows currently owned by some attachment (diagnostics and tests).
-    pub fn owned_windows_count() -> usize {
-        owned_windows().len()
     }
 
     /// Total windows released since process start (diagnostics and tests).

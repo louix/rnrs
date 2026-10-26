@@ -203,8 +203,10 @@ export function refuseWasmAdapter(
 export interface WebBootstrap {
   dispose(): void;
 }
+/** A framework extension (surfaces): receives every Wasm instance of the backend (prebuilt module
+ *  instances and the source bundle alike), before any adapter of them exists. */
 export type WebBootstrapFactory = (
-  sameBundle: RnrsWasm,
+  instances: readonly RnrsWasm[],
   onRollback: (cleanup: () => void) => void,
 ) => WebBootstrap;
 let disposeInstalled: (() => void) | undefined;
@@ -262,8 +264,9 @@ export function installWebBackend(
     };
     const rollback: (() => void)[] = [];
     try {
-      // Framework extensions (surfaces) live in the source bundle, the first instance.
-      extension = bootstrap?.(instances[0], (cleanup) => {
+      // Framework extensions (surfaces) find their exports in any instance; they run before any
+      // adapter (and so any module code) of these instances exists.
+      extension = bootstrap?.(instances, (cleanup) => {
         rollback.push(cleanup);
       });
       if (bootstrap && (!extension || typeof extension.dispose !== 'function'))

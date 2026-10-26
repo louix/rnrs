@@ -326,7 +326,7 @@ jsi::Object createWorkletEndpoint(jsi::Runtime& rt, WorkletAdapterRef adapter, c
 
 jsi::Object createWorkletBox(jsi::Runtime& rt, const WorkletAdapterRef& adapter, const jsi::Value& endpoint, void* shared) {
   struct Owned {
-    const RnrsModuleV1* table;
+    const RnrsModuleV2* table;
     void* p;
     ~Owned() {
       if (p) table->nativeRelease(p);

@@ -702,7 +702,7 @@ export async function main(argv) {
         option(argv, '--min-sdk') === undefined ? undefined : Number(option(argv, '--min-sdk'));
       const { linkModules } = await import('./native.mjs');
       const iosDeploymentTarget = option(argv, '--ios-deployment-target');
-      const { prebuilt, source, slices } = linkModules(app, target, {
+      const { prebuilt, source, slices, frameworks, libraries } = linkModules(app, target, {
         out,
         abis,
         minSdk,
@@ -714,6 +714,8 @@ export async function main(argv) {
             prebuilt: prebuilt.map((p) => p.crate),
             source: [...source].map((p) => p.crate),
             slices,
+            frameworks,
+            libraries,
           }),
         );
         return 0;

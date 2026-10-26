@@ -42,7 +42,7 @@ function setup() {
   let boot!: ReturnType<typeof createSurfaceBootstrap>;
   const backend = installWebBackend(
     wasm as unknown as RnrsWasm,
-    (same) => (boot = createSurfaceBootstrap(same)),
+    (instances) => (boot = createSurfaceBootstrap(instances)),
   );
   const module = createWebgpuTriangleModuleForTesting(8);
   const wrapper = document.createElement('div'),

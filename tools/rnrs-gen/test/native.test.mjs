@@ -19,9 +19,11 @@ import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { ROOT } from '../cli.mjs';
-import { NATIVE_ABI, tableSymbol } from '../bundle.mjs';
+import { NATIVE_ABI, NATIVE_SURFACE_ABI, tableSymbol } from '../bundle.mjs';
 import {
   ANDROID_ABIS,
+  IOS_SURFACE_FRAMEWORKS,
+  IOS_SURFACE_LIBRARIES,
   MANIFEST,
   checkPackageBinaries,
   invalidateTarget,
@@ -120,10 +122,10 @@ test('prebuilt modules only: registry and archive list, no source bundle', () =>
       );
       assert.equal(source.size, 0);
       const registry = readFileSync(path.join(out(app), 'rnrs_registry.inc'), 'utf8');
-      assert.match(registry, /extern "C" const RnrsModuleV1\* rnrs_module_v1_counter\(\);/);
+      assert.match(registry, /extern "C" const RnrsModuleV2\* rnrs_module_v2_counter\(\);/);
       assert.match(
         registry,
-        /\{"rnrs_module_v1_meter", rnrs_module_v1_meter\},\n    \{nullptr, nullptr\},/,
+        /\{"rnrs_module_v2_meter", rnrs_module_v2_meter\},\n    \{nullptr, nullptr\},/,
       );
       const cmake = readFileSync(path.join(out(app), 'modules.cmake'), 'utf8');
       assert.match(cmake, /set\(RNRS_SOURCE_BUNDLE OFF\)/);
@@ -161,7 +163,7 @@ test('a source override is per module, and its prebuilt archive is not linked', 
       // Both tables are registered: counter's from the source bundle.
       assert.match(
         readFileSync(path.join(out(app), 'rnrs_registry.inc'), 'utf8'),
-        /rnrs_module_v1_counter[\s\S]*rnrs_module_v1_meter/,
+        /rnrs_module_v2_counter[\s\S]*rnrs_module_v2_meter/,
       );
     },
   ));
@@ -258,7 +260,7 @@ test('iOS: prebuilt XCFramework slices per SDK are linked; a missing slice is re
         }
         manifest.ios = {
           deploymentTarget: '15.1',
-          exports: [`rnrs_module_v1_${pkg}`, `rnrs_eh_personality_${pkg}`],
+          exports: [`rnrs_module_v2_${pkg}`, `rnrs_eh_personality_${pkg}`],
           xcframework: xc,
           slices,
         };
@@ -290,7 +292,7 @@ test('iOS: prebuilt XCFramework slices per SDK are linked; a missing slice is re
       assert.match(slices.iphonesimulator[0], /ios-arm64_x86_64-simulator\/librnrs_counter\.a$/);
       assert.match(
         readFileSync(path.join(out, 'rnrs_registry.inc'), 'utf8'),
-        /rnrs_module_v1_counter[\s\S]*rnrs_module_v1_meter/,
+        /rnrs_module_v2_counter[\s\S]*rnrs_module_v2_meter/,
       );
       // meter (no simulator slice) as a prebuilt module is refused.
       const pj = JSON.parse(readFileSync(path.join(app, 'package.json'), 'utf8'));
@@ -466,13 +468,117 @@ test('author guard: binaries must match the package; missing ones warn when pack
     },
   ));
 
-test('author guard: a module that needs rnrs-surface is source-only and says apps must build it from source', () => {
+test('author guard: a surface module is prebuilt for every target (binaries required for publishing)', () => {
   const { notes, errors } = checkPackageBinaries(path.join(ROOT, 'packages/vello2d'), {
     require: true,
   });
-  assert.deepEqual(errors, []);
-  assert.match(
-    notes.join('\n'),
-    /no prebuilt binaries \(its crate needs rnrs-surface, which cannot be prebuilt yet\): every app using it must list it in rustNativeApp\.sourceBuild and build it with Rust/,
+  assert.deepEqual(errors, [
+    '@rnrs/example-vello2d: no prebuilt android binaries; run `rnrs build-native --target android`',
+    '@rnrs/example-vello2d: no prebuilt ios binaries; run `rnrs build-native --target ios`',
+    '@rnrs/example-vello2d: no prebuilt web binaries; run `rnrs build-native --target web`',
+  ]);
+  assert.deepEqual(notes, []);
+});
+
+test('a prebuilt surface module links with @rnrs/surface installed; another surface ABI is refused', () => {
+  const app = (surfaceAbi) => (dir) => {
+    const triangle = install(dir, '@x/triangle', 'fixtures/webgpu-triangle');
+    const file = path.join(triangle, MANIFEST);
+    json(file, {
+      ...JSON.parse(readFileSync(file, 'utf8')),
+      surface: { abi: surfaceAbi, sha256: 'x' },
+    });
+    cpSync(path.join(ROOT, 'packages/surface'), path.join(dir, 'node_modules/@rnrs/surface'), {
+      recursive: true,
+      filter: (f) => !f.includes(`${path.sep}target`) && !f.includes(`${path.sep}node_modules`),
+    });
+    json(path.join(dir, 'package.json'), {
+      name: 'app',
+      dependencies: { '@x/triangle': '*', '@rnrs/surface': '*' },
+    });
+  };
+  withApp(undefined, app(NATIVE_SURFACE_ABI), (dir) => {
+    const { prebuilt, source } = linkModules(dir, 'android', {
+      out: out(dir),
+      abis: ['arm64-v8a'],
+    });
+    assert.deepEqual(
+      prebuilt.map((p) => p.crate),
+      ['rnrs-webgpu-triangle'],
+    );
+    assert.equal(source.size, 0, 'no source bundle: @rnrs/surface needs no Rust build');
+  });
+  withApp(undefined, app(NATIVE_SURFACE_ABI + 1), (dir) =>
+    assert.throws(
+      () => linkModules(dir, 'android', { out: out(dir), abis: ['arm64-v8a'] }),
+      new RegExp(
+        `@x/triangle: its prebuilt binary implements surface ABI ${NATIVE_SURFACE_ABI + 1}, this @rnrs/runtime needs ${NATIVE_SURFACE_ABI}`,
+      ),
+    ),
+  );
+});
+
+test('iOS: a prebuilt surface module links its slices with the frameworks its manifest records', () => {
+  const app = (frameworks) => (dir) => {
+    const triangle = install(dir, '@x/triangle', 'fixtures/webgpu-triangle');
+    const file = path.join(triangle, MANIFEST);
+    const xc = 'rnrs/native/ios/rnrs_rnrs_webgpu_triangle.xcframework';
+    const slices = {
+      iphoneos: { path: `${xc}/ios-arm64/librnrs_rnrs_webgpu_triangle.a` },
+      iphonesimulator: { path: `${xc}/ios-arm64-simulator/librnrs_rnrs_webgpu_triangle.a` },
+    };
+    for (const s of Object.values(slices)) {
+      mkdirSync(path.dirname(path.join(triangle, s.path)), { recursive: true });
+      writeFileSync(path.join(triangle, s.path), '!<arch>\n');
+    }
+    json(file, {
+      ...JSON.parse(readFileSync(file, 'utf8')),
+      surface: { abi: NATIVE_SURFACE_ABI, sha256: 'x' },
+      ios: {
+        deploymentTarget: '15.1',
+        exports: [tableSymbol('rnrs-webgpu-triangle'), 'rnrs_eh_personality_rnrs_webgpu_triangle'],
+        ...(frameworks && { frameworks, linkLibraries: IOS_SURFACE_LIBRARIES }),
+        xcframework: xc,
+        slices,
+      },
+    });
+    cpSync(path.join(ROOT, 'packages/surface'), path.join(dir, 'node_modules/@rnrs/surface'), {
+      recursive: true,
+      filter: (f) => !f.includes(`${path.sep}target`) && !f.includes(`${path.sep}node_modules`),
+    });
+    json(path.join(dir, 'package.json'), {
+      name: 'app',
+      dependencies: { '@x/triangle': '*', '@rnrs/surface': '*' },
+    });
+  };
+  const out = (dir) => path.join(dir, '.rnrs/ios');
+  withApp(undefined, app(IOS_SURFACE_FRAMEWORKS), (dir) => {
+    const { prebuilt, source, slices, frameworks, libraries } = linkModules(dir, 'ios', {
+      out: out(dir),
+    });
+    assert.deepEqual(
+      prebuilt.map((p) => p.crate),
+      ['rnrs-webgpu-triangle'],
+    );
+    assert.equal(source.size, 0, 'no source bundle: @rnrs/surface needs no Rust build');
+    assert.match(
+      slices.iphonesimulator[0],
+      /ios-arm64-simulator\/librnrs_rnrs_webgpu_triangle\.a$/,
+    );
+    assert.deepEqual(frameworks, [
+      'Metal',
+      'QuartzCore',
+      'CoreGraphics',
+      'CoreFoundation',
+      'Foundation',
+    ]);
+    assert.deepEqual(libraries, ['objc']);
+  });
+  // A surface binary from before the frameworks were recorded is refused, not linked short.
+  withApp(undefined, app(undefined), (dir) =>
+    assert.throws(
+      () => linkModules(dir, 'ios', { out: out(dir) }),
+      /@x\/triangle: its iOS surface binary lists no frameworks to link/,
+    ),
   );
 });

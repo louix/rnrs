@@ -1,6 +1,7 @@
 //! iOS: the `CAMetalLayer`-backed window of `RnrsSurfaceViewComponentView`
-//! (packages/surface/ios), its C entry points, and the explicit Core Animation transaction
-//! for configures.
+//! (packages/surface/ios) and the explicit Core Animation transaction for configures. The C
+//! entry points the view calls are the framework's (packages/runtime/ios/RnrsSurfaceEntry.mm),
+//! which forward to the owning binary through [`crate::host`].
 //!
 //! Threads: every entry point is called on the main thread (UIKit). The render thread reaches
 //! the layer only through a lease (wgpu, under admission) and [`configure_in_transaction`].
@@ -33,8 +34,7 @@ use std::ptr::NonNull;
 use raw_window_handle::{HandleError, RawDisplayHandle, RawWindowHandle, UiKitDisplayHandle};
 
 use crate::layer::{self, Configured, LayerTransaction};
-use crate::platform::{self, AttachError, Revoked};
-use crate::{Extent, PlatformWindow, WindowLease};
+use crate::{PlatformWindow, WindowLease};
 
 type Id = *mut c_void;
 type Sel = *mut c_void;
@@ -91,7 +91,7 @@ unsafe fn send_get_bool(obj: Id, name: &CStr) -> bool {
     unsafe { f(obj, sel(name)) != 0 }
 }
 
-fn on_main_thread() -> bool {
+pub(crate) fn on_main_thread() -> bool {
     // SAFETY: no arguments; pure query.
     unsafe { pthread_main_np() == 1 }
 }
@@ -134,7 +134,7 @@ impl IosWindow {
     ///
     /// # Safety
     /// `view` is a live `UIView` and `layer` a live `CAMetalLayer` (its sublayer).
-    unsafe fn retain(view: NonNull<c_void>, layer: NonNull<c_void>) -> Self {
+    pub(crate) unsafe fn retain(view: NonNull<c_void>, layer: NonNull<c_void>) -> Self {
         // SAFETY (caller): live objects; objc_retain returns the same pointer.
         unsafe {
             objc_retain(view.as_ptr());
@@ -159,10 +159,6 @@ impl PlatformWindow for IosWindow {
     }
     fn raw_display_handle(&self) -> RawDisplayHandle {
         RawDisplayHandle::UiKit(UiKitDisplayHandle::new())
-    }
-    /// The layer address: stable while the view is retained.
-    fn identity(&self) -> usize {
-        self.layer.as_ptr() as usize
     }
     fn metal_layer(&self) -> Option<NonNull<c_void>> {
         Some(self.layer)
@@ -212,111 +208,4 @@ pub fn configure_in_transaction<R, E>(lease: &WindowLease, configure: impl FnOnc
         }),
         None => Configured { result: configure(), acquire_allowed: false },
     }
-}
-
-/// Result codes of `rnrs_surface_attach` when refused (an attachment number is always positive).
-pub const REFUSED: i64 = 0;
-/// Refused for now: the surface has another window, or this window is still owned by another
-/// attachment. The view retries with backoff.
-pub const BUSY: i64 = -1;
-
-fn extent(width: u32, height: u32, scale: f32) -> Extent {
-    Extent { width, height, scale: if scale.is_finite() && scale > 0.0 { scale } else { 1.0 } }
-}
-
-fn key(value: u64) -> Option<u64> {
-    (value > 0).then_some(value)
-}
-
-/// Attaches `layer` (the standalone `CAMetalLayer` sublayer of `view`, an `RnrsMetalView`) to
-/// the surface `key`: the attachment number (positive), [`BUSY`], or [`REFUSED`]. Main thread
-/// only (refused elsewhere). Both are retained before this returns; a refused attach releases
-/// those retains on the main queue.
-///
-/// # Safety
-/// `view` is null or a live `UIView`; `layer` is null or a live `CAMetalLayer`.
-#[no_mangle]
-pub unsafe extern "C" fn rnrs_surface_attach(key_value: u64, view: *mut c_void, layer: *mut c_void, width: u32, height: u32, scale: f32) -> i64 {
-    if !on_main_thread() {
-        log::error!("rnrs-surface: rnrs_surface_attach called off the main thread; refused");
-        return REFUSED;
-    }
-    let Some(key) = key(key_value) else { return REFUSED };
-    let (Some(view), Some(layer)) = (NonNull::new(view), NonNull::new(layer)) else { return REFUSED };
-    // SAFETY (caller): a live view and its live Metal layer.
-    let window = unsafe { IosWindow::retain(view, layer) };
-    match platform::attach(key, Box::new(window), extent(width, height, scale)) {
-        Ok(attachment) => i64::try_from(attachment).unwrap_or(REFUSED),
-        Err(AttachError::SurfaceBusy | AttachError::WindowBusy) => BUSY,
-        Err(AttachError::UnknownKey) => {
-            log::debug!("rnrs-surface: no live surface {key} (disposed, or from an earlier JS runtime); not attached");
-            REFUSED
-        }
-        Err(AttachError::Closed) => REFUSED,
-    }
-}
-
-/// Updates the size or scale of the current attachment; false if it is not current. Main
-/// thread only, like every entry point (refused elsewhere, so callers keep one thread order).
-#[no_mangle]
-pub extern "C" fn rnrs_surface_resize(key_value: u64, attachment: u64, width: u32, height: u32, scale: f32) -> bool {
-    if !on_main_thread() {
-        log::error!("rnrs-surface: rnrs_surface_resize called off the main thread; refused");
-        return false;
-    }
-    let Some(key) = key(key_value) else { return false };
-    platform::resize(key, attachment, extent(width, height, scale))
-}
-
-/// Revokes the attachment without waiting ([`platform::revoke_async`]): 0 released, 1 retiring
-/// (the renderer releases the window later), -1 stale. Main thread only (refused elsewhere,
-/// returning -1; the attachment then stays current).
-#[no_mangle]
-pub extern "C" fn rnrs_surface_revoke(key_value: u64, attachment: u64) -> i32 {
-    if !on_main_thread() {
-        log::error!("rnrs-surface: rnrs_surface_revoke called off the main thread; refused");
-        return -1;
-    }
-    let Some(key) = key(key_value) else { return -1 };
-    match platform::revoke_async(key, attachment) {
-        Revoked::Released => 0,
-        Revoked::Retiring { in_flight } => {
-            log::debug!("rnrs-surface: surface {key}: revoked #{attachment}, retiring ({in_flight} operation(s) in flight)");
-            1
-        }
-        Revoked::Stale => -1,
-    }
-}
-
-/// One touch transition from `RnrsSurfaceViewComponentView` (crate::touch): `phase` 0 down,
-/// 1 move, 2 up, 3 cancel, 4 cancel all; `slot` the view's per-attachment slot of the `UITouch`
-/// (0..10, reused only after its touch ended); view-local physical pixels; `UITouch.timestamp`
-/// in milliseconds. True if accepted. Main thread only (refused elsewhere).
-#[no_mangle]
-pub extern "C" fn rnrs_surface_touch(key_value: u64, attachment: u64, phase: i32, slot: i32, x_px: f32, y_px: f32, time_ms: i64) -> bool {
-    if !on_main_thread() {
-        log::error!("rnrs-surface: rnrs_surface_touch called off the main thread; refused");
-        return false;
-    }
-    let (Some(key), Some(phase)) = (key(key_value), crate::touch::Phase::from_code(phase)) else { return false };
-    platform::touch(key, attachment, phase, slot, x_px, y_px, time_ms)
-}
-
-/// Diagnostics: live surfaces in the registry.
-#[no_mangle]
-pub extern "C" fn rnrs_surface_live_surfaces() -> i32 {
-    i32::try_from(platform::live_surfaces()).unwrap_or(i32::MAX)
-}
-
-/// Makes the linker keep the entry points above (the pod's view references them, but the
-/// bundle is a static library member only linked when referenced).
-pub(crate) fn keep_entry_points() {
-    let entry_points: [*const (); 5] = [
-        rnrs_surface_attach as *const (),
-        rnrs_surface_resize as *const (),
-        rnrs_surface_revoke as *const (),
-        rnrs_surface_touch as *const (),
-        rnrs_surface_live_surfaces as *const (),
-    ];
-    std::hint::black_box(entry_points);
 }

@@ -430,9 +430,6 @@ mod tests {
             fn raw_display_handle(&self) -> raw_window_handle::RawDisplayHandle {
                 raw_window_handle::RawDisplayHandle::Android(raw_window_handle::AndroidDisplayHandle::new())
             }
-            fn identity(&self) -> usize {
-                0x6a1
-            }
         }
         assert_eq!(platform::attach(key, Box::new(W), Extent { width: 1, height: 1, scale: 1.0 }), Err(AttachError::Closed));
         threads_drain();

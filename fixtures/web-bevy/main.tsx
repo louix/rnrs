@@ -89,7 +89,7 @@ function harness() {
   let boot!: ReturnType<typeof createSurfaceBootstrap>;
   const backend = installWebBackend(
     wasm as unknown as RnrsWasm,
-    (same) => (boot = createSurfaceBootstrap(same)),
+    (instances) => (boot = createSurfaceBootstrap(instances)),
   );
   const module = createBevy3DModuleForTesting(8);
   const wrapper = document.createElement('div'),

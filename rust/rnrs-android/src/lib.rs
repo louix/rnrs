@@ -187,8 +187,8 @@ impl Drop for RnrsAdapter {
 /// Version of the C boundary (`ModuleTable`, `JsiVTable`, `ScalarBinding`, callbacks and
 /// status codes) mirrored by packages/runtime/cpp/RnrsAbi.h. The framework C++ accepts a table
 /// only with exactly this number and the struct sizes it was compiled with; any change to
-/// the boundary bumps it, and the exported symbol names carry it (`rnrs_module_v1_<crate>`).
-pub const RNRS_ABI: u32 = 1;
+/// the boundary bumps it, and the exported symbol names carry it (`rnrs_module_v2_<crate>`).
+pub const RNRS_ABI: u32 = 2;
 
 /// What one binary exports per module: identity, version data and every entry point the C++
 /// runtime calls for that module. Tables are immutable statics; the binary is linked
@@ -198,7 +198,8 @@ pub const RNRS_ABI: u32 = 1;
 /// through the table of the binary that allocated it.
 ///
 /// Built by generated code: `static T: ModuleTable = ModuleTable::new(&glue::x::MODULE, init);`
-/// plus `#[no_mangle] extern "C" fn rnrs_module_v1_<crate>() -> &'static ModuleTable`.
+/// plus `#[no_mangle] extern "C" fn rnrs_module_v2_<crate>() -> &'static ModuleTable`; a module
+/// that renders to surfaces adds `.with_surface(rnrs_surface::host::table())`.
 #[repr(C)]
 pub struct ModuleTable {
     pub abi: u32,
@@ -233,6 +234,10 @@ pub struct ModuleTable {
     pub bytes_free: unsafe extern "C" fn(*mut u8, usize, usize),
     /// Attribution counters; null unless built with the `diagnostics` feature.
     pub diagnostics: Option<unsafe extern "C" fn(*mut u64)>,
+    /// Opaque to this crate: the binary's rnrs-surface table (`RnrsSurfaceV1`,
+    /// rnrs_surface::host), or null for a module without surfaces. Every module of one binary
+    /// that has it points at the same static table.
+    pub surface: *const c_void,
 }
 
 // SAFETY: immutable static data (string literals, a static ModuleDef, function pointers).
@@ -276,7 +281,14 @@ impl ModuleTable {
             diagnostics: Some(rnrs_diagnostics),
             #[cfg(not(feature = "diagnostics"))]
             diagnostics: None,
+            surface: std::ptr::null(),
         }
+    }
+
+    /// This module renders to surfaces: `surface` is its binary's rnrs-surface table.
+    pub const fn with_surface(mut self, surface: *const c_void) -> Self {
+        self.surface = surface;
+        self
     }
 }
 
@@ -1072,7 +1084,7 @@ mod abi_contract {
 
     #[test]
     fn module_table_layout() {
-        assert_eq!(RNRS_ABI, 1);
+        assert_eq!(RNRS_ABI, 2);
         assert_eq!((offset_of!(ModuleTable, abi), offset_of!(ModuleTable, size)), (0, 4), "frozen prefix");
         assert_eq!((offset_of!(ModuleTable, vtable_size), offset_of!(ModuleTable, scalar_binding_size)), (8, 12));
         let slots = [
@@ -1084,12 +1096,12 @@ mod abi_contract {
             offset_of!(ModuleTable, adapter_cancel), offset_of!(ModuleTable, adapter_teardown), offset_of!(ModuleTable, adapter_free),
             offset_of!(ModuleTable, adapter_method_find), offset_of!(ModuleTable, native_share),
             offset_of!(ModuleTable, native_spec_name), offset_of!(ModuleTable, native_release), offset_of!(ModuleTable, bytes_free),
-            offset_of!(ModuleTable, diagnostics),
+            offset_of!(ModuleTable, diagnostics), offset_of!(ModuleTable, surface),
         ];
         for (i, offset) in slots.into_iter().enumerate() {
             assert_eq!(offset, 16 + i * P, "ModuleTable slot {i}");
         }
-        assert_eq!(size_of::<ModuleTable>(), 16 + 24 * P);
+        assert_eq!(size_of::<ModuleTable>(), 16 + 25 * P);
     }
 
     #[test]

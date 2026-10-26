@@ -56,10 +56,10 @@ and lower latency than a `TextureView`. Consequences:
 
 | Concept | Rule |
 | --- | --- |
-| Surface key | Opaque JS number, never reused, below 2^53. A key from a disposed surface or an earlier JS runtime matches nothing. No pointer reaches JS. |
+| Surface key | Opaque JS number, never reused, below 2^53. It names the module binary that owns the surface (owner × 2^32 + local key; the framework assigns owners), so each binary keeps its own surfaces and the view's calls reach only that binary. A key from a disposed surface or an earlier JS runtime matches nothing. No pointer reaches JS. |
 | Attachment | Each attach gets a fresh number. Resize and detach must name it, so a late callback for an earlier attachment is ignored. |
 | Zero extent | The view attaches only with a nonzero size and detaches when its size becomes zero. Give the view a size. |
-| One window per key | The first attached view wins; a second view with the same key is refused (`BUSY`) and retries with backoff until the first detaches. A platform window is owned by at most one attachment process-wide. |
+| One window per key | The first attached view wins; a second view with the same key is refused (`BUSY`) and retries with backoff until the first detaches. A platform window is owned by at most one attachment process-wide, across all module binaries: the framework claims it before handing it to the owning binary, which returns the claim only when its renderer releases the window. Until then any other attach of that window is `BUSY`. |
 | `WindowLease` | The renderer's only access to the window. Every acquire and present is admitted separately through it, and nothing is admitted after the attachment is revoked. |
 | Detach | Synchronous, as Android's `surfaceDestroyed` requires. It revokes the attachment, wakes the renderer and waits up to **500 ms** for leases to be dropped. The wait includes an admitted acquire or present and swapchain destruction (a GPU wait), not device creation. |
 | After a detach timeout | The view continues. Operations already admitted may finish, but no new one is admitted; the window stays retained until the renderer releases it. Counted as `detachTimeouts`. |

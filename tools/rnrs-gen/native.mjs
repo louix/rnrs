@@ -1,9 +1,9 @@
-// Binary-first native distribution (Android; iOS is not implemented yet).
+// Binary-first native distribution (Android, iOS and web).
 //
 // Publisher (`rnrs build-native`, Rust required): builds one module package into sealed static
 // archives, one per Android ABI, plus `rnrs/native/manifest.json`, all shipped in the npm package.
 // A sealed archive holds one relocatable object in which only the module's table symbol
-// (`rnrs_module_v1_<crate>`, packages/runtime/cpp/RnrsAbi.h) is global: std, Tokio, the framework
+// (`rnrs_module_v2_<crate>`, packages/runtime/cpp/RnrsAbi.h) is global: std, Tokio, the framework
 // backend and the module's dependencies are local to it, so several prebuilt modules (and one
 // unsealed source bundle) link into one library without symbol collisions. Each keeps its own
 // Rust runtime and executor.
@@ -18,6 +18,7 @@ import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import {
   FRAMEWORK_CRATES,
   FRAMEWORK_RUST,
@@ -33,6 +34,7 @@ import {
   wasmBindgenVersion,
   iosCargoEnv,
   NATIVE_ABI,
+  NATIVE_SURFACE_ABI,
   checkRustTarget,
   frameworkNeeds,
   resolve,
@@ -43,10 +45,23 @@ import {
 } from './bundle.mjs';
 
 export const MANIFEST = 'rnrs/native/manifest.json';
+/** Targets with prebuilt surface modules (the others build them from source). */
+export const SURFACE_TARGETS = ['android', 'ios', 'web'];
 /** The lowest Android API level prebuilt archives are built for (React Native's minimum). */
 export const ANDROID_MIN_SDK = 24;
 /** System libraries a sealed Android archive may need (checked when it is built). */
 export const ANDROID_LINK_LIBRARIES = ['log', 'dl', 'm'];
+/** What a sealed iOS surface binary links against (wgpu's Metal backend and rnrs-surface): the
+ *  seal check links with exactly these, the manifest records them and the RnrsRuntime pod passes
+ *  them to the app target with the slices. Headless modules need only libSystem. */
+export const IOS_SURFACE_FRAMEWORKS = [
+  'Metal',
+  'QuartzCore',
+  'CoreGraphics',
+  'CoreFoundation',
+  'Foundation',
+];
+export const IOS_SURFACE_LIBRARIES = ['objc'];
 const CLANG_PREFIX = {
   'arm64-v8a': 'aarch64-linux-android',
   'armeabi-v7a': 'armv7a-linux-androideabi',
@@ -74,27 +89,57 @@ function crateFiles(pkg) {
   return out.sort();
 }
 
+/** Hashes `dir`'s Cargo.toml and src/ tree (sorted, paths relative to `base`) into `hash`. */
+function hashCrate(hash, dir, base) {
+  const walk = (d) => {
+    for (const entry of readdirSync(d, { withFileTypes: true }).sort((a, b) =>
+      a.name < b.name ? -1 : 1,
+    )) {
+      const file = path.join(d, entry.name);
+      if (entry.isDirectory()) walk(file);
+      else hash.update(`${posix(path.relative(base, file))}\0`).update(readFileSync(file));
+    }
+  };
+  hash
+    .update(`${posix(path.relative(base, path.join(dir, 'Cargo.toml')))}\0`)
+    .update(readFileSync(path.join(dir, 'Cargo.toml')));
+  walk(path.join(dir, 'src'));
+}
+
 /** One hash over the framework Rust sources compiled into every prebuilt binary (rnrs-core,
  *  rnrs-android, rnrs): binaries of two targets are only combined when it is equal. */
 function frameworkHash() {
   const hash = createHash('sha256');
-  const walk = (dir) => {
-    for (const entry of readdirSync(dir, { withFileTypes: true }).sort((a, b) =>
-      a.name < b.name ? -1 : 1,
-    )) {
-      const file = path.join(dir, entry.name);
-      if (entry.isDirectory()) walk(file);
-      else
-        hash.update(`${posix(path.relative(FRAMEWORK_RUST, file))}\0`).update(readFileSync(file));
-    }
-  };
-  for (const crate of ['rnrs-core', 'rnrs-android', 'rnrs']) {
-    hash
-      .update(`${crate}/Cargo.toml\0`)
-      .update(readFileSync(path.join(FRAMEWORK_RUST, crate, 'Cargo.toml')));
-    walk(path.join(FRAMEWORK_RUST, crate, 'src'));
-  }
+  for (const crate of ['rnrs-core', 'rnrs-android', 'rnrs'])
+    hashCrate(hash, path.join(FRAMEWORK_RUST, crate), FRAMEWORK_RUST);
   return hash.digest('hex');
+}
+
+/** The hash of one library crate's sources (the rnrs-surface copy a surface module embeds). */
+function crateHash(dir) {
+  const hash = createHash('sha256');
+  hashCrate(hash, dir, dir);
+  return hash.digest('hex');
+}
+
+/** The @rnrs/surface library package a surface module is built with: the one its package
+ *  resolves (its dependency), as an app would install it. */
+function surfaceLibrary(pkgDir) {
+  let manifest;
+  try {
+    manifest = createRequire(path.join(pkgDir, 'package.json')).resolve(
+      '@rnrs/surface/package.json',
+    );
+  } catch {
+    throw new BundleError(
+      `${pkgDir}: its crate needs rnrs-surface, but @rnrs/surface is not installed for it; add it to the package's dependencies and install them`,
+    );
+  }
+  const lib = loadPackage(path.dirname(manifest));
+  if (!lib.library || lib.crate !== 'rnrs-surface')
+    throw new BundleError(`${path.dirname(manifest)} does not provide the rnrs-surface crate`);
+  lib.chain = ['@rnrs/surface'];
+  return lib;
 }
 
 /** The files `npm pack` puts in the package's tarball (relative, POSIX separators). */
@@ -218,15 +263,23 @@ export function buildNative(
     throw new BundleError(`${pkg.manifestPath}: a library package has no module to prebuild`);
   if (!pkg.targets.includes(target))
     throw new BundleError(`${pkg.manifestPath}: rustNative.targets does not include ${target}`);
-  // Headless modules only: a module that needs a framework library crate (rnrs-surface) shares
-  // Rust state with other binaries and stays source-built.
-  const shared = [...frameworkNeeds(pkg)].filter(
-    ([name]) => !FRAMEWORK_CRATES.includes(name) && name !== 'rnrs',
+  // A module may need rnrs-surface: each binary carries its own copy, reached by the app's
+  // surface host through the module table (RnrsAbi.h RnrsSurfaceV1). Any other library crate
+  // would share Rust state with other binaries, so such a module stays source-built.
+  const needs = frameworkNeeds(pkg);
+  const shared = [...needs].filter(
+    ([name]) => !FRAMEWORK_CRATES.includes(name) && name !== 'rnrs' && name !== 'rnrs-surface',
   );
   if (shared.length)
     throw new BundleError(
-      `${pkg.manifestPath}: its crate ${shared.map(([, why]) => why).join('; ')}; only modules without framework library crates can be prebuilt (apps build this one with rustNativeApp.sourceBuild)`,
+      `${pkg.manifestPath}: its crate ${shared.map(([, why]) => why).join('; ')}; only modules without framework library crates other than rnrs-surface can be prebuilt (apps build this one with rustNativeApp.sourceBuild)`,
     );
+  if (needs.has('rnrs-surface') && !SURFACE_TARGETS.includes(target))
+    throw new BundleError(
+      `${pkg.manifestPath}: prebuilt surface modules are implemented for ${SURFACE_TARGETS.join(', ')} only; on ${target} apps build this one with rustNativeApp.sourceBuild`,
+    );
+  const surface = needs.has('rnrs-surface') ? surfaceLibrary(pkgDir) : null;
+  const libraries = surface ? [surface] : [];
   const nativeDir = path.join(pkgDir, 'rnrs/native');
   const lock = path.join(nativeDir, 'Cargo.lock');
   const previous = existsSync(path.join(pkgDir, MANIFEST))
@@ -240,7 +293,7 @@ export function buildNative(
   );
   const { crateDir } = writeBundleCrate({
     modules: [pkg],
-    libraries: [],
+    libraries,
     target,
     outDir: work,
     logging: null,
@@ -250,7 +303,7 @@ export function buildNative(
   const hadLock = existsSync(lock);
   const env = target === 'ios' ? iosCargoEnv() : process.env;
   if (target === 'web') checkWasmBindgen(process.env.RNRS_WASM_BINDGEN ?? 'wasm-bindgen');
-  const resolved = resolve(manifest, cargo, { locked: hadLock, offline, env, libraries: [] });
+  const resolved = resolve(manifest, cargo, { locked: hadLock, offline, env, libraries });
   if (!resolved.ok)
     throw new BundleError(
       `cargo could not resolve ${pkg.crate}'s dependencies:\n${resolved.stderr.trim()}`,
@@ -265,6 +318,7 @@ export function buildNative(
     symbol: tableSymbol(pkg.crate),
     ident: pkg.crate.replace(/-/g, '_'),
     cargoArgs: [...(hadLock ? ['--locked'] : []), ...(offline ? ['--offline'] : [])],
+    surface,
   };
   const section =
     target === 'android'
@@ -291,6 +345,8 @@ export function buildNative(
     frameworkSha256: frameworkHash(),
     lockSha256: sha256(lock),
     sourceFiles,
+    // Surface modules: the surface table ABI their rnrs-surface copy implements, and that copy.
+    ...(surface && { surface: { abi: NATIVE_SURFACE_ABI, sha256: crateHash(surface.cratePath) } }),
   };
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   const sameBuild = [
@@ -303,6 +359,7 @@ export function buildNative(
     'frameworkSha256',
     'lockSha256',
     'sourceFiles',
+    'surface',
   ].every((k) => same(previous?.[k], data[k]));
   for (const other of ['android', 'ios', 'web'].filter((t) => t !== target)) {
     if (previous?.[other] && sameBuild) {
@@ -321,10 +378,12 @@ export function buildNative(
 }
 
 function buildAndroid(
-  { pkgDir, nativeDir, work, manifest, cargo, symbol, ident, cargoArgs },
+  { pkgDir, nativeDir, work, manifest, cargo, symbol, ident, cargoArgs, surface },
   { abis, ndk },
 ) {
   const bin = ndkBin(ndk);
+  // rnrs-surface releases ANativeWindow references (libandroid); wgpu loads Vulkan with dlopen.
+  const libraries = surface ? [...ANDROID_LINK_LIBRARIES, 'android'] : ANDROID_LINK_LIBRARIES;
   const targetDir = path.join(work, 'target');
   const artifacts = {};
   for (const abi of abis) {
@@ -361,12 +420,12 @@ function buildAndroid(
       symbol,
       archive,
       clang,
-      libraries: ANDROID_LINK_LIBRARIES,
+      libraries,
       work: path.join(work, 'seal', abi),
     });
     artifacts[abi] = posix(path.relative(pkgDir, archive));
   }
-  return { minSdk: ANDROID_MIN_SDK, linkLibraries: ANDROID_LINK_LIBRARIES, abis: artifacts };
+  return { minSdk: ANDROID_MIN_SDK, linkLibraries: libraries, abis: artifacts };
 }
 
 /** The web ABI prebuilt Wasm instances are built for (RNRS_WEB_ABI in rust/rnrs-web, WEB_ABI in
@@ -440,8 +499,8 @@ function rustObjcopy(env) {
  *  llvm-objcopy); the personality routine is renamed to `applePersonality(crate)`. `ld -r`
  *  (driven by clang for the platform version) then keeps only the table and that routine external
  *  (-exported_symbol: every other global becomes local), `strip -S` drops debug info, and a
- *  throwaway dylib link checks that the system libraries resolve every remaining reference.
- *  Returns the one-object archive. */
+ *  throwaway dylib link checks that libSystem plus `frameworks` and `libraries` resolve every
+ *  remaining reference. Returns the one-object archive. */
 export function sealApple({
   raw,
   symbol,
@@ -451,6 +510,8 @@ export function sealApple({
   work,
   deploymentTarget,
   objcopy,
+  frameworks = [],
+  libraries = [],
 }) {
   mkdirSync(work, { recursive: true });
   const exported = [`_${symbol}`, `_${personality}`];
@@ -500,6 +561,8 @@ export function sealApple({
     '-o',
     path.join(work, `check-${arch}.dylib`),
     sealed,
+    ...frameworks.flatMap((f) => ['-framework', f]),
+    ...libraries.map((l) => `-l${l}`),
   ]);
   const archive = path.join(work, `librnrs-${arch}.a`);
   rmSync(archive, { force: true });
@@ -508,11 +571,13 @@ export function sealApple({
 }
 
 function buildIos(
-  { pkgDir, nativeDir, work, manifest, cargo, symbol, ident, cargoArgs },
+  { pkgDir, nativeDir, work, manifest, cargo, symbol, ident, cargoArgs, surface },
   { simArchs, env },
 ) {
   if (process.platform !== 'darwin')
     throw new BundleError('build-native --target ios runs on macOS (Xcode command line tools)');
+  const frameworks = surface ? IOS_SURFACE_FRAMEWORKS : [];
+  const linkLibraries = surface ? IOS_SURFACE_LIBRARIES : [];
   const targetDir = path.join(work, 'target');
   const libraries = [];
   const archs = { iphoneos: ['arm64'], iphonesimulator: simArchs };
@@ -547,6 +612,8 @@ function buildIos(
         work: path.join(work, 'seal', sdk),
         deploymentTarget: env.IPHONEOS_DEPLOYMENT_TARGET,
         objcopy,
+        frameworks,
+        libraries: linkLibraries,
       });
     });
     const lib = path.join(work, 'seal', sdk, `librnrs_${ident}.a`);
@@ -582,6 +649,8 @@ function buildIos(
   return {
     deploymentTarget: env.IPHONEOS_DEPLOYMENT_TARGET,
     exports: [symbol, personality],
+    frameworks,
+    linkLibraries,
     xcframework: posix(path.relative(pkgDir, xcframework)),
     slices,
   };
@@ -618,7 +687,8 @@ const BINARY_TARGETS = ['android', 'ios', 'web'];
  *  `require` (publishing: `rnrs check-native`) and a warning otherwise (packing: `pack-js`;
  *  none for private packages, which npm never publishes). `targets` limits the check to some
  *  of the declared targets (an author building one platform per machine).
- *  Library packages and modules that need a framework library crate (surfaces) are source-only.
+ *  Library packages, and modules that need a framework library crate other than rnrs-surface,
+ *  are source-only.
  *  Returns {errors, warnings, notes}. */
 export function checkPackageBinaries(pkgDir, { require = false, targets } = {}) {
   const errors = [],
@@ -627,8 +697,9 @@ export function checkPackageBinaries(pkgDir, { require = false, targets } = {}) 
   const pkg = loadPackage(pkgDir);
   const name = readJson(path.join(pkgDir, 'package.json')).name;
   if (pkg.library) return { errors, warnings, notes: [`${name}: library package, no binaries`] };
-  const shared = [...frameworkNeeds(pkg)].filter(
-    ([crate]) => !FRAMEWORK_CRATES.includes(crate) && crate !== 'rnrs',
+  const needs = frameworkNeeds(pkg);
+  const shared = [...needs].filter(
+    ([crate]) => !FRAMEWORK_CRATES.includes(crate) && crate !== 'rnrs' && crate !== 'rnrs-surface',
   );
   if (shared.length)
     return {
@@ -640,8 +711,18 @@ export function checkPackageBinaries(pkgDir, { require = false, targets } = {}) 
     };
   const manifestJson = readJson(path.join(pkgDir, 'package.json'));
   const declared = pkg.targets.filter(
-    (t) => BINARY_TARGETS.includes(t) && (!targets || targets.includes(t)),
+    (t) =>
+      BINARY_TARGETS.includes(t) &&
+      (!targets || targets.includes(t)) &&
+      (!needs.has('rnrs-surface') || SURFACE_TARGETS.includes(t)),
   );
+  if (needs.has('rnrs-surface'))
+    for (const t of pkg.targets.filter(
+      (t) => BINARY_TARGETS.includes(t) && !SURFACE_TARGETS.includes(t),
+    ))
+      notes.push(
+        `${name}: no prebuilt ${t} binaries (prebuilt surface modules exist for ${SURFACE_TARGETS.join(', ')} only): apps using it on ${t} must list it in rustNativeApp.sourceBuild`,
+      );
   const quiet = !require && manifestJson.private === true;
   const hint = (t) => `run \`rnrs build-native --target ${t}\``;
   const missing = (t, what) =>
@@ -658,6 +739,10 @@ export function checkPackageBinaries(pkgDir, { require = false, targets } = {}) 
   if (m.abi !== NATIVE_ABI)
     errors.push(
       `${name}: ${MANIFEST} is for rnrs ABI ${m.abi}, this rnrs builds ABI ${NATIVE_ABI}; rebuild every target`,
+    );
+  if (needs.has('rnrs-surface') && m.surface?.abi !== NATIVE_SURFACE_ABI)
+    errors.push(
+      `${name}: its crate renders to surfaces, but the binaries implement surface ABI ${m.surface?.abi ?? 'none'} (this rnrs: ${NATIVE_SURFACE_ABI}); rebuild every target`,
     );
   const [ir] = plan([pkg])
     .filter((o) => o.kind === 'ir')
@@ -742,6 +827,16 @@ export function checkPrebuilt(
     errors.push(
       `${name}: its manifest names crate ${m.crate} (${m.symbol}), the package declares ${pkg.crate}`,
     );
+  // A surface module's binary embeds its own rnrs-surface: its surface table must be the one
+  // this runtime's surface host speaks (checked again at run time, before any surface call).
+  if (m.surface && !SURFACE_TARGETS.includes(target))
+    return [
+      `${name}: renders to surfaces, which are prebuilt for ${SURFACE_TARGETS.join(', ')} only${hint}`,
+    ];
+  if (m.surface && m.surface.abi !== NATIVE_SURFACE_ABI)
+    errors.push(
+      `${name}: its prebuilt binary implements surface ABI ${m.surface.abi}, this @rnrs/runtime needs ${NATIVE_SURFACE_ABI}; install matching versions of the module, @rnrs/runtime and @rnrs/surface${hint}`,
+    );
   const wrapper = path.join(pkg.dir, 'rnrs/index.ts');
   const wrapperHash = existsSync(wrapper)
     ? /\/\/ IR hash: (\w+)/.exec(readFileSync(wrapper, 'utf8'))?.[1]
@@ -802,6 +897,14 @@ export function checkPrebuilt(
       errors.push(
         `${name}: its iOS binary exports ${JSON.stringify(m.ios.exports)}, this @rnrs/runtime expects ${JSON.stringify(exports)}`,
       );
+    if (m.surface && !Array.isArray(m.ios?.frameworks))
+      errors.push(`${name}: its iOS surface binary lists no frameworks to link; rebuild it${hint}`);
+    // The names become linker flags of the app target.
+    const names = [...(m.ios?.frameworks ?? []), ...(m.ios?.linkLibraries ?? [])];
+    if (names.some((n) => typeof n !== 'string' || !/^[A-Za-z0-9_]+$/.test(n)))
+      errors.push(
+        `${name}: its iOS binary lists invalid frameworks or libraries ${JSON.stringify(names)}`,
+      );
     for (const sdk of ['iphoneos', 'iphonesimulator']) {
       const slice = m.ios?.slices?.[sdk]?.path;
       if (!slice || !existsSync(path.join(pkg.dir, slice)))
@@ -824,9 +927,10 @@ export function checkPrebuilt(
 }
 
 /** App: checks the app's modules for `target` and writes `<out>/rnrs_registry.inc` and (Android)
- *  `<out>/modules.cmake`. Returns {prebuilt, source, slices}: the source modules still need the
- *  source bundle build (cargo); with none, nothing else is needed. iOS `slices` maps each SDK to
- *  the absolute paths of the prebuilt static libraries to link (the pod's linker flags). Node only. */
+ *  `<out>/modules.cmake`. Returns {prebuilt, source, slices, frameworks, libraries}: the source
+ *  modules still need the source bundle build (cargo); with none, nothing else is needed. iOS
+ *  `slices` maps each SDK to the absolute paths of the prebuilt static libraries to link, and
+ *  `frameworks`/`libraries` are what those need (the pod's linker flags). Node only. */
 export function linkModules(
   appDir,
   target,
@@ -856,9 +960,9 @@ export function linkModules(
   const linked = [...prebuilt, ...source];
   const ordered = modules.filter((p) => linked.includes(p));
   if (target === 'web') {
-    // The app's module registry: the instances to load, the source bundle first (framework
-    // extensions such as surfaces live there). Prebuilt glue of overridden modules is never
-    // imported. Relative imports, so bundlers include the files no package `exports` list.
+    // The app's module registry: the instances to load, the source bundle (if any) first; a
+    // surface bootstrap binds every instance that contains rnrs-surface. Prebuilt glue of
+    // overridden modules is never imported. Relative imports, so bundlers include the files no package `exports` list.
     const rel = (file) => {
       const r = posix(path.relative(out, file));
       return r.startsWith('.') ? r : `./${r}`;
@@ -882,7 +986,7 @@ ${imports
 `,
   )
   .join('')}export const instances = [${imports.map(([id]) => id).join(', ')}];
-// The source bundle, which framework extensions (surface bootstraps) require, or null.
+// The source bundle (also the first instance), or null when every module is prebuilt.
 export const source = ${source.size ? 'source_bundle' : 'null'};
 `,
     );
@@ -893,13 +997,13 @@ export declare const instances: readonly import('@rnrs/runtime/web').RnrsBundle[
 export declare const source: import('@rnrs/runtime/web').RnrsBundle | null;
 `,
     );
-    return { prebuilt, source, slices: {} };
+    return { prebuilt, source, slices: {}, frameworks: [], libraries: [] };
   }
   writeAtomic(
     path.join(out, 'rnrs_registry.inc'),
     `// @generated by rnrs link (${target}); do not edit. Included by RnrsRegistry.cpp.
 // Prebuilt: ${prebuilt.map((p) => p.crate).join(', ') || 'none'}. Source bundle: ${[...source].map((p) => p.crate).join(', ') || 'none'}.
-${ordered.map((p) => `extern "C" const RnrsModuleV1* ${tableSymbol(p.crate)}();\n`).join('')}static const RnrsModuleEntry kRnrsModules[] = {
+${ordered.map((p) => `extern "C" const RnrsModuleV2* ${tableSymbol(p.crate)}();\n`).join('')}static const RnrsModuleEntry kRnrsModules[] = {
 ${ordered.map((p) => `    {"${tableSymbol(p.crate)}", ${tableSymbol(p.crate)}},\n`).join('')}    {nullptr, nullptr},
 };
 `,
@@ -926,10 +1030,19 @@ ${abis.map((abi) => `if(ANDROID_ABI STREQUAL "${abi}")\n  set(RNRS_MODULE_ARCHIV
     );
   }
   const slices = {};
-  if (target === 'ios')
-    for (const sdk of ['iphoneos', 'iphonesimulator'])
-      slices[sdk] = prebuilt.map((p) =>
-        path.join(p.dir, readJson(path.join(p.dir, MANIFEST)).ios.slices[sdk].path),
-      );
-  return { prebuilt, source, slices };
+  const union = (key) => [
+    ...new Set(prebuilt.flatMap((p) => readJson(path.join(p.dir, MANIFEST)).ios[key] ?? [])),
+  ];
+  if (target !== 'ios') return { prebuilt, source, slices, frameworks: [], libraries: [] };
+  for (const sdk of ['iphoneos', 'iphonesimulator'])
+    slices[sdk] = prebuilt.map((p) =>
+      path.join(p.dir, readJson(path.join(p.dir, MANIFEST)).ios.slices[sdk].path),
+    );
+  return {
+    prebuilt,
+    source,
+    slices,
+    frameworks: union('frameworks'),
+    libraries: union('linkLibraries'),
+  };
 }

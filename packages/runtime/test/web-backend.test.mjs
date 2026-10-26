@@ -287,22 +287,21 @@ if (!process.execArgv.includes(FLAG)) {
     );
   });
 
-  test('initRnrs refuses a surface bootstrap when every module is prebuilt (no source bundle)', async () => {
+  test('initRnrs hands a surface bootstrap every instance, also when every module is prebuilt', async () => {
     const { initRnrs } = await import('../src/web.ts');
-    const prebuilt = {
+    const prebuilt = (name) => ({
       default: async () => {},
       rnrs_web_abi: () => WEB_ABI,
-      rnrs_web_modules: () => ['P'],
+      rnrs_web_modules: () => [name],
       rnrs_release_slot() {},
       RnrsWebAdapter: class {},
-    };
-    let bootstrapped = false;
-    await assert.rejects(
-      initRnrs({ instances: [prebuilt], source: null }, undefined, {
-        bootstrap: () => ((bootstrapped = true), { dispose() {} }),
-      }),
-      /a bootstrap \(surfaces\) needs the app source bundle/,
-    );
-    assert.equal(bootstrapped, false);
+    });
+    const p = prebuilt('P'),
+      q = prebuilt('Q');
+    let given;
+    await initRnrs({ instances: [p, q], source: null }, undefined, {
+      bootstrap: (instances) => ((given = instances), { dispose() {} }),
+    });
+    assert.deepEqual(given, [p, q]);
   });
 }

@@ -13,6 +13,17 @@ fn extent(w: f64, h: f64, scale: f64) -> Result<Extent, JsValue> {
     }
     Ok(Extent { width: w as u32, height: h as u32, scale: scale as f32 })
 }
+/// The surface ABI of this instance ([`crate::SURFACE_ABI`]); the bootstrap requires its own.
+#[wasm_bindgen]
+pub fn rnrs_surface_abi() -> u32 {
+    crate::SURFACE_ABI
+}
+/// Binds this instance to `owner` (1 ≤ owner < 2^21) unless it is already bound; returns the
+/// owner it is bound to (0: unbound). Called before any of its surfaces exist.
+#[wasm_bindgen]
+pub fn rnrs_surface_bind(owner: u32) -> u32 {
+    crate::bind_web(owner)
+}
 #[wasm_bindgen]
 pub fn rnrs_surface_attach(k: f64, w: f64, h: f64, scale: f64) -> Result<JsValue, JsValue> {
     Ok(match web_host::attach(key(k)?, extent(w,h,scale)?).map_err(|e| JsValue::from_str(&e))? {
@@ -114,6 +125,7 @@ pub fn keep_exports() {
         rnrs_surface_diagnostics as *const (), rnrs_surface_set_release_listener as *const (),
         rnrs_surface_presentation as *const (), rnrs_surface_bind_canvas as *const (),
         rnrs_surface_touch as *const (), rnrs_surface_touch_counters as *const (),
+        rnrs_surface_abi as *const (), rnrs_surface_bind as *const (),
     ]);
     #[cfg(feature = "lab-hooks")]
     std::hint::black_box(rnrs_surface_hold_gpu_setups_for_testing as *const ());

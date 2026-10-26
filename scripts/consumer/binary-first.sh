@@ -104,11 +104,13 @@ android)
     fi
     grep -E "^rnrs: android:" "$W/$variant.gradle.log"
     APK="$APP/android/app/build/outputs/apk/release/app-release.apk"
+    # The table symbols of this framework's ABI (tools/rnrs-gen tableSymbol).
+    PREFIX="$(node --input-type=module -e "import { tableSymbol } from '$ROOT/tools/rnrs-gen/bundle.mjs'; console.log(tableSymbol(''))")"
     for abi in $ABIS; do
       unzip -p "$APK" "lib/$abi/librnrs.so" > "$W/$variant-$abi-librnrs.so"
-      tables="$("$NDK_BIN/llvm-nm" -D --defined-only "$W/$variant-$abi-librnrs.so" | awk '{print $3}' | grep '^rnrs_module_v1_' | sort | tr '\n' ' ')"
+      tables="$("$NDK_BIN/llvm-nm" -D --defined-only "$W/$variant-$abi-librnrs.so" | awk '{print $3}' | grep "^$PREFIX" | sort | tr '\n' ' ')"
       echo "$variant $abi librnrs.so ($(wc -c < "$W/$variant-$abi-librnrs.so") B) tables: $tables"
-      [ "$tables" = "rnrs_module_v1_counter rnrs_module_v1_meter " ] || { echo "$abi: expected both module tables" >&2; exit 1; }
+      [ "$tables" = "${PREFIX}counter ${PREFIX}meter " ] || { echo "$abi: expected both module tables" >&2; exit 1; }
     done
   done
   ;;

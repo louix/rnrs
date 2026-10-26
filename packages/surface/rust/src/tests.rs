@@ -6,9 +6,8 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::mpsc;
 use std::thread;
 
-/// A window whose identity the test chooses; counts its releases.
+/// A window that counts its releases.
 struct FakeWindow {
-    identity: usize,
     released: Arc<AtomicUsize>,
 }
 impl PlatformWindow for FakeWindow {
@@ -18,9 +17,6 @@ impl PlatformWindow for FakeWindow {
     fn raw_display_handle(&self) -> RawDisplayHandle {
         RawDisplayHandle::Android(AndroidDisplayHandle::new())
     }
-    fn identity(&self) -> usize {
-        self.identity
-    }
 }
 impl Drop for FakeWindow {
     fn drop(&mut self) {
@@ -28,17 +24,19 @@ impl Drop for FakeWindow {
     }
 }
 
-/// Distinct identities per test window (tests run in parallel in one process).
-static NEXT_IDENTITY: AtomicUsize = AtomicUsize::new(0x1000);
-fn identity() -> usize {
-    NEXT_IDENTITY.fetch_add(1, Ordering::SeqCst)
-}
-fn window_with(identity: usize) -> (Box<dyn PlatformWindow>, Arc<AtomicUsize>) {
-    let released = Arc::new(AtomicUsize::new(0));
-    (Box::new(FakeWindow { identity, released: released.clone() }), released)
-}
 fn window() -> (Box<dyn PlatformWindow>, Arc<AtomicUsize>) {
-    window_with(identity())
+    let released = Arc::new(AtomicUsize::new(0));
+    (Box::new(FakeWindow { released: released.clone() }), released)
+}
+/// A window as the host hands it: with its claim (host::testing). Returns the claim.
+fn claimed_window() -> (Box<dyn PlatformWindow>, Arc<AtomicUsize>, u64) {
+    let released = Arc::new(AtomicUsize::new(0));
+    let (w, claim) = host::testing::claimed(FakeWindow { released: released.clone() }, released.clone());
+    (w, released, claim)
+}
+/// The claim went back exactly once, after its window was released (once).
+fn assert_claim_returned(claim: u64) {
+    assert_eq!(host::testing::releases(claim), [1], "claim {claim}: returned once, after the window");
 }
 fn surface() -> Surface {
     Surface::new().unwrap()
@@ -112,8 +110,7 @@ fn attach_resize_lease_detach() {
 #[test]
 fn timeout_forbids_new_admissions_and_the_window_is_released_exactly_once() {
     let s = surface();
-    let id = identity();
-    let (w, released) = window_with(id);
+    let (w, released, claim) = claimed_window();
     let a = attach(s.key(), w, E).unwrap();
     let lease = s.lease().unwrap();
     let (admitted_tx, admitted_rx) = mpsc::channel();
@@ -133,40 +130,54 @@ fn timeout_forbids_new_admissions_and_the_window_is_released_exactly_once() {
     admitted_rx.recv().unwrap();
     assert_eq!(detach(s.key(), a, Duration::from_millis(30)), Detached::TimedOut { in_flight: 1 });
     assert_eq!(released.load(Ordering::SeqCst), 0, "still retained by the lease");
-    assert_eq!(owned_windows().contains(&id), true, "identity still reserved");
+    assert_eq!(host::testing::releases(claim), [0; 0], "the window stays claimed");
     finish_tx.send(()).unwrap();
     assert!(done_rx.recv().unwrap(), "no admission after revocation");
     renderer.join().unwrap();
     assert_eq!(released.load(Ordering::SeqCst), 1, "released exactly once, by the last lease");
-    assert!(!owned_windows().contains(&id), "identity released with the window");
+    assert_claim_returned(claim);
     let c = s.snapshot().counters;
     assert_eq!((c.detach_timeouts, c.detach_timeouts_in_flight), (1, 1));
 }
 
-/// Same window, second key: refused while the first attachment's lease is alive (even after
-/// its detach timed out), then accepted once it is released.
+/// Window exclusivity across binaries is the host's (packages/runtime/cpp/RnrsSurfaceHost.h);
+/// here: a binary returns the claim it was given exactly once, after the window, on every path.
 #[test]
-fn a_window_is_owned_by_one_attachment_until_released() {
-    let first = surface();
-    let second = surface();
-    let id = identity();
-    let (w, released) = window_with(id);
-    let a = attach(first.key(), w, E).unwrap();
-    let lease = first.lease().unwrap();
-    assert_eq!(detach(first.key(), a, Duration::from_millis(10)), Detached::TimedOut { in_flight: 0 });
-    let (same, same_released) = window_with(id); // another reference to the same window
-    assert_eq!(attach(second.key(), same, E), Err(AttachError::WindowBusy));
-    assert_eq!(same_released.load(Ordering::SeqCst), 1, "the refused reference is released");
-    assert_eq!(second.snapshot().counters.refused_attaches, 1);
-    drop(lease);
-    assert_eq!(released.load(Ordering::SeqCst), 1);
-    // The platform's retry now succeeds.
-    let (same, _) = window_with(id);
-    let b = attach(second.key(), same, E).unwrap();
-    assert!(b > a);
-    // Replacement on the first key with a different window after the timeout also works.
-    let (other, _) = window();
-    assert!(attach(first.key(), other, E).is_ok());
+fn the_claim_is_returned_once_after_the_window_on_every_path() {
+    let s = surface();
+    let busy = surface();
+    let closed = surface();
+    closed.close();
+    // Refused: unknown key, closed surface, surface already showing a window.
+    let (w, _, unknown) = claimed_window();
+    assert_eq!(attach(u64::MAX, w, E), Err(AttachError::UnknownKey));
+    let (w, _, refused_closed) = claimed_window();
+    assert_eq!(attach(closed.key(), w, E), Err(AttachError::Closed));
+    let (w, _, shown) = claimed_window();
+    let b = attach(busy.key(), w, E).unwrap();
+    let (w, _, refused_busy) = claimed_window();
+    assert_eq!(attach(busy.key(), w, E), Err(AttachError::SurfaceBusy));
+    for claim in [unknown, refused_closed, refused_busy] {
+        assert_claim_returned(claim);
+    }
+    // Detach without leases.
+    assert_eq!(detach(busy.key(), b, LONG), Detached::Released);
+    assert_claim_returned(shown);
+    // A timed-out detach keeps the claim until the late lease drop.
+    let (w, _, late) = claimed_window();
+    let a = attach(s.key(), w, E).unwrap();
+    let lease = s.lease().unwrap();
+    assert_eq!(detach(s.key(), a, Duration::from_millis(10)), Detached::TimedOut { in_flight: 0 });
+    assert!(host::testing::releases(late).is_empty(), "still leased: still claimed");
+    let renderer = thread::spawn(move || drop(lease)); // the render thread drops it
+    renderer.join().unwrap();
+    assert_claim_returned(late);
+    // A surface dropped while attached.
+    let (w, _, dropped) = claimed_window();
+    let gone = surface();
+    attach(gone.key(), w, E).unwrap();
+    drop(gone);
+    assert_claim_returned(dropped);
 }
 
 #[test]
@@ -198,12 +209,10 @@ fn close_revokes_and_refuses_without_blocking() {
 #[test]
 fn dropping_a_surface_releases_its_attached_window() {
     let s = surface();
-    let id = identity();
-    let (w, released) = window_with(id);
+    let (w, released) = window();
     attach(s.key(), w, E).unwrap();
     drop(s);
     assert_eq!(released.load(Ordering::SeqCst), 1);
-    assert!(!owned_windows().contains(&id));
 }
 
 #[test]
@@ -260,7 +269,7 @@ fn admissions_racing_detach_stop_at_revocation() {
 
 /// A layer-backed window (as on iOS): no raw window handle, a Metal layer instead.
 struct LayerWindow {
-    identity: usize,
+    layer: usize,
     released: Arc<AtomicUsize>,
 }
 impl PlatformWindow for LayerWindow {
@@ -270,11 +279,8 @@ impl PlatformWindow for LayerWindow {
     fn raw_display_handle(&self) -> RawDisplayHandle {
         RawDisplayHandle::Android(AndroidDisplayHandle::new())
     }
-    fn identity(&self) -> usize {
-        self.identity
-    }
     fn metal_layer(&self) -> Option<NonNull<c_void>> {
-        NonNull::new(self.identity as *mut c_void)
+        NonNull::new(self.layer as *mut c_void)
     }
 }
 impl Drop for LayerWindow {
@@ -287,8 +293,8 @@ impl Drop for LayerWindow {
 fn a_layer_window_refuses_raw_handles_and_exposes_its_layer() {
     let s = surface();
     let released = Arc::new(AtomicUsize::new(0));
-    let id = identity();
-    attach(s.key(), Box::new(LayerWindow { identity: id, released: released.clone() }), E).unwrap();
+    let id = 0x1000;
+    attach(s.key(), Box::new(LayerWindow { layer: id, released: released.clone() }), E).unwrap();
     let lease = s.lease().unwrap();
     assert!(matches!(lease.window_handle(), Err(HandleError::NotSupported)), "a renderer cannot take the raw-handle path");
     assert_eq!(lease.metal_layer().map(|p| p.as_ptr() as usize), Some(id));
@@ -327,8 +333,7 @@ fn revoke_async_with_a_lease_retires_later_and_records_the_time() {
     let _r = RETIREMENT.lock().unwrap_or_else(|e| e.into_inner());
     let before = retirement_stats();
     let s = surface();
-    let id = identity();
-    let (w, released) = window_with(id);
+    let (w, released, claim) = claimed_window();
     let a = attach(s.key(), w, E).unwrap();
     let lease = s.lease().unwrap();
     let op = lease.admit().unwrap();
@@ -340,10 +345,8 @@ fn revoke_async_with_a_lease_retires_later_and_records_the_time() {
     let c = s.snapshot().counters;
     assert_eq!((c.detaches, c.retiring, c.detach_timeouts, c.detach_timeouts_in_flight), (1, 1, 0, 0));
     assert_eq!(released.load(Ordering::SeqCst), 0, "retained while leased");
-    // The same window cannot attach elsewhere until it is retired.
-    let (again, again_released) = window_with(id);
-    assert_eq!(attach(s.key(), again, E), Err(AttachError::WindowBusy));
-    assert_eq!(again_released.load(Ordering::SeqCst), 1);
+    // The window stays claimed (no binary can attach it) until it is retired.
+    assert!(host::testing::releases(claim).is_empty());
     thread::sleep(Duration::from_millis(30));
     drop(op);
     drop(lease);
@@ -351,8 +354,7 @@ fn revoke_async_with_a_lease_retires_later_and_records_the_time() {
     let after = retirement_stats();
     assert_eq!(after.retired, before.retired + 1);
     assert!(after.max_ms >= 30.0, "{after:?}");
-    let (third, _) = window_with(id);
-    assert!(attach(s.key(), third, E).is_ok(), "the identity is free again");
+    assert_claim_returned(claim);
 }
 
 #[test]
@@ -428,4 +430,16 @@ fn touch_follows_the_attachment_and_detach_resets() {
     let (counters, active) = s.touch_counters();
     assert_eq!((counters.resets, active), (2, 0));
     assert_eq!(detach(s.key(), b, LONG), Detached::Released);
+}
+
+#[test]
+fn a_browser_instance_binds_its_owner_once_and_reports_it() {
+    let cell = AtomicU32::new(0);
+    assert_eq!(bind_once(&cell, 0), 0, "owner 0 is out of range; still unbound");
+    assert_eq!(bind_once(&cell, OWNER_LIMIT), 0, "out of range; still unbound");
+    assert_eq!(bind_once(&cell, 3), 3, "binds");
+    assert_eq!(bind_once(&cell, 3), 3, "the same owner again");
+    assert_eq!(bind_once(&cell, 9), 3, "another candidate gets the owner it is bound to");
+    assert_eq!(bind_once(&cell, 0), 3, "never changes");
+    assert_eq!(bind_once(&cell, OWNER_LIMIT - 1), 3);
 }

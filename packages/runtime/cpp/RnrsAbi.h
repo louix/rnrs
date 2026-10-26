@@ -3,7 +3,7 @@
 // and Rust module binaries (rust/rnrs-android `ModuleTable`). Each module binary, prebuilt and
 // sealed or source-built, exports one function per module:
 //
-//   const RnrsModuleV1* rnrs_module_v1_<crate>(void);
+//   const RnrsModuleV2* rnrs_module_v2_<crate>(void);
 //
 // It is called before the table is validated, so it may only return the address of a static
 // table. The C++ runtime reaches a module only through its table, keeps the table pointer with
@@ -17,7 +17,8 @@
 // comment-only edits need no bump. The contract is pinned twice: by the static_asserts at the
 // end of this file and by the same layout and constants in rnrs-android's `abi_contract` test.
 // The leading {abi, size} fields are frozen in every future version so that an old or new
-// table can always be refused safely.
+// table can always be refused safely. The surface table (RnrsSurfaceV1) and its constants are
+// versioned the same way by RNRS_SURFACE_ABI, pinned by rnrs-surface's `host` contract test.
 //
 // Call contexts: the adapter's is used on its RN runtime's JS thread; the endpoint's on the
 // thread of whichever runtime calls it. Each context serves one call on one thread; values
@@ -25,10 +26,14 @@
 #include <cstddef>
 #include <cstdint>
 
-#define RNRS_ABI 1
+#define RNRS_ABI 2
+// The surface table (RnrsSurfaceV1), versioned on its own: rust/rnrs-android builds the module
+// table, packages/surface/rust (rnrs-surface) the surface table.
+#define RNRS_SURFACE_ABI 1
 
 extern "C" {
 struct RnrsAdapter;
+struct RnrsSurfaceV1;
 typedef void (*RnrsCallback)(void*);
 typedef void (*RnrsSettle)(void* ctx, uint64_t id, uint32_t status, uint32_t value, const char* msg, size_t len);
 struct JsiVTable {
@@ -72,10 +77,10 @@ struct RnrsScalarBinding {
   const void* instance;
 };
 
-struct RnrsModuleV1 {
+struct RnrsModuleV2 {
   // Frozen in every version.
   uint32_t abi;   // RNRS_ABI the binary was built for
-  uint32_t size;  // sizeof(RnrsModuleV1) as the binary was built
+  uint32_t size;  // sizeof(RnrsModuleV2) as the binary was built
   // Checked with abi/size before the first call into the binary.
   uint32_t vtableSize;         // sizeof(JsiVTable) the binary expects
   uint32_t scalarBindingSize;  // sizeof(RnrsScalarBinding)
@@ -89,7 +94,7 @@ struct RnrsModuleV1 {
   // Once per process, after validation and before any other entry (idempotent per binary).
   void (*init)();
   bool (*setAppDataDir)(const uint8_t*, size_t);
-  RnrsAdapter* (*adapterNew)(const RnrsModuleV1* self, uint32_t maxInFlight, RnrsCallback notify,
+  RnrsAdapter* (*adapterNew)(const RnrsModuleV2* self, uint32_t maxInFlight, RnrsCallback notify,
       RnrsDeliveryCallback delivery, RnrsCallback release, void* ctx, char* error, size_t cap);
   bool (*adapterScalar)(const RnrsAdapter*, size_t index, uint32_t* method, RnrsScalarBinding*);
   uint32_t (*scalarCall)(const RnrsAdapter*, const RnrsScalarBinding*, const double* args, double* out,
@@ -107,8 +112,35 @@ struct RnrsModuleV1 {
   void (*nativeRelease)(void*);                          // any thread
   void (*bytesFree)(uint8_t* ptr, size_t len, size_t cap);  // any thread
   void (*diagnostics)(uint64_t* out);                    // null unless built with diagnostics
+  const RnrsSurfaceV1* surface;                          // null unless the module renders to surfaces
 };
-typedef const RnrsModuleV1* (*RnrsModuleGetter)();
+
+// Called by a binary exactly once per claim it was given (RnrsSurfaceV1::attach), after it has
+// released its own reference to the claimed window; any thread, with no lock of the binary held.
+typedef void (*RnrsSurfaceRelease)(uint64_t claim);
+// One binary's rnrs-surface (packages/surface/rust/src/host.rs): every module of that binary
+// that renders to surfaces points at the same static table. Surface keys are owner * 2^32 +
+// local, where owner is the number this table was bound to; the host routes platform calls by
+// that owner. Main/UI thread for every entry except bind (registry init) and liveSurfaces.
+struct RnrsSurfaceV1 {
+  // Frozen in every version.
+  uint32_t abi;   // RNRS_SURFACE_ABI the binary was built for
+  uint32_t size;  // sizeof(RnrsSurfaceV1) as the binary was built
+  // Once, before any surface exists. False if already bound to another owner.
+  bool (*bind)(uint32_t owner, RnrsSurfaceRelease release);
+  // Takes ownership of the window and of `claim` on every path, accepted or refused (Android:
+  // `window` is one ANativeWindow reference, `layer` null; iOS: `window` the view and `layer` its
+  // CAMetalLayer, both retained by the binary). > 0 the attachment, -1 busy, 0 refused.
+  int64_t (*attach)(uint64_t key, void* window, void* layer, uint32_t width, uint32_t height, float scale, uint64_t claim);
+  bool (*resize)(uint64_t key, uint64_t attachment, uint32_t width, uint32_t height, float scale);
+  // Android: revokes and waits up to timeoutMs for the renderer; false if it timed out.
+  bool (*detach)(uint64_t key, uint64_t attachment, uint32_t timeoutMs);
+  // iOS: revokes without waiting: 0 released, 1 retiring, -1 stale.
+  int32_t (*revoke)(uint64_t key, uint64_t attachment);
+  bool (*touch)(uint64_t key, uint64_t attachment, int32_t phase, int32_t pointer, float x, float y, int64_t timeMs);
+  uint32_t (*liveSurfaces)();
+};
+typedef const RnrsModuleV2* (*RnrsModuleGetter)();
 // One entry of the generated registry (rnrs_registry.inc).
 struct RnrsModuleEntry {
   const char* symbol;
@@ -121,9 +153,9 @@ struct RnrsModuleEntry {
 #define RNRS_SLOT(type, field, i) \
   static_assert(offsetof(type, field) == (i) * sizeof(void*), #type "." #field " offset")
 #define RNRS_TABLE_SLOT(field, i) \
-  static_assert(offsetof(RnrsModuleV1, field) == 4 * sizeof(uint32_t) + (i) * sizeof(void*), "RnrsModuleV1." #field " offset")
-static_assert(offsetof(RnrsModuleV1, abi) == 0 && offsetof(RnrsModuleV1, size) == 4, "frozen RnrsModuleV1 prefix");
-static_assert(offsetof(RnrsModuleV1, vtableSize) == 8 && offsetof(RnrsModuleV1, scalarBindingSize) == 12, "RnrsModuleV1 header");
+  static_assert(offsetof(RnrsModuleV2, field) == 4 * sizeof(uint32_t) + (i) * sizeof(void*), "RnrsModuleV2." #field " offset")
+static_assert(offsetof(RnrsModuleV2, abi) == 0 && offsetof(RnrsModuleV2, size) == 4, "frozen RnrsModuleV2 prefix");
+static_assert(offsetof(RnrsModuleV2, vtableSize) == 8 && offsetof(RnrsModuleV2, scalarBindingSize) == 12, "RnrsModuleV2 header");
 RNRS_TABLE_SLOT(name, 0); RNRS_TABLE_SLOT(nameLen, 1); RNRS_TABLE_SLOT(hash, 2); RNRS_TABLE_SLOT(hashLen, 3);
 RNRS_TABLE_SLOT(build, 4); RNRS_TABLE_SLOT(buildLen, 5); RNRS_TABLE_SLOT(def, 6); RNRS_TABLE_SLOT(init, 7);
 RNRS_TABLE_SLOT(setAppDataDir, 8); RNRS_TABLE_SLOT(adapterNew, 9); RNRS_TABLE_SLOT(adapterScalar, 10);
@@ -131,8 +163,15 @@ RNRS_TABLE_SLOT(scalarCall, 11); RNRS_TABLE_SLOT(adapterCall, 12); RNRS_TABLE_SL
 RNRS_TABLE_SLOT(adapterStats, 14); RNRS_TABLE_SLOT(adapterCancel, 15); RNRS_TABLE_SLOT(adapterTeardown, 16);
 RNRS_TABLE_SLOT(adapterFree, 17); RNRS_TABLE_SLOT(adapterMethodFind, 18); RNRS_TABLE_SLOT(nativeShare, 19);
 RNRS_TABLE_SLOT(nativeSpecName, 20); RNRS_TABLE_SLOT(nativeRelease, 21); RNRS_TABLE_SLOT(bytesFree, 22);
-RNRS_TABLE_SLOT(diagnostics, 23);
-static_assert(sizeof(RnrsModuleV1) == 4 * sizeof(uint32_t) + 24 * sizeof(void*), "RnrsModuleV1 size");
+RNRS_TABLE_SLOT(diagnostics, 23); RNRS_TABLE_SLOT(surface, 24);
+static_assert(sizeof(RnrsModuleV2) == 4 * sizeof(uint32_t) + 25 * sizeof(void*), "RnrsModuleV2 size");
+#define RNRS_SURFACE_SLOT(field, i) \
+  static_assert(offsetof(RnrsSurfaceV1, field) == 2 * sizeof(uint32_t) + (i) * sizeof(void*), "RnrsSurfaceV1." #field " offset")
+static_assert(offsetof(RnrsSurfaceV1, abi) == 0 && offsetof(RnrsSurfaceV1, size) == 4, "frozen RnrsSurfaceV1 prefix");
+RNRS_SURFACE_SLOT(bind, 0); RNRS_SURFACE_SLOT(attach, 1); RNRS_SURFACE_SLOT(resize, 2); RNRS_SURFACE_SLOT(detach, 3);
+RNRS_SURFACE_SLOT(revoke, 4); RNRS_SURFACE_SLOT(touch, 5); RNRS_SURFACE_SLOT(liveSurfaces, 6);
+static_assert(sizeof(RnrsSurfaceV1) == 2 * sizeof(uint32_t) + 7 * sizeof(void*), "RnrsSurfaceV1 size");
+#undef RNRS_SURFACE_SLOT
 RNRS_SLOT(JsiVTable, kind, 0); RNRS_SLOT(JsiVTable, toNumber, 1); RNRS_SLOT(JsiVTable, toBool, 2);
 RNRS_SLOT(JsiVTable, getProperty, 3); RNRS_SLOT(JsiVTable, arrayLength, 4); RNRS_SLOT(JsiVTable, getIndex, 5);
 RNRS_SLOT(JsiVTable, undefinedValue, 6); RNRS_SLOT(JsiVTable, nullValue, 7); RNRS_SLOT(JsiVTable, number, 8);
@@ -168,4 +207,9 @@ constexpr uint8_t kDeliveryResultQueued = 0, kDeliveryResultRunning = 1, kDelive
 // unchanged by C++: settlement statuses and admission failure codes.
 constexpr uint32_t kSettleOk = 0, kSettleCancelled = 1, kSettleFailed = 2, kSettleLost = 3;
 constexpr double kAdmitClosed = -1, kAdmitOverloaded = -2, kAdmitSaturated = -3;
+// RnrsSurfaceV1: surface keys (owner in the high bits) and attach/revoke results.
+constexpr unsigned kSurfaceOwnerShift = 32;
+constexpr uint64_t kSurfaceOwnerLimit = uint64_t{1} << 21;  // owners stay below this, so keys are < 2^53
+constexpr int64_t kAttachRefused = 0, kAttachBusy = -1;
+constexpr int32_t kRevokeReleased = 0, kRevokeRetiring = 1, kRevokeStale = -1;
 }  // namespace rnrs::abi

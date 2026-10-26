@@ -1,5 +1,4 @@
 use std::ptr::NonNull;
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 use raw_window_handle::{AndroidDisplayHandle, AndroidNdkWindowHandle, HandleError, RawDisplayHandle, RawWindowHandle};
 use rnrs_surface::platform::{self, Revoked};
@@ -9,9 +8,7 @@ use rnrs_surface::{Extent, PlatformWindow};
 use super::*;
 use crate::spec::{Probe as _, TouchProbeModule as _};
 
-static NEXT_WINDOW: AtomicUsize = AtomicUsize::new(0x1000);
-
-struct FakeWindow(usize);
+struct FakeWindow;
 impl PlatformWindow for FakeWindow {
     fn raw_window_handle(&self) -> Result<RawWindowHandle, HandleError> {
         Ok(RawWindowHandle::AndroidNdk(AndroidNdkWindowHandle::new(NonNull::<u8>::dangling().cast())))
@@ -19,15 +16,12 @@ impl PlatformWindow for FakeWindow {
     fn raw_display_handle(&self) -> RawDisplayHandle {
         RawDisplayHandle::Android(AndroidDisplayHandle::new())
     }
-    fn identity(&self) -> usize {
-        self.0
-    }
 }
 
 const E: Extent = Extent { width: 1170, height: 600, scale: 3.0 };
 
 fn attach(key: u64) -> u64 {
-    platform::attach(key, Box::new(FakeWindow(NEXT_WINDOW.fetch_add(1, Ordering::SeqCst))), E).expect("attached")
+    platform::attach(key, Box::new(FakeWindow), E).expect("attached")
 }
 
 fn probe() -> (Native<Probe>, u64) {

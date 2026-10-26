@@ -24,6 +24,13 @@ clang++ -std=c++20 -g -O1 -fsanitize=thread -Wall -Wextra -I "$cpp" \
 # Module registry (RnrsRegistry.cpp) with fake module tables (native/tests/registry/): refusal
 # of other ABIs and sizes before use, duplicates, init order, app data dir broadcast. ASan + UBSan.
 clang++ -std=c++20 -g -O1 -fsanitize=address,undefined -fno-sanitize-recover=all -Wall -Wextra -I "$cpp" \
-  -I native/tests/registry native/tests/rnrs_registry_test.cpp "$cpp/RnrsRegistry.cpp" "$cpp/RnrsPlatform.cpp" \
+  -I native/tests/registry native/tests/rnrs_registry_test.cpp "$cpp/RnrsRegistry.cpp" "$cpp/RnrsSurfaceHost.cpp" "$cpp/RnrsPlatform.cpp" \
   -o "$out/rnrs_registry_test"
 "$out/rnrs_registry_test"
+# Surface host (RnrsSurfaceHost.cpp) and the registry's surface binding, with fake surface tables
+# for two binaries (native/tests/surface-host/): process-wide window claims, routing by owner,
+# stale and repeated releases, refusals by module name. TSan.
+clang++ -std=c++20 -g -O1 -fsanitize=thread -Wall -Wextra -I "$cpp" \
+  -I native/tests/surface-host native/tests/rnrs_surface_host_test.cpp "$cpp/RnrsRegistry.cpp" "$cpp/RnrsSurfaceHost.cpp" \
+  "$cpp/RnrsPlatform.cpp" -o "$out/rnrs_surface_host_test"
+"$out/rnrs_surface_host_test"

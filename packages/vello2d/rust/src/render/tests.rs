@@ -4,7 +4,7 @@ use super::*;
 use crate::timing::EventRing;
 use crate::frame::encode;
 use raw_window_handle::{AndroidDisplayHandle, AndroidNdkWindowHandle, RawDisplayHandle, RawWindowHandle};
-use rnrs_surface::platform::{self, AttachError, Detached};
+use rnrs_surface::platform::{self, Detached};
 use rnrs_surface::PlatformWindow;
 use std::collections::VecDeque;
 use std::sync::atomic::AtomicBool;
@@ -16,7 +16,7 @@ pub(crate) fn serial() -> MutexGuard<'static, ()> {
     lock(&SERIAL)
 }
 
-struct FakeWindow(usize, Arc<AtomicUsize>);
+struct FakeWindow(Arc<AtomicUsize>);
 impl PlatformWindow for FakeWindow {
     fn raw_window_handle(&self) -> Result<RawWindowHandle, raw_window_handle::HandleError> {
         Ok(RawWindowHandle::AndroidNdk(AndroidNdkWindowHandle::new(NonNull::<u8>::dangling().cast())))
@@ -24,16 +24,12 @@ impl PlatformWindow for FakeWindow {
     fn raw_display_handle(&self) -> RawDisplayHandle {
         RawDisplayHandle::Android(AndroidDisplayHandle::new())
     }
-    fn identity(&self) -> usize {
-        self.0
-    }
 }
 impl Drop for FakeWindow {
     fn drop(&mut self) {
-        self.1.fetch_add(1, Ordering::SeqCst);
+        self.0.fetch_add(1, Ordering::SeqCst);
     }
 }
-static NEXT_ID: AtomicUsize = AtomicUsize::new(0x9000);
 
 #[derive(Debug, PartialEq)]
 enum Event {
@@ -240,14 +236,9 @@ fn rig_with_ring(ring: EventRing) -> Rig {
     let shared = spawn_with(&surface, Fake { events: tx, ctl: ctl.clone(), lease: None, device: false, acquire_allowed: false }, CAP, ring).unwrap();
     Rig { surface, shared, rx, ctl }
 }
-fn window_with(id: usize) -> (Box<dyn PlatformWindow>, Arc<AtomicUsize>) {
+fn attach(surface: &Surface, extent: Extent) -> (u64, Arc<AtomicUsize>) {
     let released = Arc::new(AtomicUsize::new(0));
-    (Box::new(FakeWindow(id, released.clone())), released)
-}
-fn attach(surface: &Surface, extent: Extent) -> (u64, Arc<AtomicUsize>, usize) {
-    let id = NEXT_ID.fetch_add(1, Ordering::SeqCst);
-    let (w, released) = window_with(id);
-    (platform::attach(surface.key(), w, extent).unwrap(), released, id)
+    (platform::attach(surface.key(), Box::new(FakeWindow(released.clone())), extent).unwrap(), released)
 }
 fn next(rx: &mpsc::Receiver<Event>) -> Event {
     rx.recv_timeout(T).expect("event")
@@ -295,7 +286,7 @@ fn prepares_before_leasing_binds_presents_resizes_and_unbinds_on_detach() {
     let _s = serial();
     let r = rig();
     assert!(r.shared.submit(rect_frame(1)));
-    let (a, released, _) = attach(&r.surface, E);
+    let (a, released) = attach(&r.surface, E);
     assert_eq!(next(&r.rx), Event::Prepare, "the device is created before the lease is taken");
     assert_eq!(next(&r.rx), Event::Bind(a, 100));
     assert_eq!(next(&r.rx), Event::Present(1));
@@ -308,7 +299,7 @@ fn prepares_before_leasing_binds_presents_resizes_and_unbinds_on_detach() {
     // Released guarantees zero leases; the last lease may still be finishing its Arc drop.
     assert!(wait_until(|| released.load(Ordering::SeqCst) == 1), "window released after detach");
     assert_eq!(next(&r.rx), Event::Unbind);
-    let (b, _, _) = attach(&r.surface, E);
+    let (b, _) = attach(&r.surface, E);
     assert_eq!(next(&r.rx), Event::Bind(b, 100), "same device, no second prepare");
     assert_eq!(next(&r.rx), Event::Present(1));
     r.shared.close();
@@ -322,7 +313,7 @@ fn a_detach_during_device_creation_does_not_wait_for_it() {
     let _s = serial();
     let r = rig();
     r.ctl.prepare_gate.enable();
-    let (a, released, _) = attach(&r.surface, E);
+    let (a, released) = attach(&r.surface, E);
     r.ctl.prepare_gate.wait_entered(1); // the thread is stalled in prepare(), no lease
     // The prepare gate stays closed: detach must not depend on device creation.
     let key = r.surface.key();
@@ -342,7 +333,7 @@ fn frames_coalesce_to_the_latest_while_presenting() {
     let _s = serial();
     let r = rig();
     r.ctl.present_gate.enable();
-    let (a, _, _) = attach(&r.surface, E);
+    let (a, _) = attach(&r.surface, E);
     assert_eq!(next(&r.rx), Event::Prepare);
     assert_eq!(next(&r.rx), Event::Bind(a, 100));
     assert!(r.shared.submit(rect_frame(1)));
@@ -361,14 +352,14 @@ fn frames_coalesce_to_the_latest_while_presenting() {
 }
 
 /// Admitted acquire stalled → detach times out → completion → no present (second admission
-/// refused) → unbind → window released exactly once. Meanwhile the same window cannot attach
-/// to a second key; after the release the retry succeeds.
+/// refused) → unbind → window released exactly once. (That no other surface can take the
+/// window meanwhile is the host's claim, packages/runtime/cpp/RnrsSurfaceHost.h.)
 #[test]
-fn stalled_presenter_timeout_no_present_after_revocation_and_same_window_waits() {
+fn stalled_presenter_timeout_no_present_after_revocation() {
     let _s = serial();
     let r = rig();
     r.ctl.present_gate.enable();
-    let (a, released, id) = attach(&r.surface, E);
+    let (a, released) = attach(&r.surface, E);
     assert_eq!(next(&r.rx), Event::Prepare);
     assert_eq!(next(&r.rx), Event::Bind(a, 100));
     assert!(r.shared.submit(rect_frame(1)));
@@ -377,16 +368,10 @@ fn stalled_presenter_timeout_no_present_after_revocation_and_same_window_waits()
     assert_eq!(platform::detach(r.surface.key(), a, Duration::from_millis(40)), Detached::TimedOut { in_flight: 1 });
     assert!(started.elapsed() < T, "detach must finish while the presenter remains blocked");
     assert_eq!(released.load(Ordering::SeqCst), 0, "retained while the renderer holds it");
-    let other = Surface::new().unwrap();
-    let (same, same_released) = window_with(id);
-    assert_eq!(platform::attach(other.key(), same, E), Err(AttachError::WindowBusy));
-    assert_eq!(same_released.load(Ordering::SeqCst), 1);
     r.ctl.present_gate.release();
     assert_eq!(next(&r.rx), Event::PresentRevoked, "the late acquire is not followed by a present");
     assert_eq!(next(&r.rx), Event::Unbind);
     assert!(wait_until(|| released.load(Ordering::SeqCst) == 1), "released exactly once after the unbind");
-    let (same, _) = window_with(id);
-    assert!(platform::attach(other.key(), same, E).is_ok(), "the platform's retry succeeds");
     assert_eq!(r.surface.snapshot().counters.detach_timeouts_in_flight, 1);
     r.ctl.present_gate.open();
     r.shared.close();
@@ -408,7 +393,7 @@ fn quiet_until_dropped(rx: &mpsc::Receiver<Event>) -> bool {
 fn device_loss_drops_everything_then_recovers_with_a_new_device() {
     let _s = serial();
     let r = rig();
-    let (a, _, _) = attach(&r.surface, E);
+    let (a, _) = attach(&r.surface, E);
     assert_eq!(next(&r.rx), Event::Prepare);
     assert_eq!(next(&r.rx), Event::Bind(a, 100));
     r.ctl.prepare_gate.enable(); // hold recovery until its intermediate state is inspected
@@ -438,7 +423,7 @@ fn device_loss_drops_everything_then_recovers_with_a_new_device() {
 fn surface_loss_recreates_the_surface() {
     let _s = serial();
     let r = rig();
-    let (a, _, _) = attach(&r.surface, E);
+    let (a, _) = attach(&r.surface, E);
     assert_eq!(next(&r.rx), Event::Prepare);
     assert_eq!(next(&r.rx), Event::Bind(a, 100));
     lock(&r.ctl.present_results).push_back(PresentError::SurfaceLost("test".into()));
@@ -458,7 +443,7 @@ fn repeated_bind_failures_back_off_then_fail_until_a_new_attachment() {
         lock(&r.ctl.bind_results).push_back(Err("no".into()));
     }
     let started = Instant::now();
-    let (a, _, _) = attach(&r.surface, E);
+    let (a, _) = attach(&r.surface, E);
     assert_eq!(next(&r.rx), Event::Prepare);
     assert!(wait_until(|| r.shared.stats().gpu == GpuState::Failed));
     let elapsed = started.elapsed();
@@ -468,7 +453,7 @@ fn repeated_bind_failures_back_off_then_fail_until_a_new_attachment() {
     assert!(r.shared.submit(rect_frame(1)), "failed GPU: submit still true (only closed is false)");
     assert!(quiet(&r.rx), "no retries once failed");
     assert_eq!(platform::detach(r.surface.key(), a, T), Detached::Released);
-    let (b, _, _) = attach(&r.surface, E);
+    let (b, _) = attach(&r.surface, E);
     assert_eq!(next(&r.rx), Event::Bind(b, 100), "a new attachment gets fresh attempts");
     assert_eq!(next(&r.rx), Event::Present(1));
     assert!(wait_until(|| r.shared.stats().gpu == GpuState::Ready));
@@ -479,7 +464,7 @@ fn repeated_bind_failures_back_off_then_fail_until_a_new_attachment() {
 fn zero_extent_unbinds_and_invalid_frames_are_counted() {
     let _s = serial();
     let r = rig();
-    let (a, _, _) = attach(&r.surface, E);
+    let (a, _) = attach(&r.surface, E);
     assert_eq!(next(&r.rx), Event::Prepare);
     assert_eq!(next(&r.rx), Event::Bind(a, 100));
     assert!(r.shared.submit(vec![0; 12]), "malformed content is accepted by submit, rejected by the thread");
@@ -500,7 +485,7 @@ fn the_cap_counts_retiring_threads_until_they_exit() {
     let before = 0;
     let stalled = rig();
     stalled.ctl.present_gate.enable();
-    let (a, _, _) = attach(&stalled.surface, E);
+    let (a, _) = attach(&stalled.surface, E);
     assert_eq!(next(&stalled.rx), Event::Prepare);
     assert_eq!(next(&stalled.rx), Event::Bind(a, 100));
     assert!(stalled.shared.submit(rect_frame(1)));
@@ -534,7 +519,7 @@ fn bind_then_fail_cycles_are_bounded() {
         let _s = serial();
         let r = rig();
         *lock(&r.ctl.always_fail) = Some(make);
-        let (a, _, _) = attach(&r.surface, E);
+        let (a, _) = attach(&r.surface, E);
         assert!(r.shared.submit(rect_frame(1)));
         assert!(wait_until(|| r.shared.stats().gpu == GpuState::Failed), "{name}: reached failed");
         let binds = std::iter::from_fn(|| r.rx.recv_timeout(Duration::from_millis(300)).ok()).filter(|e| matches!(e, Event::Bind(..))).count();
@@ -544,7 +529,7 @@ fn bind_then_fail_cycles_are_bounded() {
         // A new attachment starts over (and succeeds once the fault is gone).
         *lock(&r.ctl.always_fail) = None;
         assert_eq!(platform::detach(r.surface.key(), a, T), Detached::Released);
-        let (b, _, _) = attach(&r.surface, E);
+        let (b, _) = attach(&r.surface, E);
         assert!(wait_until(|| r.shared.stats().gpu == GpuState::Ready), "{name}: recovered on the new attachment");
         let _ = b;
         r.shared.close();
@@ -556,13 +541,13 @@ fn bind_then_fail_cycles_are_bounded() {
 fn a_device_lost_while_unbound_is_replaced_before_binding() {
     let _s = serial();
     let r = rig();
-    let (a, _, _) = attach(&r.surface, E);
+    let (a, _) = attach(&r.surface, E);
     assert_eq!(next(&r.rx), Event::Prepare);
     assert_eq!(next(&r.rx), Event::Bind(a, 100));
     assert_eq!(platform::detach(r.surface.key(), a, T), Detached::Released);
     assert_eq!(next(&r.rx), Event::Unbind);
     r.ctl.lost.store(true, Ordering::SeqCst); // lost in the background
-    let (b, _, _) = attach(&r.surface, E);
+    let (b, _) = attach(&r.surface, E);
     assert_eq!(next(&r.rx), Event::ResetDevice);
     assert_eq!(next(&r.rx), Event::Prepare);
     assert_eq!(next(&r.rx), Event::Bind(b, 100));
@@ -577,7 +562,7 @@ fn event_ring_records_submits_and_presents_with_frame_ids() {
     let _s = serial();
     let r = rig_with_ring(EventRing::new(64).unwrap());
     let (surface, shared, rx) = (&r.surface, &r.shared, &r.rx);
-    let (a, _, _) = attach(&surface, E);
+    let (a, _) = attach(&surface, E);
     assert_eq!(next(&rx), Event::Prepare);
     assert_eq!(next(&rx), Event::Bind(a, 100));
     for n in 1..=3 {
@@ -624,7 +609,7 @@ fn scripted_run(ring: EventRing) -> (Visible, Vec<u8>) {
     let (surface, shared, rx, ctl) = (&r.surface, &r.shared, &r.rx, &r.ctl);
     ctl.present_gate.enable();
     let mut submits = Vec::new();
-    let (a, _, _) = attach(&surface, E);
+    let (a, _) = attach(&surface, E);
     // Attachment numbers are process-wide and never reused: recorded as 1 for this run's.
     let mut events = Vec::new();
     let mut expect = |want: Event| {
@@ -717,7 +702,7 @@ fn the_event_ring_records_every_unsuccessful_present_as_kind_3() {
     let _s = serial();
     let r = rig_with_ring(EventRing::new(256).unwrap());
     let (surface, shared, rx, ctl) = (&r.surface, &r.shared, &r.rx, &r.ctl);
-    let (a, _, _) = attach(&surface, E);
+    let (a, _) = attach(&surface, E);
     assert_eq!(next(&rx), Event::Prepare);
     assert_eq!(next(&rx), Event::Bind(a, 100));
     let fail_then_submit = |e: PresentError, n: usize| {
@@ -784,7 +769,7 @@ fn present_admitted_orders_acquire_and_submit_under_admission() {
             |_| calls.borrow_mut().push("submit"),
         )
     };
-    let (a, _, _) = attach(&surface, E);
+    let (a, _) = attach(&surface, E);
     let lease = surface.lease().unwrap();
     assert_eq!(run(&lease, true, None), Ok(()));
     assert_eq!(*calls.borrow(), ["acquire", "prepare", "submit"]);
@@ -807,7 +792,7 @@ fn the_surface_is_dropped_before_the_lease_that_keeps_the_window() {
             lock(&self.1).push(self.0);
         }
     }
-    struct RecWindow(usize, #[allow(dead_code)] Rec); // the Rec records the window's drop
+    struct RecWindow(#[allow(dead_code)] Rec); // the Rec records the window's drop
     impl PlatformWindow for RecWindow {
         fn raw_window_handle(&self) -> Result<RawWindowHandle, raw_window_handle::HandleError> {
             Err(raw_window_handle::HandleError::NotSupported)
@@ -815,13 +800,9 @@ fn the_surface_is_dropped_before_the_lease_that_keeps_the_window() {
         fn raw_display_handle(&self) -> RawDisplayHandle {
             RawDisplayHandle::Android(AndroidDisplayHandle::new())
         }
-        fn identity(&self) -> usize {
-            self.0
-        }
     }
     let surface = Surface::new().unwrap();
-    let id = NEXT_ID.fetch_add(1, Ordering::SeqCst);
-    let a = platform::attach(surface.key(), Box::new(RecWindow(id, Rec("window", order.clone()))), E).unwrap();
+    let a = platform::attach(surface.key(), Box::new(RecWindow(Rec("window", order.clone()))), E).unwrap();
     let bound = SurfaceLease { surface: Rec("surface", order.clone()), lease: surface.lease().unwrap() };
     assert!(matches!(platform::revoke_async(surface.key(), a), platform::Revoked::Retiring { .. }));
     assert!(lock(&order).is_empty(), "the lease keeps the window alive after the revocation");
@@ -837,7 +818,7 @@ fn a_failed_timeout_readback_refuses_acquires_and_recovers_by_rebinding() {
     let _s = serial();
     let r = rig();
     lock(&r.ctl.readbacks).push_back(false); // the first bind's configure is not confirmed
-    let (a, _, _) = attach(&r.surface, E);
+    let (a, _) = attach(&r.surface, E);
     assert_eq!(next(&r.rx), Event::Prepare);
     assert_eq!(next(&r.rx), Event::Bind(a, 100));
     assert!(r.shared.submit(rect_frame(1)));
@@ -875,7 +856,7 @@ fn a_persistently_failed_readback_stops_after_the_bounded_attempts() {
 fn an_outdated_swapchain_is_not_reconfigured_after_revocation() {
     let _s = serial();
     let surface = Surface::new().unwrap();
-    let (a, _, _) = attach(&surface, E);
+    let (a, _) = attach(&surface, E);
     let lease = surface.lease().unwrap();
     let mut configures = 0;
     assert_eq!(reconfigure_outdated(&lease, || { configures += 1; Ok(()) }), PresentError::Skipped("swapchain outdated; reconfigured".into()));
@@ -899,7 +880,7 @@ fn an_outdated_swapchain_is_not_reconfigured_after_revocation() {
 fn configures_are_admitted_and_refused_after_revocation() {
     let _s = serial();
     let surface = Surface::new().unwrap();
-    let (a, _, _) = attach(&surface, E);
+    let (a, _) = attach(&surface, E);
     let lease = surface.lease().unwrap();
     assert_eq!(admitted(&lease, || 7), Some(7));
     let mut seen = None;

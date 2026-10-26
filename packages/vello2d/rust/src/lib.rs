@@ -241,9 +241,6 @@ mod tests {
             fn raw_display_handle(&self) -> raw_window_handle::RawDisplayHandle {
                 raw_window_handle::RawDisplayHandle::Android(raw_window_handle::AndroidDisplayHandle::new())
             }
-            fn identity(&self) -> usize {
-                0x7e57
-            }
         }
         assert_eq!(rnrs_surface::platform::attach(key, Box::new(W), rnrs_surface::Extent { width: 1, height: 1, scale: 1.0 }), Err(rnrs_surface::platform::AttachError::Closed));
         // A renderer created after teardown (a create that raced it) is retired at once.

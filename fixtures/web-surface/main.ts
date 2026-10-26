@@ -54,7 +54,7 @@ function setup(deferredRelease = false) {
     : wasm;
   const backend = installWebBackend(
     bundle as unknown as RnrsWasm,
-    (same) => (boot = createSurfaceBootstrap(same)),
+    (instances) => (boot = createSurfaceBootstrap(instances)),
   );
   const module = createVello2DModuleForTesting(8);
   const renderer = module.create({ resolutionScale: 1, timingRecords: 16 });
@@ -394,8 +394,8 @@ async function main() {
   await test('backend replacement invalidates old canvas epoch and closes resources', async (h) => {
     h.renderer.submit(frame([1, 0, 0, 1]));
     h.boot.host.mount(h.canvas, h.wrapper, h.key);
-    const replacement = installWebBackend(wasm as unknown as RnrsWasm, (same) =>
-      createSurfaceBootstrap(same),
+    const replacement = installWebBackend(wasm as unknown as RnrsWasm, (instances) =>
+      createSurfaceBootstrap(instances),
     );
     try {
       await nextFrames();
