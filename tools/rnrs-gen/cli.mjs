@@ -107,7 +107,7 @@ export function loadPackage(dir) {
   };
   if (rn.library !== undefined) {
     // A Rust library package (for example @rnrs/surface): a crate that module crates depend on
-    // by version (`rnrs-surface = "0.2"`). It has no spec, generated interface or JS wrapper;
+    // by version (`rnrs-surface = "0.3"`). It has no spec, generated interface or JS wrapper;
     // bundles patch the crate name to the installed copy and register no module for it.
     const extra = Object.keys(rn).filter((k) => !['targets', 'library'].includes(k));
     if (extra.length)

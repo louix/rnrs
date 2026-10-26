@@ -1,6 +1,6 @@
 {
   "name": "@rnrs/example-http",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "HTTP client for React Native (Android and iOS, reqwest on Tokio) and browser Wasm (reqwest over fetch), implemented in Rust. Experimental.",
   "license": "MIT",
@@ -37,6 +37,6 @@
     "./package.json": "./package.json"
   },
   "peerDependencies": {
-    "@rnrs/runtime": "0.2.0"
+    "@rnrs/runtime": "0.3.0"
   }
 }

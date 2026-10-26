@@ -1,6 +1,6 @@
 {
   "name": "@rnrs/labs-webgpu-triangle",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Lab fixture: one wgpu triangle drawn by Rust through the rnrs wgpu adapter into an @rnrs/surface view (Android: Vulkan, iOS: Metal, browser: WebGPU). No fallback.",
   "license": "MIT",
@@ -35,9 +35,9 @@
     "./package.json": "./package.json"
   },
   "dependencies": {
-    "@rnrs/surface": "0.2.0"
+    "@rnrs/surface": "0.3.0"
   },
   "peerDependencies": {
-    "@rnrs/runtime": "0.2.0"
+    "@rnrs/runtime": "0.3.0"
   }
 }

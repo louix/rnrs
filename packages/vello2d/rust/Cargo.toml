@@ -1,12 +1,12 @@
 [package]
 name = "rnrs-vello2d"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 description = "2D renderer module for @rnrs/example-vello2d: Vello CPU raster presented with wgpu on an rnrs-surface."
 
 [dependencies]
-rnrs-core = "0.2"
-rnrs-surface = "0.2"
+rnrs-core = "0.3"
+rnrs-surface = "0.3"
 # Pinned. The surface with this renderer has run on the Pixel 2 XL (Adreno) only; on the
 # Pixel 8a only headless probes ran (results/surface), where GPU Vello (vello 0.11,
 # vello_hybrid 0.2) failed in the Mali driver, so the scene is rasterized by vello_cpu (a

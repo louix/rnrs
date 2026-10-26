@@ -19,10 +19,10 @@ const hash = (file) => createHash('sha256').update(readFileSync(file)).digest('h
 run('node', [path.join(root, 'scripts/pack.mjs')], root);
 mkdirSync(path.join(fixture, 'vendor'), { recursive: true });
 const archives = [
-  'rnrs-cli-0.2.0.tgz',
-  'rnrs-runtime-0.2.0.tgz',
-  'rnrs-surface-0.2.0.tgz',
-  'rnrs-example-vello2d-0.2.0.tgz',
+  'rnrs-cli-0.3.0.tgz',
+  'rnrs-runtime-0.3.0.tgz',
+  'rnrs-surface-0.3.0.tgz',
+  'rnrs-example-vello2d-0.3.0.tgz',
 ];
 for (const archive of archives)
   copyFileSync(path.join(root, '.generated/pack', archive), path.join(fixture, 'vendor', archive));

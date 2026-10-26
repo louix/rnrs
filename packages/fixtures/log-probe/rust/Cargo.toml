@@ -1,11 +1,11 @@
 [package]
 name = "log-probe"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 description = "Lab-only fixture for the Rust logging smoke: plain tracing and log calls, no platform code."
 
 [dependencies]
-rnrs-core = "0.2"
+rnrs-core = "0.3"
 tracing = { version = "0.1", default-features = false, features = ["std"] }
 log = "0.4"
 

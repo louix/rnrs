@@ -4,10 +4,10 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@rnrs/cli": "file:vendor/rnrs-cli-0.2.0.tgz",
-    "@rnrs/example-vello2d": "file:vendor/rnrs-example-vello2d-0.2.0.tgz",
-    "@rnrs/runtime": "file:vendor/rnrs-runtime-0.2.0.tgz",
-    "@rnrs/surface": "file:vendor/rnrs-surface-0.2.0.tgz",
+    "@rnrs/cli": "file:vendor/rnrs-cli-0.3.0.tgz",
+    "@rnrs/example-vello2d": "file:vendor/rnrs-example-vello2d-0.3.0.tgz",
+    "@rnrs/runtime": "file:vendor/rnrs-runtime-0.3.0.tgz",
+    "@rnrs/surface": "file:vendor/rnrs-surface-0.3.0.tgz",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-native-web": "0.21.4"

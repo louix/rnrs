@@ -1,9 +1,9 @@
 [package]
 name = "rnrs-blake3"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 description = "BLAKE3 module implementation for @rnrs/example-blake3 (wraps the blake3 crate)."
 
 [dependencies]
-rnrs-core = "0.2"
+rnrs-core = "0.3"
 blake3 = "1.8"

@@ -1,8 +1,8 @@
 [package]
 name = "worklets-probe"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 description = "Lab-only fixture for the Worklets proof of concept: scalar methods, one native object, and refused shapes."
 
 [dependencies]
-rnrs-core = "0.2"
+rnrs-core = "0.3"

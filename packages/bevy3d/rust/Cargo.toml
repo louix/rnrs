@@ -1,6 +1,6 @@
 [package]
 name = "rnrs-bevy3d"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 # Bevy 0.20.0's MSRV. Apps bundling this module build their whole Rust bundle with 1.97.1
 # (RUSTUP_TOOLCHAIN=1.97.1); the framework's default toolchain is unchanged.
@@ -8,8 +8,8 @@ rust-version = "1.97.1"
 description = "Bounded Bevy example module for @rnrs/example-bevy3d: a Rust-owned Bevy scene rendered offscreen and presented with wgpu on an rnrs-surface (Android: Vulkan; iOS: Metal; browser: WebGPU prototype; see packages/bevy3d/README.md)."
 
 [dependencies]
-rnrs-core = "0.2"
-rnrs-surface = "0.2"
+rnrs-core = "0.3"
+rnrs-surface = "0.3"
 log = "0.4"
 # Bevy 0.20.0 uses wgpu ^30, the same 30.0.1 the framework's renderers pin. Only the plugins a
 # lit cube needs; no winit (Bevy never sees the window), no log plugin (rnrs-log owns logging),

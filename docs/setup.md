@@ -161,7 +161,7 @@ archives instead, all **in one `npm install` command** so npm does not look up a
 dependency in the registry before its archive is installed:
 
 ```sh
-npm install "$PACK/rnrs-runtime-0.2.0.tgz" "$PACK/rnrs-cli-0.2.0.tgz"   # add rnrs-surface-0.2.0.tgz for renderers
+npm install "$PACK/rnrs-runtime-0.3.0.tgz" "$PACK/rnrs-cli-0.3.0.tgz"   # add rnrs-surface-0.3.0.tgz for renderers
 ```
 
 ## Troubleshooting

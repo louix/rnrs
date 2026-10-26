@@ -1,11 +1,11 @@
 [package]
 name = "rnrs-http"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 description = "HTTP module implementation for @rnrs/example-http (wraps reqwest)."
 
 [dependencies]
-rnrs-core = "0.2"
+rnrs-core = "0.3"
 futures-util = { version = "0.3", default-features = false }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

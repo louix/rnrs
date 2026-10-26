@@ -1,6 +1,6 @@
 [package]
 name = "rnrs"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/louix/rnrs"
@@ -20,5 +20,5 @@ wgpu = ["surface", "rnrs-surface/wgpu"]
 
 [dependencies]
 # Exact: released together with this crate in @rnrs/runtime.
-rnrs-core = "=0.2.0"
-rnrs-surface = { version = "0.2", optional = true }
+rnrs-core = "=0.3.0"
+rnrs-surface = { version = "0.3", optional = true }

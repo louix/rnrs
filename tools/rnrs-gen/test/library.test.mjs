@@ -36,11 +36,11 @@ const json = (file, value) => {
 };
 
 /** node_modules/<name>: a library package whose crate is `crate` at `version`. */
-function library(app, name, { crate, version = '0.2.0', cargoName = crate, rustNative }) {
+function library(app, name, { crate, version = '0.3.0', cargoName = crate, rustNative }) {
   const dir = path.join(app, 'node_modules', name);
   json(path.join(dir, 'package.json'), {
     name,
-    version: '0.2.0',
+    version: '0.3.0',
     rustNative: rustNative ?? { targets: ['android', 'web'], library: { crate, path: 'rust' } },
   });
   mkdirSync(path.join(dir, 'rust/src'), { recursive: true });
@@ -193,10 +193,10 @@ test(
       json(path.join(app, 'package.json'), { name: 'app', dependencies: { 'uses-lib': '1' } });
       moduleUsing(app, 'uses-lib', {
         crate: 'uses_lib',
-        requirement: 'shared-lib = "0.2"',
+        requirement: 'shared-lib = "0.3"',
         dependsOn: { '@scope/shared-lib': '1' },
       });
-      library(app, '@scope/shared-lib', { crate: 'shared-lib', version: '0.2.4' });
+      library(app, '@scope/shared-lib', { crate: 'shared-lib', version: '0.3.4' });
       const opts = (dir) => ({ out: path.join(dir, '.rnrs/web'), offline: true });
       const result = lockBundle(app, 'web', opts(app));
       assert.deepEqual(
@@ -211,7 +211,7 @@ test(
         ),
       ];
       assert.equal(entries.length, 1);
-      assert.equal(entries[0][1], '0.2.4');
+      assert.equal(entries[0][1], '0.3.4');
       assert.equal(entries[0][2], undefined, 'no registry source');
       for (const p of [app, ROOT, tmpdir()]) assert.ok(!lock.includes(p), `lock mentions ${p}`);
       // A relocated app (another absolute path) checks against the same lock unchanged.
@@ -219,9 +219,9 @@ test(
       assert.doesNotThrow(() => lockBundle(moved, 'web', { ...opts(moved), check: true }));
       assert.equal(readFileSync(lockFile(moved, 'web'), 'utf8'), lock);
       // The installed library changes to an incompatible version: the committed lock is stale,
-      // and fresh resolution cannot satisfy "0.2" from the package (offline: no registry
+      // and fresh resolution cannot satisfy "0.3" from the package (offline: no registry
       // fallback; online, provenance would refuse a crates.io crate of that name).
-      library(moved, '@scope/shared-lib', { crate: 'shared-lib', version: '0.3.0' });
+      library(moved, '@scope/shared-lib', { crate: 'shared-lib', version: '0.4.0' });
       assert.throws(
         () => lockBundle(moved, 'web', { ...opts(moved), check: true }),
         /does not match the app's Rust dependencies/,
@@ -271,7 +271,7 @@ test(
       // link its view manager and codegen component.
       json(path.join(app, 'package.json'), {
         name: 'app',
-        dependencies: { '@rnrs/example-vello2d': '0.2.0' },
+        dependencies: { '@rnrs/example-vello2d': '0.3.0' },
       });
       assert.throws(
         () => selectModules(app, 'android'),
@@ -279,7 +279,7 @@ test(
       );
       json(path.join(app, 'package.json'), {
         name: 'app',
-        dependencies: { '@rnrs/example-vello2d': '0.2.0', '@rnrs/surface': '0.2.0' },
+        dependencies: { '@rnrs/example-vello2d': '0.3.0', '@rnrs/surface': '0.3.0' },
       });
       const result = lockBundle(app, 'android', {
         out: path.join(app, '.rnrs/android'),
@@ -308,7 +308,7 @@ test('a module crate needing an rnrs-* library that no installed package provide
       json(path.join(app, 'package.json'), { name: 'app', dependencies: { renderer: '1' } });
       moduleUsing(app, 'renderer', {
         crate: 'renderer_mod',
-        requirement: 'rnrs-surface = "0.2"',
+        requirement: 'rnrs-surface = "0.3"',
         dependsOn: {},
       });
     },
@@ -332,7 +332,7 @@ test('rnrs-* and former rnr-* crates resolved from a registry or git are refused
   ]) {
     const foreign = (name) => ({
       name,
-      version: '0.2.0',
+      version: '0.3.0',
       source,
       manifest_path: '/elsewhere/Cargo.toml',
     });
@@ -340,7 +340,7 @@ test('rnrs-* and former rnr-* crates resolved from a registry or git are refused
     for (const name of ['rnrs', 'rnrs-core', 'rnrs-android', 'rnrs-web', 'rnrs-log'])
       assert.throws(
         () => checkProvenance({ packages: [foreign(name)] }),
-        new RegExp(`\\b${name} 0\\.2\\.0 resolved from .*, not the framework's`),
+        new RegExp(`\\b${name} 0\\.3\\.0 resolved from .*, not the framework's`),
       );
     // Anything else in the namespace, current or former, declared by a package or not.
     for (const name of [
@@ -354,7 +354,7 @@ test('rnrs-* and former rnr-* crates resolved from a registry or git are refused
       assert.throws(
         () => checkProvenance({ packages: [foreign(name)] }),
         new RegExp(
-          `\\b${name} 0\\.2\\.0 resolved from .*\\nCrates named rnrs-\\* \\(and the former rnr-\\* names\\) are reserved for the framework`,
+          `\\b${name} 0\\.3\\.0 resolved from .*\\nCrates named rnrs-\\* \\(and the former rnr-\\* names\\) are reserved for the framework`,
         ),
       );
   }
@@ -372,7 +372,7 @@ test('a module crate depending on a former rnr-* framework name is refused with 
       json(path.join(app, 'package.json'), { name: 'app', dependencies: { old: '1' } });
       moduleUsing(app, 'old', {
         crate: 'old_mod',
-        requirement: 'rnr-surface = "0.2"',
+        requirement: 'rnr-surface = "0.3"',
         dependsOn: {},
       });
     },
@@ -400,22 +400,22 @@ test('rnrs-* and rnr-* dependency scanning covers dependency tables, renames and
         'name = "x"',
         '',
         '[dependencies]',
-        'rnrs-core = "0.2"',
-        'surface = { package = "rnrs-surface", version = "0.2" }',
+        'rnrs-core = "0.3"',
+        'surface = { package = "rnrs-surface", version = "0.3" }',
         'serde = "1"',
         '',
         '[target.\'cfg(target_os = "android")\'.dependencies]',
-        'rnr_extra = "0.2"',
-        'rnrs_other = "0.2"',
+        'rnr_extra = "0.3"',
+        'rnrs_other = "0.3"',
         '',
         '[dependencies.rnr-table]',
-        'version = "0.2"',
+        'version = "0.3"',
         '',
         '[dev-dependencies]',
-        'rnr-test-only = "0.2"',
+        'rnr-test-only = "0.3"',
         '',
         '[build-dependencies]',
-        'rnrs-build = "0.2"',
+        'rnrs-build = "0.3"',
       ].join('\n'),
     );
     assert.deepEqual(rnrsCrateDependencies(file).sort(), [

@@ -152,7 +152,7 @@ test(
         cargoToml,
         readFileSync(cargoToml, 'utf8')
           .replace('name = "counter"', 'name = "bad_core"')
-          .replace('rnrs-core = "0.2"', 'rnrs-core = "0.0.1"'),
+          .replace('rnrs-core = "0.3"', 'rnrs-core = "0.0.1"'),
       );
       json(path.join(dir, 'package.json'), { name: 'app', dependencies: { 'bad-core': '1' } });
       // Offline: an unsatisfiable patch fails resolution (online it could fetch an unrelated

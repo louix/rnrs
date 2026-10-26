@@ -2,7 +2,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! rnrs = "0.2"                                     # headless modules
+//! rnrs = "0.3"                                     # headless modules
 //! rnrs = { version = "0.1", features = ["surface"] } # surfaces (the app installs @rnrs/surface)
 //! rnrs = { version = "0.1", features = ["wgpu"] }    # wgpu renderers (rnrs::gpu)
 //! ```

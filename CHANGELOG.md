@@ -1,15 +1,22 @@
 # Changelog
 
-## Unreleased
+## 0.3.0
 
-- Module packages can ship prebuilt Android binaries, iOS XCFrameworks and browser Wasm modules (`rnrs build-native`).
-  Apps link them without Rust. Modules listed in `rustNativeApp.sourceBuild` are compiled from
-  source instead, explicitly; there is no automatic fallback.
-- The native boundary is a versioned C table per module. The executor
-  budget and Tokio runtime are per module binary.
-- Apps whose modules have no prebuilt binary must list them in `rustNativeApp.sourceBuild`.
+- Module packages can ship prebuilt binaries (`rnrs build-native`): Android libraries, iOS
+  XCFrameworks and browser Wasm modules, including rendering-surface modules. Apps link them
+  without a Rust toolchain.
+- Building from source is explicit: list modules in `rustNativeApp.sourceBuild` (or `"*"`).
+  There is no automatic fallback; a module without a matching prebuilt binary is refused.
+- `rnrs pack-js` refuses stale prebuilt binaries; `rnrs check-native` (scaffolded as
+  `prepublishOnly`) refuses missing ones.
 - Web apps initialize with the registry `rnrs build --target web` writes:
   `import * as modules from './.rnrs/web/rnrs.js'; await initRnrs(modules)`.
+- Bevy rendering works on the iOS simulator.
+
+Upgrade `@rnrs/cli`, `@rnrs/runtime` and `@rnrs/surface` (if used) together.
+Module authors: depend on the `0.3` framework crates, rebuild binaries with `rnrs build-native`
+and republish; 0.2.0 packages contain no prebuilt binaries. Apps: rebuild native apps and web
+bundles. The TypeScript-spec and Rust-implementation authoring API is unchanged.
 
 ## 0.2.0
 

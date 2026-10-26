@@ -48,7 +48,7 @@ for dir in "$APP" "$REF"; do
   (cd "$dir" && npm install --no-audit --no-fund "expo@$EXPO_VERSION" >/dev/null)
 done
 cp "$ROOT/fixtures/expo-consumer/App.tsx" "$APP/"
-(cd "$APP" && npm install --no-audit --no-fund "$P/rnrs-cli-0.2.0.tgz" "$P/rnrs-runtime-0.2.0.tgz" "$P/rnrs-example-counter-0.2.0.tgz" >/dev/null)
+(cd "$APP" && npm install --no-audit --no-fund "$P/rnrs-cli-0.3.0.tgz" "$P/rnrs-runtime-0.3.0.tgz" "$P/rnrs-example-counter-0.3.0.tgz" >/dev/null)
 # The counter module is compiled from source (rustNativeApp.sourceBuild; package.json only).
 node "$ROOT/scripts/consumer/source-build.mjs" "$APP" "*"
 (cd "$APP" && node -e 'const fs=require("fs"),out=process.argv[1],v={};

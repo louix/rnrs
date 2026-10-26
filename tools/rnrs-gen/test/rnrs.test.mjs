@@ -50,7 +50,7 @@ function withDir(body) {
 function crate(dir, body, name = 'm') {
   write(
     path.join(dir, 'Cargo.toml'),
-    `[package]\nname = "${name}"\nversion = "0.2.0"\nedition = "2021"\n\n${body}\n`,
+    `[package]\nname = "${name}"\nversion = "0.3.0"\nedition = "2021"\n\n${body}\n`,
   );
   write(path.join(dir, 'src/lib.rs'), ''); // a target, so cargo accepts the crate
   return { cratePath: dir };
@@ -66,12 +66,12 @@ test('the manifest reader handles the TOML Cargo files use', () => {
       'line"""',
       '[dependencies]',
       'a = "1"',
-      'b = { version = "0.2", features = ["x", "y"], optional = true }',
+      'b = { version = "0.3", features = ["x", "y"], optional = true }',
       'c.package = "real-c"',
       'c.version = "2"',
       '"quoted-key" = "3"',
       '[target.\'cfg(target_os = "ios")\'.dependencies]',
-      'd = { package = "rnrs", version = "0.2" }',
+      'd = { package = "rnrs", version = "0.3" }',
       '[dependencies.e]',
       'version = "4"',
       'features = [',
@@ -89,7 +89,7 @@ test('the manifest reader handles the TOML Cargo files use', () => {
   assert.equal(toml.package.name, 'lit');
   assert.equal(toml.package.description, 'multi\nline');
   assert.deepEqual(plain(toml.dependencies.b), {
-    version: '0.2',
+    version: '0.3',
     features: ['x', 'y'],
     optional: true,
   });
@@ -97,7 +97,7 @@ test('the manifest reader handles the TOML Cargo files use', () => {
   assert.equal(toml.dependencies['quoted-key'], '3');
   assert.deepEqual(plain(toml.target['cfg(target_os = "ios")'].dependencies.d), {
     package: 'rnrs',
-    version: '0.2',
+    version: '0.3',
   });
   assert.deepEqual(plain(toml.dependencies.e.features), ['one', 'two']);
   assert.deepEqual(
@@ -115,7 +115,7 @@ test('dependency declarations: renames, kinds, targets, workspace inheritance an
   withDir((dir) => {
     write(
       path.join(dir, 'Cargo.toml'),
-      '[workspace]\nmembers = ["m"]\n[workspace.dependencies]\nfw = { package = "rnrs", version = "0.2", features = ["surface"] }\n',
+      '[workspace]\nmembers = ["m"]\n[workspace.dependencies]\nfw = { package = "rnrs", version = "0.3", features = ["surface"] }\n',
     );
     crate(
       path.join(dir, 'm'),
@@ -124,9 +124,9 @@ test('dependency declarations: renames, kinds, targets, workspace inheritance an
         'fw = { workspace = true }',
         'helper = { path = "../helper" }',
         '[dev-dependencies]',
-        'rnrs = "0.2"',
+        'rnrs = "0.3"',
         '[target.\'cfg(target_arch = "wasm32")\'.build-dependencies]',
-        'rnrs-x = "0.2"',
+        'rnrs-x = "0.3"',
         '[features]',
         'gpu = ["fw?/wgpu"]',
       ].join('\n'),
@@ -134,7 +134,7 @@ test('dependency declarations: renames, kinds, targets, workspace inheritance an
     const m = readManifest(path.join(dir, 'm/Cargo.toml'));
     const by = Object.fromEntries(m.deps.map((d) => [`${d.kind}:${d.key}`, d]));
     assert.equal(by['normal:fw'].package, 'rnrs');
-    assert.equal(by['normal:fw'].version, '0.2');
+    assert.equal(by['normal:fw'].version, '0.3');
     assert.equal(by['normal:helper'].path, path.join(dir, 'helper'));
     assert.equal(by['dev:rnrs'].kind, 'dev');
     assert.equal(by['build:rnrs-x'].target, 'cfg(target_arch = "wasm32")');
@@ -173,49 +173,49 @@ test('dependency declarations: renames, kinds, targets, workspace inheritance an
 test('the generated interface names rnrs-core through the dependency the crate declares', () =>
   withDir((dir) => {
     const core = (body) => interfaceCore(crate(dir, body));
-    assert.equal(core('[dependencies]\nrnrs-core = "0.2"'), 'rnrs_core');
-    assert.equal(core('[dependencies]\nrnrs = "0.2"'), 'rnrs::core');
-    assert.equal(core('[dependencies]\nfw = { package = "rnrs", version = "0.2" }'), 'fw::core');
-    assert.equal(core('[dependencies.my-core]\npackage = "rnrs-core"\nversion = "0.2"'), 'my_core');
+    assert.equal(core('[dependencies]\nrnrs-core = "0.3"'), 'rnrs_core');
+    assert.equal(core('[dependencies]\nrnrs = "0.3"'), 'rnrs::core');
+    assert.equal(core('[dependencies]\nfw = { package = "rnrs", version = "0.3" }'), 'fw::core');
+    assert.equal(core('[dependencies.my-core]\npackage = "rnrs-core"\nversion = "0.3"'), 'my_core');
     // Both: rnrs-core, so crates that add rnrs keep their generated interface.
-    assert.equal(core('[dependencies]\nrnrs = "0.2"\nrnrs-core = "0.2"'), 'rnrs_core');
+    assert.equal(core('[dependencies]\nrnrs = "0.3"\nrnrs-core = "0.3"'), 'rnrs_core');
     // A conditional rnrs-core does not win over an unconditional rnrs.
     assert.equal(
-      core('[dependencies]\nrnrs = "0.2"\nrnrs-core = { version = "0.2", optional = true }'),
+      core('[dependencies]\nrnrs = "0.3"\nrnrs-core = { version = "0.3", optional = true }'),
       'rnrs::core',
     );
     assert.throws(
-      () => core('[dependencies]\nrnrs = { version = "0.2", optional = true }'),
-      /rnrs is optional; the generated interface uses it on every target, so declare it unconditionally: add rnrs = "0\.2" to \[dependencies\]/,
+      () => core('[dependencies]\nrnrs = { version = "0.3", optional = true }'),
+      /rnrs is optional; the generated interface uses it on every target, so declare it unconditionally: add rnrs = "0\.3" to \[dependencies\]/,
     );
     assert.throws(
       () =>
         core(
-          '[target.\'cfg(target_os = "android")\'.dependencies]\nfw = { package = "rnrs", version = "0.2" }',
+          '[target.\'cfg(target_os = "android")\'.dependencies]\nfw = { package = "rnrs", version = "0.3" }',
         ),
       /fw \(package rnrs\) is declared only for cfg\(target_os = "android"\)/,
     );
     assert.throws(
-      () => core('[dependencies]\nrnr-core = "0.2"'),
-      /the crate must depend on the framework: add rnrs = "0\.2" to \[dependencies\] \(it depends on rnr-core, which was renamed rnrs-core; depend on rnrs or rnrs-core instead\)/,
+      () => core('[dependencies]\nrnr-core = "0.3"'),
+      /the crate must depend on the framework: add rnrs = "0\.3" to \[dependencies\] \(it depends on rnr-core, which was renamed rnrs-core; depend on rnrs or rnrs-core instead\)/,
     );
     assert.throws(
-      () => core('[dev-dependencies]\nrnrs = "0.2"'),
-      /the crate must depend on the framework: add rnrs = "0\.2" to \[dependencies\]/,
+      () => core('[dev-dependencies]\nrnrs = "0.3"'),
+      /the crate must depend on the framework: add rnrs = "0\.3" to \[dependencies\]/,
     );
     assert.throws(
-      () => core('[dependencies]\ncore = { package = "rnrs", version = "0.2" }'),
+      () => core('[dependencies]\ncore = { package = "rnrs", version = "0.3" }'),
       /named core, which the generated interface cannot use as a path root/,
     );
     assert.throws(
-      () => core('[dependencies]\nrnrs = { version = "0.2"'),
+      () => core('[dependencies]\nrnrs = { version = "0.3"'),
       /while looking for the module's rnrs dependency/,
     );
     // Requirements are checked against the framework crate the module uses.
-    crate(dir, '[dependencies]\nfw = { package = "rnrs", version = "0.3" }');
+    crate(dir, '[dependencies]\nfw = { package = "rnrs", version = "0.4" }');
     assert.throws(
       () => checkCoreRequirement({ cratePath: dir }),
-      /rnrs requirement "0\.3" is not satisfied by this framework's rnrs 0\.2\.0; use rnrs = "0\.2"/,
+      /rnrs requirement "0\.4" is not satisfied by this framework's rnrs 0\.3\.0; use rnrs = "0\.3"/,
     );
     crate(dir, '[dependencies]\nrnrs = { path = "../rnrs" }');
     assert.doesNotThrow(() => checkCoreRequirement({ cratePath: dir }));
@@ -250,7 +250,7 @@ function moduleWith(app, name, { crate: crateName, requirement, extra = '' }) {
     toml,
     readFileSync(toml, 'utf8')
       .replace(/^name = "[^"]+"/m, `name = "${crateName}"`)
-      .replace(/^rnrs-core = "0\.2"\n/m, `${requirement}\n`) + extra,
+      .replace(/^rnrs-core = "0\.3"\n/m, `${requirement}\n`) + extra,
   );
   return dir;
 }
@@ -266,7 +266,7 @@ function app(dir, deps) {
 test('the bundle patches rnrs only when a module crate, or a crate it reaches by path, uses it', () =>
   withDir((dir) => {
     app(dir, ['plain']);
-    moduleWith(dir, 'plain', { crate: 'plain_mod', requirement: 'rnrs-core = "0.2"' });
+    moduleWith(dir, 'plain', { crate: 'plain_mod', requirement: 'rnrs-core = "0.3"' });
     const patchOf = () => {
       const { crateDir } = generateBundle(dir, 'android', path.join(dir, '.rnrs/android'));
       return readFileSync(path.join(crateDir, 'Cargo.toml'), 'utf8').split('[patch.crates-io]')[1];
@@ -280,7 +280,7 @@ test('the bundle patches rnrs only when a module crate, or a crate it reaches by
     // A path helper crate inside the module package depends on rnrs: patched.
     write(
       path.join(dir, 'node_modules/plain/helper/Cargo.toml'),
-      '[package]\nname = "helper"\nversion = "0.2.0"\n\n[dependencies]\nrnrs = "0.2"\n',
+      '[package]\nname = "helper"\nversion = "0.3.0"\n\n[dependencies]\nrnrs = "0.3"\n',
     );
     const toml = path.join(dir, 'node_modules/plain/rust/Cargo.toml');
     write(
@@ -311,37 +311,37 @@ test('an rnrs feature whose library package is not installed is refused before c
     app(dir, ['r']);
     moduleWith(dir, 'r', {
       crate: 'r_mod',
-      requirement: 'rnrs = { version = "0.2", features = ["surface"] }',
+      requirement: 'rnrs = { version = "0.3", features = ["surface"] }',
     });
     refused(`enables rnrs's "surface" feature, which needs rnrs-surface`);
     // Through the crate's own feature table, under a rename.
     moduleWith(dir, 'r', {
       crate: 'r_mod',
-      requirement: 'fw = { package = "rnrs", version = "0.2" }',
+      requirement: 'fw = { package = "rnrs", version = "0.3" }',
       extra: '\n[features]\ndefault = ["fw/surface"]\n',
     });
     refused(`enables rnrs's "surface" feature, which needs rnrs-surface`);
     // Through a path dependency.
     moduleWith(dir, 'r', {
       crate: 'r_mod',
-      requirement: 'rnrs = "0.2"\nhelper = { path = "../helper" }',
+      requirement: 'rnrs = "0.3"\nhelper = { path = "../helper" }',
     });
     write(
       path.join(dir, 'node_modules/r/helper/Cargo.toml'),
-      '[package]\nname = "helper"\nversion = "0.2.0"\n\n[dependencies]\nrnrs = { version = "0.2", features = ["surface"] }\n',
+      '[package]\nname = "helper"\nversion = "0.3.0"\n\n[dependencies]\nrnrs = { version = "0.3", features = ["surface"] }\n',
     );
     refused(`enables rnrs's "surface" feature \\(through helper\\), which needs rnrs-surface`);
     // Reached from default through another feature: refused too.
     moduleWith(dir, 'r', {
       crate: 'r_mod',
-      requirement: 'rnrs = "0.2"',
+      requirement: 'rnrs = "0.3"',
       extra: '\n[features]\ndefault = ["gpu"]\ngpu = ["rnrs/surface"]\n',
     });
     refused(`enables rnrs's "surface" feature, which needs rnrs-surface`);
     // An optional feature nothing enables needs no package (the bundle builds default features).
     moduleWith(dir, 'r', {
       crate: 'r_mod',
-      requirement: 'rnrs = "0.2"',
+      requirement: 'rnrs = "0.3"',
       extra: '\n[features]\ngpu = ["rnrs/surface"]\n',
     });
     assert.deepEqual(
@@ -352,11 +352,11 @@ test('an rnrs feature whose library package is not installed is refused before c
     moduleWith(dir, 'r', {
       crate: 'r_mod',
       requirement:
-        'rnrs-core = "0.2"\nrnrs = { version = "0.2", optional = true, features = ["surface"] }',
+        'rnrs-core = "0.3"\nrnrs = { version = "0.3", optional = true, features = ["surface"] }',
     });
     assert.equal(usesRnrs(selectModules(dir, 'android')), false);
     // Headless use of rnrs needs no library package.
-    moduleWith(dir, 'r', { crate: 'r_mod', requirement: 'rnrs = "0.2"' });
+    moduleWith(dir, 'r', { crate: 'r_mod', requirement: 'rnrs = "0.3"' });
     assert.deepEqual(
       selectModules(dir, 'android').map((p) => p.crate),
       ['r_mod'],
@@ -401,17 +401,17 @@ test('the manifest reader fails closed on shapes it could misread', () =>
     const read = (body) => readManifest(crate(dir, body) && path.join(dir, 'Cargo.toml'));
     for (const [body, why] of [
       ['[dependencies]\nrnrs = true', /dependencies\.rnrs must be a version string or a table/],
-      ['[dependencies]\nrnrs = ["0.2"]', /dependencies\.rnrs must be a version string or a table/],
+      ['[dependencies]\nrnrs = ["0.3"]', /dependencies\.rnrs must be a version string or a table/],
       ['[dependencies]\nfw = { package = 1 }', /dependencies\.fw\.package must be a string/],
       [
-        '[dependencies]\nrnrs = { version = "0.2", optional = "yes" }',
+        '[dependencies]\nrnrs = { version = "0.3", optional = "yes" }',
         /dependencies\.rnrs\.optional must be true or false/,
       ],
       [
-        '[dependencies]\nrnrs = { version = "0.2", features = "surface" }',
+        '[dependencies]\nrnrs = { version = "0.3", features = "surface" }',
         /dependencies\.rnrs\.features must be an array of strings/,
       ],
-      ['[[dependencies]]\nrnrs = "0.2"', /\[dependencies\] must be a table/],
+      ['[[dependencies]]\nrnrs = "0.3"', /\[dependencies\] must be a table/],
       ['[features]\ngpu = "rnrs/surface"', /features\.gpu must be an array of strings/],
       ['[target]\n\'cfg(unix)\' = "x"', /target\.cfg\(unix\) must be a table/],
     ])
@@ -448,7 +448,7 @@ test('prototype-named keys are ordinary keys and never touch Object.prototype', 
           '[package.metadata.constructor]',
           'x = 1',
           '[dependencies]',
-          'rnrs = "0.2"',
+          'rnrs = "0.3"',
           'toString = "1"',
           'constructor = { version = "1", "__proto__" = { optional = true } }',
           'hasOwnProperty = { version = "1", features = ["__proto__"] }',
@@ -499,20 +499,20 @@ test('values keep their TOML types, so numbers and dates are never read as strin
     assert.throws(
       () =>
         parseToml(
-          '[dependencies]\nrnrs.version = "0.2"\n[dependencies.rnrs]\nfeatures = []\n',
+          '[dependencies]\nrnrs.version = "0.3"\n[dependencies.rnrs]\nfeatures = []\n',
           'X.toml',
         ),
       /^Error: X\.toml:3:\d+: /,
     );
     // Typed fields: a number or date where cargo wants a string is refused with its path.
     for (const [body, why] of [
-      ['[dependencies]\nrnrs = 0.2', /dependencies\.rnrs must be a version string or a table/],
+      ['[dependencies]\nrnrs = 0.3', /dependencies\.rnrs must be a version string or a table/],
       [
         '[dependencies]\nrnrs = { version = 1979-05-27 }',
         /dependencies\.rnrs\.version must be a string/,
       ],
       [
-        '[dependencies]\nrnrs = { version = "0.2", optional = 1 }',
+        '[dependencies]\nrnrs = { version = "0.3", optional = 1 }',
         /dependencies\.rnrs\.optional must be true or false/,
       ],
     ])
@@ -528,7 +528,7 @@ test('workspace = true follows the workspace cargo would use, or is refused', ()
     const ws = (body) =>
       write(
         path.join(dir, 'Cargo.toml'),
-        `[workspace]\n${body}\n[workspace.dependencies]\nrnrs = { version = "0.2", features = ["surface"] }\n`,
+        `[workspace]\n${body}\n[workspace.dependencies]\nrnrs = { version = "0.3", features = ["surface"] }\n`,
       );
     const member = crate(path.join(dir, 'crates/m'), '[dependencies]\nrnrs = { workspace = true }');
     const read = () => readManifest(path.join(member.cratePath, 'Cargo.toml')).deps[0];
@@ -551,22 +551,22 @@ test('workspace = true follows the workspace cargo would use, or is refused', ()
     // An implicit member: a path dependency of the root package.
     write(
       path.join(dir, 'Cargo.toml'),
-      '[package]\nname = "root"\nversion = "0.2.0"\n[dependencies]\nm = { path = "crates/m" }\n[workspace]\n[workspace.dependencies]\nrnrs = "0.2"\n',
+      '[package]\nname = "root"\nversion = "0.3.0"\n[dependencies]\nm = { path = "crates/m" }\n[workspace]\n[workspace.dependencies]\nrnrs = "0.3"\n',
     );
-    assert.equal(read().version, '0.2');
+    assert.equal(read().version, '0.3');
     // package.workspace names a root elsewhere (and the nearer one is ignored).
     write(
       path.join(dir, 'elsewhere/Cargo.toml'),
-      '[workspace]\nmembers = ["../crates/m"]\n[workspace.dependencies]\nrnrs = "0.2.0"\n',
+      '[workspace]\nmembers = ["../crates/m"]\n[workspace.dependencies]\nrnrs = "0.3.0"\n',
     );
     write(
       path.join(member.cratePath, 'Cargo.toml'),
-      '[package]\nname = "m"\nversion = "0.2.0"\nworkspace = "../../elsewhere"\n[dependencies]\nrnrs = { workspace = true }\n',
+      '[package]\nname = "m"\nversion = "0.3.0"\nworkspace = "../../elsewhere"\n[dependencies]\nrnrs = { workspace = true }\n',
     );
-    assert.equal(read().version, '0.2.0');
+    assert.equal(read().version, '0.3.0');
     write(
       path.join(member.cratePath, 'Cargo.toml'),
-      '[package]\nname = "m"\nversion = "0.2.0"\nworkspace = "../../nowhere"\n[dependencies]\nrnrs = { workspace = true }\n',
+      '[package]\nname = "m"\nversion = "0.3.0"\nworkspace = "../../nowhere"\n[dependencies]\nrnrs = { workspace = true }\n',
     );
     assert.throws(
       read,
@@ -575,21 +575,21 @@ test('workspace = true follows the workspace cargo would use, or is refused', ()
     // Fields that cargo refuses next to workspace = true.
     write(
       path.join(member.cratePath, 'Cargo.toml'),
-      '[package]\nname = "m"\nversion = "0.2.0"\n[dependencies]\nrnrs = { workspace = true, version = "0.2" }\n',
+      '[package]\nname = "m"\nversion = "0.3.0"\n[dependencies]\nrnrs = { workspace = true, version = "0.3" }\n',
     );
     assert.throws(read, /dependencies\.rnrs: version cannot be combined with workspace = true/);
   }));
 
 test('every framework declaration must be satisfiable, not only the one the interface uses', () =>
   withDir((dir) => {
-    crate(dir, '[dependencies]\nrnrs-core = "0.2"\nrnrs = "0.3"');
+    crate(dir, '[dependencies]\nrnrs-core = "0.3"\nrnrs = "0.4"');
     assert.throws(
       () => checkCoreRequirement({ cratePath: dir }),
-      /dependency rnrs: rnrs requirement "0\.3" is not satisfied by this framework's rnrs 0\.2\.0/,
+      /dependency rnrs: rnrs requirement "0\.4" is not satisfied by this framework's rnrs 0\.3\.0/,
     );
     crate(
       dir,
-      '[dependencies]\nrnrs = "0.2"\n[dev-dependencies]\nfw = { package = "rnrs", version = "1" }',
+      '[dependencies]\nrnrs = "0.3"\n[dev-dependencies]\nfw = { package = "rnrs", version = "1" }',
     );
     assert.throws(
       () => checkCoreRequirement({ cratePath: dir }),
@@ -597,13 +597,13 @@ test('every framework declaration must be satisfiable, not only the one the inte
     );
     crate(
       dir,
-      '[dependencies]\nrnrs = "0.2"\n[target.\'cfg(unix)\'.dependencies]\nrnrs-core = "0.3"',
+      '[dependencies]\nrnrs = "0.3"\n[target.\'cfg(unix)\'.dependencies]\nrnrs-core = "0.4"',
     );
     assert.throws(
       () => checkCoreRequirement({ cratePath: dir }),
-      /dependency rnrs-core for cfg\(unix\): rnrs-core requirement "0\.3"/,
+      /dependency rnrs-core for cfg\(unix\): rnrs-core requirement "0\.4"/,
     );
-    crate(dir, '[dependencies]\nrnrs = "0.2"\nrnrs-core = { path = "../core" }');
+    crate(dir, '[dependencies]\nrnrs = "0.3"\nrnrs-core = { path = "../core" }');
     assert.doesNotThrow(() => checkCoreRequirement({ cratePath: dir }));
   }));
 
@@ -638,7 +638,7 @@ test('rnrs test patches what cargo test builds: dev-dependencies and the request
   withDir((dir) => {
     const pkg = moduleWith(dir, 'p', {
       crate: 'p_mod',
-      requirement: 'rnrs = "0.2"',
+      requirement: 'rnrs = "0.3"',
       extra: '\n[features]\ngpu = ["rnrs/surface"]\n',
     });
     write(path.join(pkg, 'rust/src/rnrs_interface.rs'), ''); // regenerated by rnrs test
@@ -658,7 +658,7 @@ test('rnrs test patches what cargo test builds: dev-dependencies and the request
     // --features gpu enables rnrs/surface: it needs @rnrs/surface, which is not installed.
     assert.throws(
       () => testPackage(pkg, ['--features', 'gpu'], { cargo }),
-      /the crate enables rnrs's "surface" feature, which needs rnrs-surface, which comes from @rnrs\/surface; install it next to the package \(npm install --save-dev @rnrs\/surface@0\.2\.0\)/,
+      /the crate enables rnrs's "surface" feature, which needs rnrs-surface, which comes from @rnrs\/surface; install it next to the package \(npm install --save-dev @rnrs\/surface@0\.3\.0\)/,
     );
     // A dev-dependency enabling it is built by cargo test too.
     const toml = path.join(pkg, 'rust/Cargo.toml');
@@ -666,7 +666,7 @@ test('rnrs test patches what cargo test builds: dev-dependencies and the request
       toml,
       readFileSync(toml, 'utf8').replace(
         '[dev-dependencies]\n',
-        '[dev-dependencies]\nfw = { package = "rnrs", version = "0.2", features = ["surface"] }\n',
+        '[dev-dependencies]\nfw = { package = "rnrs", version = "0.3", features = ["surface"] }\n',
       ),
     );
     assert.throws(
@@ -691,7 +691,7 @@ test('rnrs test patches what cargo test builds: dev-dependencies and the request
       toml,
       readFileSync(toml, 'utf8').replace(
         '[dev-dependencies]\n',
-        '[dev-dependencies]\nrnrs-mystery = "0.2"\n',
+        '[dev-dependencies]\nrnrs-mystery = "0.3"\n',
       ),
     );
     assert.throws(
@@ -761,7 +761,7 @@ test('activation: dep: suppresses only the implicit feature of the dependency it
     moduleWith(dir, 'r', {
       crate: 'r_mod',
       requirement:
-        'rnrs-core = "0.2"\nrnrs = { version = "0.2", optional = true, features = ["surface"] }\nhelper = { path = "../../../helper", optional = true }',
+        'rnrs-core = "0.3"\nrnrs = { version = "0.3", optional = true, features = ["surface"] }\nhelper = { path = "../../../helper", optional = true }',
       extra: '\n[features]\ndefault = ["rnrs"]\nother = ["dep:helper"]\n',
     });
     assert.throws(

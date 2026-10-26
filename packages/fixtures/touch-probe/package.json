@@ -1,6 +1,6 @@
 {
   "name": "@rnrs/labs-touch-probe",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Lab-only, GPU-free consumer of rnrs-surface touch input: a surface with touch enabled, drained explicitly by drain() into bounded consumer state. No renderer.",
   "license": "MIT",
@@ -37,9 +37,9 @@
     "./package.json": "./package.json"
   },
   "dependencies": {
-    "@rnrs/surface": "0.2.0"
+    "@rnrs/surface": "0.3.0"
   },
   "peerDependencies": {
-    "@rnrs/runtime": "0.2.0"
+    "@rnrs/runtime": "0.3.0"
   }
 }

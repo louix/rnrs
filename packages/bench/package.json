@@ -1,6 +1,6 @@
 {
   "name": "@rnrs/labs-bench",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Measurement-only module for the conversion pilot. Not a product module.",
   "license": "MIT",
@@ -37,6 +37,6 @@
     "./package.json": "./package.json"
   },
   "peerDependencies": {
-    "@rnrs/runtime": "0.2.0"
+    "@rnrs/runtime": "0.3.0"
   }
 }

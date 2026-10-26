@@ -1,5 +1,5 @@
 # Repository workspace: the lab, the framework crates and the example module packages.
-# Module crates depend on `rnrs-core = "0.2"` or `rnrs = "0.2"` like any published dependency;
+# Module crates depend on `rnrs-core = "0.3"` or `rnrs = "0.3"` like any published dependency;
 # this workspace (and every generated per-app bundle) patches them to the framework's copies.
 [workspace]
 members = [

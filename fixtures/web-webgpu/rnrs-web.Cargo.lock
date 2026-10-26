@@ -660,7 +660,7 @@ checksum = "19b30a45b0cd0bcca8037f3d0dc3421eaf95327a17cad11964fb8179b4fc4832"
 
 [[package]]
 name = "rnrs"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "rnrs-core",
  "rnrs-surface",
@@ -680,11 +680,11 @@ dependencies = [
 
 [[package]]
 name = "rnrs-core"
-version = "0.2.0"
+version = "0.3.0"
 
 [[package]]
 name = "rnrs-surface"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "js-sys",
  "log",
@@ -699,7 +699,7 @@ dependencies = [
 
 [[package]]
 name = "rnrs-vello2d"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "js-sys",
  "libc",
@@ -714,7 +714,7 @@ dependencies = [
 
 [[package]]
 name = "rnrs-web"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "js-sys",
  "rnrs-core",
@@ -724,7 +724,7 @@ dependencies = [
 
 [[package]]
 name = "rnrs-webgpu-triangle"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "rnrs",
 ]
