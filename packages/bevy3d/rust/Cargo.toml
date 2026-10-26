@@ -5,7 +5,7 @@ edition = "2021"
 # Bevy 0.20.0's MSRV. Apps bundling this module build their whole Rust bundle with 1.97.1
 # (RUSTUP_TOOLCHAIN=1.97.1); the framework's default toolchain is unchanged.
 rust-version = "1.97.1"
-description = "Bounded Bevy example module for @rnrs/example-bevy3d: a Rust-owned Bevy scene rendered offscreen and presented with wgpu on an rnrs-surface (Android: Vulkan; iOS: Metal, ported but not rendering on the simulator; browser: WebGPU prototype; see packages/bevy3d/README.md)."
+description = "Bounded Bevy example module for @rnrs/example-bevy3d: a Rust-owned Bevy scene rendered offscreen and presented with wgpu on an rnrs-surface (Android: Vulkan; iOS: Metal; browser: WebGPU prototype; see packages/bevy3d/README.md)."
 
 [dependencies]
 rnrs-core = "0.2"

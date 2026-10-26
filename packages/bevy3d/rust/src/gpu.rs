@@ -50,7 +50,10 @@ impl Gpu {
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default())).map_err(|e| format!("no {backends:?} adapter: {e}"))?;
         // Bevy picks its pipelines (e.g. storage vs uniform buffers) from the device's limits,
         // so the device gets everything the adapter offers.
-        let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor { label: Some("rnrs-bevy3d"), required_limits: adapter.limits(), ..Default::default() }))
+        // Bevy selects storage texture formats from adapter capabilities. Enable those
+        // capabilities on our manually created device too (notably R16Float for SSAO).
+        let required_features = adapter.features() & wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES;
+        let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor { label: Some("rnrs-bevy3d"), required_features, required_limits: adapter.limits(), ..Default::default() }))
             .map_err(|e| format!("request_device: {e}"))?;
         device.on_uncaptured_error(Arc::new(|e| log::error!("rnrs-bevy3d: wgpu error: {e}")));
         let lost = Arc::new(AtomicBool::new(false));

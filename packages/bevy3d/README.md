@@ -1,6 +1,6 @@
 # Bevy example
 
-Rust-owned Bevy scene with TypeScript controls. Android requires API 26 and Rust 1.97.1 for this example. The iOS build does not render on the simulator. In the browser, unmounting crashes Firefox, and headless browsers with software WebGPU can lose the device.
+Rust-owned Bevy scene with TypeScript controls. Android requires API 26 and Rust 1.97.1 for this example. In the browser, unmounting crashes Firefox, and headless browsers with software WebGPU can lose the device.
 
 ## Browser WebGPU
 
