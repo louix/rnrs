@@ -28,7 +28,8 @@ with the framework version.
 
 ## Releasing with npm approval
 
-1. Merge to main and wait for CI. Tag that commit `vX.Y.Z` and push the tag.
+1. Merge to main through a pull request with passing CI (direct pushes run no CI: run the
+   [CI scripts](development.md#ci) first). Tag that commit `vX.Y.Z` and push the tag.
 2. The release workflow runs CI (including iOS), builds and verifies the three packages, then
    stages those exact artifacts on npm with provenance. It cannot approve publication.
    After staging succeeds, it creates a GitHub Release with the matching `CHANGELOG.md`

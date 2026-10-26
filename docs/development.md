@@ -67,12 +67,20 @@ tested) and, for `@rnrs/surface`, React `^19.3.0`.
 
 ## CI
 
-`.github/workflows/ci.yml` runs on pull requests and `main`. Required on pull requests: lint,
-format, types, `npm test` and the [release check](releasing.md) (`host`); the Rust workspace,
-offline packaged resolution, generation and sanitizer C++ tests (`rust`, `nix develop .#host`);
-the browser harness and clean web, author and `rnrs init` consumers (`web`); and a clean Android
-consumer APK with its relocated `--locked` build and 16 KB alignment check (`android`). The iOS
-simulator consumer build and smoke run (`ios`, macOS, Xcode 26.6) runs on `main`, manual runs and
-releases. Toolchains (Nix store, rustup, cargo downloads, Gradle) are cached; build outputs are
-not. Device suites (`rnrs-device-test.mjs`, `rn-smoke.mjs`, `ios-device-test.mjs`, the GPU and
-touch runners) stay manual.
+`.github/workflows/ci.yml` runs on pull requests, on manual runs and, through the release
+workflow, on `v*` tags. Pushes, including to `main`, start no run: before pushing directly, run
+the same checks locally. Each job sets up its environment (Nix shell, toolchain and Gradle caches,
+Xcode) and runs one script; run it from the repository root after `npm ci --ignore-scripts`:
+
+| Job | Local command | Covers |
+| --- | --- | --- |
+| `host` | `nix develop .#host --command bash scripts/ci/host.sh` | format, lint, types, `npm test` with cargo required, `rnrs:check`, the [release check](releasing.md), Rust workspace tests, generation reliability, sanitizer C++ tests |
+| `web` | `nix develop .#web --command bash scripts/ci/web.sh` | browser harness; clean Vite, author and `rnrs init` consumers in headless Chromium |
+| `android` | `nix develop --command bash scripts/ci/android.sh` | clean consumer APK, relocated `--locked` build, 16 KB alignment |
+| `ios` | `nix develop .#ios --command bash scripts/ci/ios.sh` (Mac) | clean simulator consumer and its smoke run on a temporary simulator (CI: Xcode 26.6) |
+
+`host`, `web` and `android` need x86_64 Linux and `ios` needs a Mac; no machine runs all four.
+All jobs, including `ios`, run on every pull request and every release; manual runs can skip
+`ios`. CI caches the Nix store, rustup, cargo downloads and Gradle, not build outputs, and sets
+`RNRS_WEB_NO_SANDBOX=1` for `web` only. Device suites (`rnrs-device-test.mjs`, `rn-smoke.mjs`,
+`ios-device-test.mjs`, the GPU and touch runners) stay manual.
