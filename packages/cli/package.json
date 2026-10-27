@@ -1,6 +1,6 @@
 {
   "name": "@rnrs/cli",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Experimental rnrs CLI for React Native modules written as TypeScript specs plus Rust: the generator, module authoring commands (init, generate, check, test, pack-js) and per-app Rust bundle builds (bundle, build, lock). Uses the framework (spec, Rust crates) of the @rnrs/runtime installed next to it.",
   "license": "MIT",
   "repository": {
@@ -24,7 +24,7 @@
     "typescript": "6.0.3"
   },
   "peerDependencies": {
-    "@rnrs/runtime": "0.3.0"
+    "@rnrs/runtime": "0.4.0"
   },
   "publishConfig": {
     "access": "public"

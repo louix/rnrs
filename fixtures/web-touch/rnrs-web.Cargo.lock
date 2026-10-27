@@ -104,11 +104,11 @@ dependencies = [
 
 [[package]]
 name = "rnrs-core"
-version = "0.3.0"
+version = "0.4.0"
 
 [[package]]
 name = "rnrs-surface"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "js-sys",
  "log",
@@ -118,7 +118,7 @@ dependencies = [
 
 [[package]]
 name = "rnrs-web"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "js-sys",
  "rnrs-core",
@@ -160,7 +160,7 @@ dependencies = [
 
 [[package]]
 name = "touch-probe"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "rnrs-core",
  "rnrs-surface",

@@ -1,6 +1,6 @@
 {
   "name": "@rnrs/surface",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Experimental framework rendering surface for React Native (Android, iOS): the <RnrsSurfaceView> Fabric component and the rnrs-surface Rust crate that renderer modules depend on. Platform glue is framework code; renderer authors write TypeScript and Rust only.",
   "license": "MIT",
   "repository": {
@@ -64,7 +64,7 @@
     "RnrsSurface.podspec"
   ],
   "peerDependencies": {
-    "@rnrs/runtime": "0.3.0",
+    "@rnrs/runtime": "0.4.0",
     "react": "^19.3.0",
     "react-native": "^0.88.0"
   },

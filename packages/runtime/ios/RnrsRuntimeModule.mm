@@ -79,7 +79,7 @@ RCT_EXPORT_MODULE(RnrsRuntime)
 
 - (NSString *)version
 {
-  return @"0.3.0";
+  return @"0.4.0";
 }
 
 - (void)installJSIBindingsWithRuntime:(jsi::Runtime &)runtime

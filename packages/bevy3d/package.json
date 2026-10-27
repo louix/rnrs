@@ -1,6 +1,6 @@
 {
   "name": "@rnrs/example-bevy3d",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "Bounded Bevy example for @rnrs/surface on Android, iOS and the browser: a Rust-owned Bevy scene (one rotating cube) rendered offscreen and presented through wgpu (Vulkan on Android, Metal on iOS, WebGPU in the browser) on the surface, with small TypeScript controls. Experimental; apps need Rust 1.97.1 (Bevy 0.20 MSRV) and Android minSdk 26. iOS: experimental private-lab build (Metal), declared so the build can be reproduced, not verified rendering support: it does not render on the iOS simulator (Bevy 0.20's SSAO needs a storage-texture format the simulator's Metal adapter lacks); physical devices untested; see packages/bevy3d/README.md. Browser (web): WebGPU prototype on the main thread (requestAnimationFrame), no CPU copy or fallback; see packages/bevy3d/README.md.",
   "license": "MIT",
@@ -34,9 +34,9 @@
     "./package.json": "./package.json"
   },
   "dependencies": {
-    "@rnrs/surface": "0.3.0"
+    "@rnrs/surface": "0.4.0"
   },
   "peerDependencies": {
-    "@rnrs/runtime": "0.3.0"
+    "@rnrs/runtime": "0.4.0"
   }
 }

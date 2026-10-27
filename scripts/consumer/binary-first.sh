@@ -23,7 +23,7 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 W="$ROOT/.generated/binary-first/$TARGET"
 FIX="$ROOT/fixtures/binary-first"
 PACK="$ROOT/.generated/pack"
-[ -f "$PACK/rnrs-runtime-0.3.0.tgz" ] || node "$ROOT/scripts/pack.mjs"
+[ -f "$PACK/rnrs-runtime-0.4.0.tgz" ] || node "$ROOT/scripts/pack.mjs"
 export RUSTUP_HOME="${RUSTUP_HOME:-$ROOT/.generated/rustup}"
 export CARGO_HOME="${CARGO_HOME:-$ROOT/.generated/cargo}"
 export RUSTUP_TOOLCHAIN="${RUSTUP_TOOLCHAIN:-1.90.0}"
@@ -34,7 +34,7 @@ rm -rf "$W" && mkdir -p "$W/publish"
 echo "== publish: build-native --target $TARGET"
 for m in example-counter labs-meter; do
   d="$W/publish/$m"
-  mkdir -p "$d" && tar -xzf "$PACK/rnrs-$m-0.3.0.tgz" -C "$d" --strip-components=1
+  mkdir -p "$d" && tar -xzf "$PACK/rnrs-$m-0.4.0.tgz" -C "$d" --strip-components=1
   (cd "$d" && node "$RNRS" build-native . --target "$TARGET" && node "$RNRS" check-native . --target "$TARGET" && rm -rf .rnrs \
     && npm pack --ignore-scripts --pack-destination "$W/publish" > /dev/null)
 done
@@ -69,8 +69,8 @@ check_no_rust() { # app
   [ -z "$targets" ] || exit 1
 }
 install_app() { # app dir: the packed framework and the published module tarballs
-  (cd "$1" && npm install --no-audit --no-fund "$PACK/rnrs-cli-0.3.0.tgz" "$PACK/rnrs-runtime-0.3.0.tgz" \
-    "$W/publish/rnrs-example-counter-0.3.0.tgz" "$W/publish/rnrs-labs-meter-0.3.0.tgz" > "$1.npm.log" 2>&1)
+  (cd "$1" && npm install --no-audit --no-fund "$PACK/rnrs-cli-0.4.0.tgz" "$PACK/rnrs-runtime-0.4.0.tgz" \
+    "$W/publish/rnrs-example-counter-0.4.0.tgz" "$W/publish/rnrs-labs-meter-0.4.0.tgz" > "$1.npm.log" 2>&1)
 }
 
 case "$TARGET" in

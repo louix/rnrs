@@ -409,7 +409,7 @@ crate-type = [${native ? '"staticlib"' : '"cdylib"'}]
 [dependencies]
 ${deps.join('\n')}
 ${buildDeps}
-# Modules depend on rnrs-core = "0.3"${rnrs ? ' or rnrs = "0.3"' : ''}; resolve ${rnrs ? 'them to the framework copies' : 'it to this framework copy'}${libraries.length ? ", and library packages' crates to their installed copies" : ''}.
+# Modules depend on rnrs-core = "0.4"${rnrs ? ' or rnrs = "0.4"' : ''}; resolve ${rnrs ? 'them to the framework copies' : 'it to this framework copy'}${libraries.length ? ", and library packages' crates to their installed copies" : ''}.
 [patch.crates-io]
 rnrs-core = { path = ${toml(path.join(FRAMEWORK_RUST, 'rnrs-core'))} }
 ${rnrs}${libraries.map((p) => `${p.crate} = { path = ${toml(p.cratePath)} }\n`).join('')}
@@ -571,7 +571,7 @@ export function checkProvenance(metadata, libraries = []) {
   }
   if (errors.length)
     throw new BundleError(
-      `${errors.join('\n')}\nA module requires a framework crate version this @rnrs/runtime does not provide (it patches rnrs-core = "0.3"); ` +
+      `${errors.join('\n')}\nA module requires a framework crate version this @rnrs/runtime does not provide (it patches rnrs-core = "0.4"); ` +
         "fix the module's rnrs-core requirement rather than letting cargo fetch an unrelated crates.io package.",
     );
   // Nothing else in the rnrs-* (or former rnr-*) namespace may come from a registry or git either, whether or not

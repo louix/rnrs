@@ -1,10 +1,10 @@
 [package]
 name = "rnrs-webgpu-triangle"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 publish = false
 description = "Lab fixture: one wgpu triangle through the rnrs wgpu adapter (rnrs::gpu) on Android, iOS and the browser."
 
 [dependencies]
 # Everything comes through the facade: rnrs-core, rnrs-surface and the pinned wgpu (rnrs::gpu::wgpu).
-rnrs = { version = "0.3", features = ["wgpu"] }
+rnrs = { version = "0.4", features = ["wgpu"] }

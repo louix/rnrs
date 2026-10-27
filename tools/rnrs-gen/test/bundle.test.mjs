@@ -282,13 +282,13 @@ test('framework crates resolved from anywhere but the framework copy are rejecte
   const { checkProvenance } = await import('../bundle.mjs');
   const registry = {
     name: 'rnrs-core',
-    version: '0.3.9',
+    version: '0.4.9',
     source: 'registry+https://github.com/rust-lang/crates.io-index',
     manifest_path: '/elsewhere/Cargo.toml',
   };
   assert.throws(
     () => checkProvenance({ packages: [registry] }),
-    /rnrs-core 0\.3\.9 resolved from registry\+https:\/\/github.com\/rust-lang\/crates.io-index, not the framework's/,
+    /rnrs-core 0\.4\.9 resolved from registry\+https:\/\/github.com\/rust-lang\/crates.io-index, not the framework's/,
   );
   assert.doesNotThrow(() =>
     checkProvenance({
@@ -304,36 +304,36 @@ test('module crates must require an rnrs-core version the framework provides', a
   const with_ = (line) =>
     writeFileSync(
       path.join(dir, 'Cargo.toml'),
-      `[package]\nname = "m"\nversion = "0.3.0"\n\n[dependencies]\n${line}\n`,
+      `[package]\nname = "m"\nversion = "0.4.0"\n\n[dependencies]\n${line}\n`,
     );
   try {
     for (const ok of [
-      'rnrs-core = "0.3"',
-      'rnrs-core = "^0.3.0"',
-      'rnrs-core = { version = "0.3", features = ["tokio"] }',
+      'rnrs-core = "0.4"',
+      'rnrs-core = "^0.4.0"',
+      'rnrs-core = { version = "0.4", features = ["tokio"] }',
       'rnrs-core = { path = "../core" }',
     ]) {
       with_(ok);
       assert.doesNotThrow(() => checkCoreRequirement(pkg), ok);
     }
     for (const bad of [
-      'rnrs-core = "0.4"',
+      'rnrs-core = "0.5"',
       'rnrs-core = "1"',
-      'rnrs-core = "0.3.7"',
-      'rnrs-core = ">=0.3"',
+      'rnrs-core = "0.4.7"',
+      'rnrs-core = ">=0.4"',
       'rnrs-core = "*"',
     ]) {
       with_(bad);
       assert.throws(
         () => checkCoreRequirement(pkg),
-        /is not satisfied by this framework's rnrs-core 0\.3\.0/,
+        /is not satisfied by this framework's rnrs-core 0\.4\.0/,
         bad,
       );
     }
     with_('serde = "1"');
     assert.throws(
       () => checkCoreRequirement(pkg),
-      /must depend on the framework: add rnrs = "0\.3" to \[dependencies\]/,
+      /must depend on the framework: add rnrs = "0\.4" to \[dependencies\]/,
     );
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -375,7 +375,7 @@ const libraryPackage = (app, name, { targets, crate, extra = {} }) => {
   mkdirSync(path.join(dir, 'rust/src'), { recursive: true });
   writeFileSync(
     path.join(dir, 'rust/Cargo.toml'),
-    `[package]\nname = "${crate}"\nversion = "0.3.0"\nedition = "2021"\n`,
+    `[package]\nname = "${crate}"\nversion = "0.4.0"\nedition = "2021"\n`,
   );
   writeFileSync(path.join(dir, 'rust/src/lib.rs'), '');
   return dir;
@@ -478,13 +478,13 @@ test('library crates resolved from anywhere but the installed package are reject
   };
   const registry = {
     name: 'rnrs-surface',
-    version: '0.3.3',
+    version: '0.4.3',
     source: 'registry+https://github.com/rust-lang/crates.io-index',
     manifest_path: '/elsewhere/Cargo.toml',
   };
   assert.throws(
     () => checkProvenance({ packages: [registry] }, [lib]),
-    /rnrs-surface 0\.3\.3 resolved from registry\+.*, not the installed library package app -> @rnrs\/surface/,
+    /rnrs-surface 0\.4\.3 resolved from registry\+.*, not the installed library package app -> @rnrs\/surface/,
   );
   // Without the library package installed it is still refused: rnrs-* is a reserved namespace.
   assert.throws(

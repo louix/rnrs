@@ -82,27 +82,27 @@ done
 P="$ROOT/.generated/pack"
 if [ "${RNRS_IOS_FIXTURE:-}" = surface-s3 ]; then
   cp "$ROOT/fixtures/surface-s3/App.tsx" "$ROOT/fixtures/paddle-game/game.ts" "$APP/"
-  (cd "$APP" && npm install --no-audit --no-fund "$P/rnrs-cli-0.3.0.tgz" "$P/rnrs-runtime-0.3.0.tgz" "$P/rnrs-surface-0.3.0.tgz" "$P/rnrs-example-vello2d-0.3.0.tgz")
+  (cd "$APP" && npm install --no-audit --no-fund "$P/rnrs-cli-0.4.0.tgz" "$P/rnrs-runtime-0.4.0.tgz" "$P/rnrs-surface-0.4.0.tgz" "$P/rnrs-example-vello2d-0.4.0.tgz")
 elif [ "${RNRS_IOS_FIXTURE:-}" = paddle-game ]; then
   cp "$ROOT/fixtures/paddle-game/App.tsx" "$ROOT/fixtures/paddle-game/smoke.ts" "$APP/"
   source "$ROOT/scripts/consumer/fixture-files.sh"
   copy_fixture_files "$ROOT/fixtures/paddle-game" "$APP" "game.ts contention.ts"
-  (cd "$APP" && npm install --no-audit --no-fund "$P/rnrs-cli-0.3.0.tgz" "$P/rnrs-runtime-0.3.0.tgz" "$P/rnrs-surface-0.3.0.tgz" "$P/rnrs-example-vello2d-0.3.0.tgz")
+  (cd "$APP" && npm install --no-audit --no-fund "$P/rnrs-cli-0.4.0.tgz" "$P/rnrs-runtime-0.4.0.tgz" "$P/rnrs-surface-0.4.0.tgz" "$P/rnrs-example-vello2d-0.4.0.tgz")
 elif [ "${RNRS_IOS_FIXTURE:-}" = touch-probe ]; then
   cp "$ROOT/fixtures/touch-probe-ios/App.tsx" "$APP/"
-  (cd "$APP" && npm install --no-audit --no-fund "$P/rnrs-cli-0.3.0.tgz" "$P/rnrs-runtime-0.3.0.tgz" "$P/rnrs-surface-0.3.0.tgz" "$P/rnrs-labs-touch-probe-0.3.0.tgz")
+  (cd "$APP" && npm install --no-audit --no-fund "$P/rnrs-cli-0.4.0.tgz" "$P/rnrs-runtime-0.4.0.tgz" "$P/rnrs-surface-0.4.0.tgz" "$P/rnrs-labs-touch-probe-0.4.0.tgz")
 elif [ "${RNRS_IOS_FIXTURE:-}" = bevy ]; then
   cp "$ROOT/fixtures/bevy-consumer/App.tsx" "$ROOT/fixtures/bevy-consumer/smoke.ts" "$APP/"
-  (cd "$APP" && npm install --no-audit --no-fund "$P/rnrs-cli-0.3.0.tgz" "$P/rnrs-runtime-0.3.0.tgz" "$P/rnrs-surface-0.3.0.tgz" "$P/rnrs-example-bevy3d-0.3.0.tgz")
+  (cd "$APP" && npm install --no-audit --no-fund "$P/rnrs-cli-0.4.0.tgz" "$P/rnrs-runtime-0.4.0.tgz" "$P/rnrs-surface-0.4.0.tgz" "$P/rnrs-example-bevy3d-0.4.0.tgz")
 elif [ "${RNRS_IOS_FIXTURE:-}" = triangle ]; then
   cp "$ROOT/fixtures/triangle-consumer/App.tsx" "$ROOT/fixtures/triangle-consumer/smoke.ts" "$APP/"
-  (cd "$APP" && npm install --no-audit --no-fund "$P/rnrs-cli-0.3.0.tgz" "$P/rnrs-runtime-0.3.0.tgz" "$P/rnrs-surface-0.3.0.tgz" "$P/rnrs-labs-webgpu-triangle-0.3.0.tgz")
+  (cd "$APP" && npm install --no-audit --no-fund "$P/rnrs-cli-0.4.0.tgz" "$P/rnrs-runtime-0.4.0.tgz" "$P/rnrs-surface-0.4.0.tgz" "$P/rnrs-labs-webgpu-triangle-0.4.0.tgz")
 elif [ "${RNRS_IOS_FIXTURE:-}" = worklets-lab ]; then
   cp "$ROOT/fixtures/worklets-lab/App.tsx" "$ROOT/fixtures/worklets-lab/GestureLab.tsx" "$ROOT/fixtures/worklets-lab/smoke.ts" \
     "$ROOT/fixtures/worklets-lab/babel.config.js" "$APP/"
   PINS=(react-native-worklets@0.13.0 react-native-reanimated@4.7.1 react-native-gesture-handler@3.3.0)
   (cd "$APP" && npm install --no-audit --no-fund --save-exact "${PINS[@]}" \
-    "$P/rnrs-cli-0.3.0.tgz" "$P/rnrs-runtime-0.3.0.tgz" "$P/rnrs-labs-worklets-probe-0.3.0.tgz")
+    "$P/rnrs-cli-0.4.0.tgz" "$P/rnrs-runtime-0.4.0.tgz" "$P/rnrs-labs-worklets-probe-0.4.0.tgz")
   for pin in "${PINS[@]}"; do
     name="${pin%@*}" want="${pin##*@}"
     got=$(node -p "require('$APP/node_modules/$name/package.json').version")
@@ -112,15 +112,15 @@ elif [ "${RNRS_IOS_FIXTURE:-}" = smoke ]; then
   cp "$ROOT/${RNRS_IOS_SMOKE_DIR:?set RNRS_IOS_SMOKE_DIR with RNRS_IOS_FIXTURE=smoke}/smoke.ts" "$APP/smoke.ts"
   cp "$ROOT/fixtures/consumer/ios/SmokeApp.tsx" "$APP/App.tsx"
   smoke_pkgs=()
-  for m in ${RNRS_IOS_SMOKE_MODULES:-example-counter}; do smoke_pkgs+=("$P/rnrs-$m-0.3.0.tgz"); done
-  (cd "$APP" && npm install --no-audit --no-fund "$P/rnrs-cli-0.3.0.tgz" "$P/rnrs-runtime-0.3.0.tgz" "${smoke_pkgs[@]}")
+  for m in ${RNRS_IOS_SMOKE_MODULES:-example-counter}; do smoke_pkgs+=("$P/rnrs-$m-0.4.0.tgz"); done
+  (cd "$APP" && npm install --no-audit --no-fund "$P/rnrs-cli-0.4.0.tgz" "$P/rnrs-runtime-0.4.0.tgz" "${smoke_pkgs[@]}")
 elif [ "${RNRS_IOS_FIXTURE:-}" = modules ]; then
   node "$ROOT/scripts/consumer/ios-fixture.mjs" --modules "$APP"
-  (cd "$APP" && npm install --no-audit --no-fund "$P/rnrs-cli-0.3.0.tgz" "$P/rnrs-runtime-0.3.0.tgz" "$P/rnrs-example-http-0.3.0.tgz" "$P/rnrs-example-kv-0.3.0.tgz")
+  (cd "$APP" && npm install --no-audit --no-fund "$P/rnrs-cli-0.4.0.tgz" "$P/rnrs-runtime-0.4.0.tgz" "$P/rnrs-example-http-0.4.0.tgz" "$P/rnrs-example-kv-0.4.0.tgz")
 else
   node "$ROOT/scripts/consumer/ios-fixture.mjs" "$APP"
-  (cd "$APP" && npm install --no-audit --no-fund "$P/rnrs-cli-0.3.0.tgz" "$P/rnrs-runtime-0.3.0.tgz" "$P/rnrs-example-blake3-0.3.0.tgz" \
-    "$P/rnrs-example-counter-0.3.0.tgz" "$P/rnrs-labs-meter-0.3.0.tgz" "$P/rnrs-labs-values-0.3.0.tgz")
+  (cd "$APP" && npm install --no-audit --no-fund "$P/rnrs-cli-0.4.0.tgz" "$P/rnrs-runtime-0.4.0.tgz" "$P/rnrs-example-blake3-0.4.0.tgz" \
+    "$P/rnrs-example-counter-0.4.0.tgz" "$P/rnrs-labs-meter-0.4.0.tgz" "$P/rnrs-labs-values-0.4.0.tgz")
 fi
 # Optional Rust logging configuration (RNRS_APP_LOGGING, JSON for rustNativeApp.logging).
 if [ -n "${RNRS_APP_LOGGING:-}" ]; then node "$ROOT/scripts/consumer/app-logging.mjs" "$APP" "$RNRS_APP_LOGGING"; fi

@@ -60,10 +60,10 @@ read -r -a fixture_files <<< "${FIXTURE_FILES:-}"
 set +f
 FIXTURE_HASHES="$(cd "$APP" && sha256sum App.tsx smoke.ts "${fixture_files[@]}")"
 cp "$ROOT/fixtures/blake3/test_vectors.json" "$APP/test_vectors.json"
-tarballs=("$C/../pack/rnrs-cli-0.3.0.tgz" "$C/../pack/rnrs-runtime-0.3.0.tgz")
-for m in $MODULES; do tarballs+=("$C/../pack/rnrs-$m-0.3.0.tgz"); done
+tarballs=("$C/../pack/rnrs-cli-0.4.0.tgz" "$C/../pack/rnrs-runtime-0.4.0.tgz")
+for m in $MODULES; do tarballs+=("$C/../pack/rnrs-$m-0.4.0.tgz"); done
 # Further framework tarballs by file stem (e.g. PACKS=rnrs-surface for @rnrs/surface).
-for p in ${PACKS:-}; do tarballs+=("$C/../pack/$p-0.3.0.tgz"); done
+for p in ${PACKS:-}; do tarballs+=("$C/../pack/$p-0.4.0.tgz"); done
 while IFS= read -r t; do [ -n "$t" ] && tarballs+=("$t"); done <<< "${EXTRA_TARBALLS:-}"
 (cd "$APP" && npm install --no-audit --no-fund "${tarballs[@]}")
 # Optional Rust logging configuration (RNRS_APP_LOGGING, JSON for rustNativeApp.logging).

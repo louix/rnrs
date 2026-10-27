@@ -1,6 +1,6 @@
 {
   "name": "@rnrs/runtime",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Experimental framework for React Native modules written as TypeScript specs plus Rust: JS runtime, Android and iOS (JSI) backends, the browser Wasm backend, the framework spec and Rust crates. The rnrs CLI is @rnrs/cli.",
   "license": "MIT",
   "repository": {
@@ -67,7 +67,7 @@
     }
   },
   "dependencies": {
-    "@rnrs/cli": "0.3.0"
+    "@rnrs/cli": "0.4.0"
   },
   "peerDependencies": {
     "react-native": "^0.88.0"

@@ -99,7 +99,7 @@ test(
           `npm install --offline ${args.join(' ')} failed (prepare the npm cache: node scripts/prepare-test-cache.mjs):\n${r.stderr}`,
         );
       };
-      npm(path.join(packDir, 'rnrs-cli-0.3.0.tgz'), path.join(packDir, 'rnrs-runtime-0.3.0.tgz'));
+      npm(path.join(packDir, 'rnrs-cli-0.4.0.tgz'), path.join(packDir, 'rnrs-runtime-0.4.0.tgz'));
       for (const dep of ['typescript', 'smol-toml'])
         assert.ok(
           existsSync(path.join(app, 'node_modules', dep, 'package.json')),
@@ -125,10 +125,10 @@ test(
       // The scaffold depends on rnrs; rename it to cover renamed facades end to end.
       const toml = path.join(mod, 'rust/Cargo.toml');
       const scaffold = readFileSync(toml, 'utf8');
-      assert.match(scaffold, /^rnrs = "0\.3"$/m);
+      assert.match(scaffold, /^rnrs = "0\.4"$/m);
       writeFileSync(
         toml,
-        scaffold.replace(/^rnrs = "0\.3"$/m, 'fw = { package = "rnrs", version = "0.3" }'),
+        scaffold.replace(/^rnrs = "0\.4"$/m, 'fw = { package = "rnrs", version = "0.4" }'),
       );
       r = rnrs('generate', mod);
       assert.equal(r.code, 0, r.out);
@@ -169,8 +169,8 @@ test(
       writeFileSync(
         toml,
         readFileSync(toml, 'utf8').replace(
-          'version = "0.3" }',
-          'version = "0.3", features = ["surface"] }',
+          'version = "0.4" }',
+          'version = "0.4", features = ["surface"] }',
         ),
       );
       r = rnrs('lock', '--target', 'android', '--app', app, '--offline');
@@ -181,7 +181,7 @@ test(
       );
       assert.doesNotMatch(r.out, /no matching package/);
       // Installed as a direct dependency: rnrs-surface resolves from the package, and no GPU crate.
-      npm(path.join(packDir, 'rnrs-surface-0.3.0.tgz'));
+      npm(path.join(packDir, 'rnrs-surface-0.4.0.tgz'));
       r = rnrs('lock', '--target', 'android', '--app', app, '--offline');
       assert.equal(r.code, 0, r.out);
       const pkgs = lockPackages(readFileSync(path.join(app, 'rnrs-android.Cargo.lock'), 'utf8'));
@@ -195,8 +195,8 @@ test(
       writeFileSync(
         toml,
         readFileSync(toml, 'utf8').replace(
-          'version = "0.3", features = ["surface"] }',
-          'version = "0.3", features = ["wgpu"] }',
+          'version = "0.4", features = ["surface"] }',
+          'version = "0.4", features = ["wgpu"] }',
         ),
       );
       r = rnrs('lock', '--target', 'android', '--app', app, '--offline');

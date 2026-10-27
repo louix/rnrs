@@ -16,7 +16,7 @@ MODULES="${MODULES:-example-blake3 example-counter}"
 NAME="${NAME:-web-app}"
 APP="$ROOT/.generated/consumer/$NAME"
 PACK="$ROOT/.generated/pack"
-[ -f "$PACK/rnrs-runtime-0.3.0.tgz" ] || node "$ROOT/scripts/pack.mjs"
+[ -f "$PACK/rnrs-runtime-0.4.0.tgz" ] || node "$ROOT/scripts/pack.mjs"
 
 rm -rf "$APP"
 mkdir -p "$APP"
@@ -34,8 +34,8 @@ cp "$ROOT/fixtures/$FIXTURE/web-main.ts" "$APP/main.ts"
 cp "$ROOT/fixtures/$FIXTURE/smoke.ts" "$APP/smoke.ts"
 cp "$ROOT/fixtures/blake3/test_vectors.json" "$APP/test_vectors.json"
 printf '.rnrs/\nnode_modules/\ndist/\n' > "$APP/.gitignore"
-tarballs=("$PACK/rnrs-cli-0.3.0.tgz" "$PACK/rnrs-runtime-0.3.0.tgz")
-for m in $MODULES; do tarballs+=("$PACK/rnrs-$m-0.3.0.tgz"); done
+tarballs=("$PACK/rnrs-cli-0.4.0.tgz" "$PACK/rnrs-runtime-0.4.0.tgz")
+for m in $MODULES; do tarballs+=("$PACK/rnrs-$m-0.4.0.tgz"); done
 (cd "$APP" && npm install --no-audit --no-fund "${tarballs[@]}")
 # Optional Rust logging configuration (RNRS_APP_LOGGING, JSON for rustNativeApp.logging).
 if [ -n "${RNRS_APP_LOGGING:-}" ]; then node "$ROOT/scripts/consumer/app-logging.mjs" "$APP" "$RNRS_APP_LOGGING"; fi

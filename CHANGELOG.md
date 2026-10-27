@@ -1,25 +1,22 @@
 # Changelog
 
-## Unreleased
+## 0.4.0
 
-- Native objects compose across types: methods of one object type can take and return others,
-  and records, unions, arrays and `Record<string, T>` values can hold native handles.
+- Native objects compose across types: methods can take and return other object types, and
+  records, unions, arrays and `Record<string, T>` values can hold native handles.
 - `Record<string, T>` (Rust `BTreeMap<String, T>`) and `JsonValue` from `@rnrs/runtime/spec`
-  (Rust `rnrs::JsonValue`) convert plain objects and JSON data directly. Custom
-  `rnrs_core::bind::Env` implementations must add `own_entries`.
-- Opt-in declared errors: a method result `Throws<T, E>` makes the Rust method return
-  `Result<T, E>`; `Err` throws or rejects a `DomainError` whose `data` is `E`, tested with the
-  generated `is<E>` guard. Methods without `Throws` keep `Result<T, String>`.
-- Faster `number[]` results on Android and iOS (the native JSI backend): the whole array is
-  converted in one native call instead of one JS call per element. Results are unchanged: an ordinary array whose elements are own
-  data properties (inherited setters and read-only indices cannot intercept them). Generated
-  glue uses the new defaulted `rnrs_core::bind::Env::new_number_array`; custom backends work
-  unchanged, and the authoring API does not change.
-- Faster string arguments on Android and iOS: the native JSI UTF-8 encoder writes ASCII text and
-  single-byte characters directly. The lone-surrogate policy (U+FFFD) is unchanged.
-- The native module ABI is now 5: prebuilt module binaries must be rebuilt with this
-  `@rnrs/runtime` (older ones are refused with a rebuild message). Web binaries are unaffected.
-  Wrappers that declare errors need this `@rnrs/runtime` (call protocol 4).
+  (Rust `rnrs::JsonValue`) convert plain objects and JSON data. Custom `rnrs_core::bind::Env` implementations must add
+  `own_entries`.
+- Opt-in declared errors: a `Throws<T, E>` result makes the Rust method return `Result<T, E>`;
+  `Err` throws or rejects a `DomainError` whose `data` is `E` (generated `is<E>` guard).
+  Methods without `Throws` keep `Result<T, String>`.
+- Faster `number[]` results and string arguments on Android and iOS; results are unchanged.
+
+Upgrade `@rnrs/cli`, `@rnrs/runtime` and `@rnrs/surface` (if used) together.
+The native module ABI is now 5: module authors depend on the `0.4` framework crates, rebuild
+prebuilt Android and iOS binaries with `rnrs build-native` and republish (older binaries are
+refused with a rebuild message; web binaries are unaffected). Wrappers that declare errors need
+`@rnrs/runtime` 0.4.0 (call protocol 4). Apps: rebuild native apps and web bundles.
 
 ## 0.3.0
 

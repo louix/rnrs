@@ -1,6 +1,6 @@
 {
   "name": "@rnrs/example-kv",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "Persistent key-value store for React Native on Android and iOS, implemented in Rust with sled. No browser backend. Experimental.",
   "license": "MIT",
@@ -36,6 +36,6 @@
     "./package.json": "./package.json"
   },
   "peerDependencies": {
-    "@rnrs/runtime": "0.3.0"
+    "@rnrs/runtime": "0.4.0"
   }
 }

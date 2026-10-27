@@ -57,7 +57,7 @@ const generateModule = (app) => {
   mkdirSync(dir);
   writeFileSync(
     path.join(dir, 'package.json'),
-    JSON.stringify({ name: 'demo-mod', version: '0.3.0' }),
+    JSON.stringify({ name: 'demo-mod', version: '0.4.0' }),
   );
   const rnrs = path.join(app, 'node_modules/@rnrs/cli/bin/rnrs.mjs');
   run('node', [rnrs, 'init', '.', '--name', 'demo-mod', '--targets', 'web'], dir);
@@ -86,7 +86,7 @@ test(
         env: { ...process.env, RNRS_PACK_OUT: packDir },
       });
       assert.equal(packed.status, 0, packed.stderr);
-      const tarballs = ['rnrs-cli-0.3.0.tgz', 'rnrs-runtime-0.3.0.tgz'].map((t) =>
+      const tarballs = ['rnrs-cli-0.4.0.tgz', 'rnrs-runtime-0.4.0.tgz'].map((t) =>
         path.join(packDir, t),
       );
 
