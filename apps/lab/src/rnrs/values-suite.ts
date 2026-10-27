@@ -299,7 +299,21 @@ export async function runValuesSuite(env: ValuesEnv): Promise<CheckResult[]> {
       return { out, bytes };
     };
     const big = 'x'.repeat(5000);
+    // Hermes Array.prototype.join builds UTF-16 storage even for ASCII-only content (the
+    // benchmark's strLen fixtures are built this way), so these take the native encoder's
+    // UTF-16 path rather than the ASCII-storage copy: lengths around 16/1024/64Ki, U+0000 and
+    // U+007F, and ASCII next to lone and paired surrogates.
+    const joined = (n: number, unit: (i: number) => string) =>
+      Array.from({ length: n }, (_, i) => unit(i)).join('');
+    const asciiUnit = (i: number) => String.fromCharCode(i % 128);
     const cases = [
+      ...[1, 15, 16, 17, 1023, 1024, 1025, 65537].map((n) => joined(n, asciiUnit)),
+      Array.from('abcdefghijklmnop'.repeat(64)).join(''),
+      ['a', '\uD800', 'b'].join(''),
+      ['x', '\uD83E'].join(''),
+      ['\uD83E', '\uDD80', 'x'].join(''),
+      ['\uDC00', '\u0000', '\u007F', '\u0080'].join(''),
+      ['abc'.repeat(400), '\uD800', 'def'.repeat(400)].join(''),
       '\uD800',
       '\uDC00',
       '\uD800\uD800',

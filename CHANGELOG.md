@@ -15,6 +15,8 @@
   data properties (inherited setters and read-only indices cannot intercept them). Generated
   glue uses the new defaulted `rnrs_core::bind::Env::new_number_array`; custom backends work
   unchanged, and the authoring API does not change.
+- Faster string arguments on Android and iOS: the native JSI UTF-8 encoder writes ASCII text and
+  single-byte characters directly. The lone-surrogate policy (U+FFFD) is unchanged.
 - The native module ABI is now 5: prebuilt module binaries must be rebuilt with this
   `@rnrs/runtime` (older ones are refused with a rebuild message). Web binaries are unaffected.
   Wrappers that declare errors need this `@rnrs/runtime` (call protocol 4).

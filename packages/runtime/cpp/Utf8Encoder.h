@@ -4,8 +4,10 @@
 // boundaries (engines deliver ropes in pieces). With `out` null it only counts bytes; with
 // `out` set it writes at most `cap` bytes and records `overflow` instead of writing past
 // them. The capacity is checked once per fragment against the fragment's worst case; only a
-// fragment that might not fit takes the per-write checked loop, so the common path is the
-// plain encoding loop. No JSI dependency (host-tested in native/tests/utf8_encoder_test.cpp).
+// fragment that might not fit takes the per-write checked loop. The measure pass always takes
+// the plain loop; a UTF-16 fragment written into the exact measured size usually does not fit
+// its worst case and takes the checked one. No JSI dependency (host-tested in
+// native/tests/utf8_encoder_test.cpp).
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -48,17 +50,24 @@ struct Utf8Encoder {
  private:
   bool fits(size_t n) const { return !overflow && cap >= len && n <= cap - len; }
 
+  // Bytes are stored directly (no staging array and variable-length memcpy: in the release
+  // build that kept `put` out of line, with a stack-protector check and a memcpy call per
+  // code unit).
   template <bool Checked>
   void put(uint32_t cp) {
-    uint8_t b[4];
-    size_t n;
-    if (cp < 0x80) { b[0] = static_cast<uint8_t>(cp); n = 1; }
-    else if (cp < 0x800) { b[0] = 0xC0 | (cp >> 6); b[1] = 0x80 | (cp & 0x3F); n = 2; }
-    else if (cp < 0x10000) { b[0] = 0xE0 | (cp >> 12); b[1] = 0x80 | ((cp >> 6) & 0x3F); b[2] = 0x80 | (cp & 0x3F); n = 3; }
-    else { b[0] = 0xF0 | (cp >> 18); b[1] = 0x80 | ((cp >> 12) & 0x3F); b[2] = 0x80 | ((cp >> 6) & 0x3F); b[3] = 0x80 | (cp & 0x3F); n = 4; }
+    size_t n = cp < 0x80 ? 1 : cp < 0x800 ? 2 : cp < 0x10000 ? 3 : 4;
     if (out) {
-      if (!Checked || fits(n)) std::memcpy(out + len, b, n);
-      else overflow = true;
+      if (!Checked || fits(n)) {
+        uint8_t* d = out + len;
+        switch (n) {
+          case 1: d[0] = static_cast<uint8_t>(cp); break;
+          case 2: d[0] = 0xC0 | (cp >> 6); d[1] = 0x80 | (cp & 0x3F); break;
+          case 3: d[0] = 0xE0 | (cp >> 12); d[1] = 0x80 | ((cp >> 6) & 0x3F); d[2] = 0x80 | (cp & 0x3F); break;
+          default: d[0] = 0xF0 | (cp >> 18); d[1] = 0x80 | ((cp >> 12) & 0x3F); d[2] = 0x80 | ((cp >> 6) & 0x3F); d[3] = 0x80 | (cp & 0x3F); break;
+        }
+      } else {
+        overflow = true;
+      }
     }
     len += n;
   }
@@ -69,6 +78,18 @@ struct Utf8Encoder {
   void utf16(const char16_t* units, size_t num) {
     for (size_t i = 0; i < num; i++) {
       char16_t u = units[i];
+      // ASCII (also ASCII content in UTF-16 storage, e.g. Hermes join results): one byte,
+      // stored here rather than through `put`, which the release build may keep out of line
+      // (the exact-size write pass usually takes the checked loop). Not after a pending high
+      // surrogate, which first becomes U+FFFD below.
+      if (u < 0x80 && !pending) {
+        if (out) {
+          if (!Checked || fits(1)) out[len] = static_cast<uint8_t>(u);
+          else overflow = true;
+        }
+        len++;
+        continue;
+      }
       if (pending) {
         pending = false;
         if (u >= 0xDC00 && u <= 0xDFFF) {
