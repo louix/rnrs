@@ -171,7 +171,9 @@ function main([apk, abi = 'arm64-v8a', out]) {
     console.log(
       `status: ${report.status}${report.problems.length ? ` (${report.problems.join('; ')})` : ''}`,
     );
-    process.exit(code);
+    // Not process.exit(): with the APK's buffers live, exiting from here intermittently hung
+    // in V8 teardown. Callers return, so pending `finally` cleanup also runs.
+    process.exitCode = code;
   };
   if (!apk || !existsSync(apk)) {
     report.status = 'unavailable';
