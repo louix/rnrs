@@ -82,11 +82,9 @@ export function valueTypesWithNatives(ir) {
   // Value types are not recursive, so each name is resolved once, depth first.
   const named = {
     has(name) {
+      // A name the parser dropped after a diagnostic holds nothing (generation fails anyway).
       if (!memo.has(name))
-        memo.set(
-          name,
-          fieldsOf.get(name).some((f) => holdsNative(f.type, named)),
-        );
+        memo.set(name, fieldsOf.get(name)?.some((f) => holdsNative(f.type, named)) ?? false);
       return memo.get(name);
     },
   };
@@ -130,9 +128,14 @@ function traitMethods(methods, owner) {
   const out = [];
   for (const m of methods) {
     const params = m.params.map((p) => `${ident(p.name)}: ${paramType(p, owner)}`);
-    const ret = `Result<${interfaceType(m.returns, owner)}, String>`;
+    // Throws<T, E>: `Err(E)` becomes a JS DomainError; otherwise the default String error.
+    const ret = `Result<${interfaceType(m.returns, owner)}, ${m.throws ? m.throws.name : 'String'}>`;
     const name = ident(m.name);
-    const doc = `    /// \`${m.name}(${m.params.map((p) => p.name + (p.optional ? '?' : '')).join(', ')})\`${m.async ? ' (async)' : ''}\n`;
+    const doc =
+      `    /// \`${m.name}(${m.params.map((p) => p.name + (p.optional ? '?' : '')).join(', ')})\`${m.async ? ' (async)' : ''}\n` +
+      (m.throws
+        ? `    /// \`Err\` ${m.async ? 'rejects' : 'throws'} a JS \`DomainError\` whose \`data\` is the \`${m.throws.name}\`.\n`
+        : '');
     if (!m.async) {
       out.push(`${doc}    fn ${name}(&self${params.map((p) => ', ' + p).join('')}) -> ${ret};`);
       continue;
@@ -445,7 +448,9 @@ function callArm(m, index) {
   const argList = m.params.map((p) => `arg_${snake(p.name)}`).join(', ');
   if (!m.async) {
     lines.push(
-      `        let result = receiver.${ident(m.name)}(${argList}).map_err(BindError::error)?;`,
+      m.throws
+        ? `        let result = match receiver.${ident(m.name)}(${argList}) {\n            Ok(result) => result,\n            Err(error) => return Err(domain_error(cx.env, move |env| ${writeExpr(m.throws, 'error')})),\n        };`
+        : `        let result = receiver.${ident(m.name)}(${argList}).map_err(BindError::error)?;`,
     );
     lines.push(`        let env = &mut *cx.env;`);
     lines.push(`        ${writeExpr(m.returns, 'result')}`);
@@ -455,12 +460,23 @@ function callArm(m, index) {
       `        receiver.validate_${snake(m.name)}(${refs}).map_err(BindError::range_error)?;`,
     );
     lines.push(`        cx.start(move |cancel| async move {`);
-    lines.push(
-      `            let result = receiver.${ident(m.name)}(${argList}${argList ? ', ' : ''}cancel).await?;`,
-    );
-    lines.push(
-      `            Ok(pending(move |env: &mut dyn Env| ${writeExpr(m.returns, 'result')}))`,
-    );
+    const run = `receiver.${ident(m.name)}(${argList}${argList ? ', ' : ''}cancel).await`;
+    if (m.throws) {
+      // A declared error settles as a converted value too (status 4), converted on the JS thread.
+      lines.push(`            Ok(match ${run} {`);
+      lines.push(
+        `                Ok(result) => pending(move |env: &mut dyn Env| ${writeExpr(m.returns, 'result')}),`,
+      );
+      lines.push(
+        `                Err(error) => pending_declared(move |env: &mut dyn Env| ${writeExpr(m.throws, 'error')}),`,
+      );
+      lines.push(`            })`);
+    } else {
+      lines.push(`            let result = ${run}?;`);
+      lines.push(
+        `            Ok(pending(move |env: &mut dyn Env| ${writeExpr(m.returns, 'result')}))`,
+      );
+    }
     lines.push(`        })`);
   }
   return `    ${index} => {\n${lines.join('\n')}\n    }`;
@@ -473,6 +489,8 @@ export function scalarEligible(m) {
   return (
     !m.owner &&
     !m.async &&
+    // Declared errors need the generic call (a converted payload); String-error leaves only.
+    !m.throws &&
     m.params.length <= 4 &&
     m.params.every((p) => !p.optional && ['number', 'boolean'].includes(p.type.k)) &&
     ['number', 'boolean', 'void'].includes(m.returns.k)

@@ -8,7 +8,7 @@ use rnrs_core::{CancelToken, JsonValue, Native};
 
 pub mod rnrs_interface;
 use rnrs_interface as spec;
-use spec::{Blob, Event, Inventory, Labeled, Point, Prepared, Shape, Size, Slot, StatementSlot, Tagged};
+use spec::{Blob, Event, Inventory, Labeled, LookupError, Overflow, Point, Prepared, Shape, Size, Slot, StatementSlot, Tagged};
 
 #[derive(Default)]
 pub struct Values;
@@ -25,6 +25,27 @@ impl spec::Bag for PointBag {
 
     fn count(&self) -> Result<f64, String> {
         Ok(self.0.lock().unwrap_or_else(|e| e.into_inner()).len() as f64)
+    }
+
+    fn at(&self, index: f64) -> Result<Point, LookupError> {
+        let points = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        let found = (index >= 0.0 && index.fract() == 0.0).then(|| points.get(index as usize)).flatten();
+        found.cloned().ok_or_else(|| LookupError::NotFound { key: index.to_string() })
+    }
+}
+
+/// Calls of the declared-error fixture methods (each Rust method runs exactly once per call).
+static LOOKUP_CALLS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+fn lookup(key: &str) -> Result<f64, LookupError> {
+    LOOKUP_CALLS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    match key {
+        "one" => Ok(1.0),
+        "missing" => Err(LookupError::NotFound { key: key.to_owned() }),
+        "bad" => Err(LookupError::Invalid { reason: "bad key".to_owned(), at: 0.0 }),
+        "busy" => Err(LookupError::Busy),
+        "nan" => Err(LookupError::Detail { info: JsonValue::Number(f64::NAN) }),
+        _ => Ok(0.0),
     }
 }
 
@@ -349,6 +370,32 @@ impl spec::ValuesModule for Values {
     async fn statements_by_name_later(&self, db: Native<Database>, sql: Vec<String>, ms: f64, _cancel: CancelToken) -> Result<BTreeMap<String, Native<Statement>>, String> {
         sleep(Duration::from_secs_f64(ms.clamp(0.0, 1000.0) / 1000.0)).await;
         Ok(sql.into_iter().map(|sql| (sql.clone(), db.statement(sql))).collect())
+    }
+    fn lookup(&self, key: String) -> Result<f64, LookupError> {
+        lookup(&key)
+    }
+    async fn lookup_later(&self, key: String, ms: f64, _cancel: CancelToken) -> Result<f64, LookupError> {
+        sleep(Duration::from_millis(ms as u64)).await;
+        lookup(&key)
+    }
+    fn lookup_calls(&self) -> Result<f64, String> {
+        Ok(LOOKUP_CALLS.load(std::sync::atomic::Ordering::SeqCst) as f64)
+    }
+    fn half(&self, x: f64) -> Result<f64, LookupError> {
+        LOOKUP_CALLS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        if x % 2.0 == 0.0 {
+            Ok(x / 2.0)
+        } else {
+            Err(LookupError::Invalid { reason: "odd".to_owned(), at: x })
+        }
+    }
+    fn limited_sum(&self, xs: Vec<f64>, limit: f64) -> Result<f64, Overflow> {
+        let sum: f64 = xs.iter().sum();
+        if sum > limit {
+            Err(Overflow { limit, got: xs })
+        } else {
+            Ok(sum)
+        }
     }
 }
 

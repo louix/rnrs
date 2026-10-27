@@ -196,7 +196,9 @@ static_assert(offsetof(RnrsScalarBinding, args) == 0 && offsetof(RnrsScalarBindi
 
 // Status codes and callback values of this ABI (pinned with the layout).
 namespace rnrs::abi {
-constexpr uint32_t kCallOk = 0, kCallError = 1, kCallThrown = 2;  // adapterCall, scalarCall
+// adapterCall, scalarCall. kCallDomain (adapterCall only): `out` holds a declared error's value
+// (spec Throws<T, E>), handed to the calling host's `domainError` helper; no message.
+constexpr uint32_t kCallOk = 0, kCallError = 1, kCallThrown = 2, kCallDomain = 3;
 constexpr uint32_t kErrorType = 0, kErrorRange = 1, kErrorPlain = 2;  // errorKind
 constexpr uint32_t kTeardownExplicit = 0, kTeardownLifecycle = 1, kTeardownDestructor = 2, kTeardownRefused = 3;
 constexpr uint32_t kUnwrapOk = 0, kUnwrapNotNative = 1, kUnwrapClosed = 2, kUnwrapDisposed = 3;
@@ -212,7 +214,7 @@ constexpr uint32_t kEntriesOk = 0, kEntriesNotPlain = 1, kEntriesThrown = 2;  //
 constexpr uint8_t kDeliveryResultQueued = 0, kDeliveryResultRunning = 1, kDeliveryResultDone = 2, kDeliveryResultDropped = 3;
 // Produced by the binary for the JS runtime (packages/runtime/src/runtime.ts), passed through
 // unchanged by C++: settlement statuses and admission failure codes.
-constexpr uint32_t kSettleOk = 0, kSettleCancelled = 1, kSettleFailed = 2, kSettleLost = 3;
+constexpr uint32_t kSettleOk = 0, kSettleCancelled = 1, kSettleFailed = 2, kSettleLost = 3, kSettleDomain = 4;
 constexpr double kAdmitClosed = -1, kAdmitOverloaded = -2, kAdmitSaturated = -3;
 // RnrsSurfaceV1: surface keys (owner in the high bits) and attach/revoke results.
 constexpr unsigned kSurfaceOwnerShift = 32;

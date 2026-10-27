@@ -3,6 +3,7 @@
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
+import { holdsNative, valueTypesWithNatives } from './emit-rust.mjs';
 
 // TypeScript 7 (the native compiler, used for tsc) has no stable JS API, so the generator uses
 // the TypeScript 6 API. The published @rnrs/cli depends on plain typescript@6.0.3: npm nests it
@@ -169,6 +170,9 @@ export function parseSpec(specPath, { frameworkSpec, root }) {
     json: framework?.statements.find(
       (s) => ts.isTypeAliasDeclaration(s) && s.name.text === 'JsonValue',
     ),
+    throws: framework?.statements.find(
+      (s) => ts.isTypeAliasDeclaration(s) && s.name.text === 'Throws',
+    ),
   };
   // Rust names the generated interface imports when the spec uses Record<string, T> or JsonValue.
   const dynamicUses = new Map(); // Rust type name -> first use site
@@ -199,6 +203,7 @@ export function parseSpec(specPath, { frameworkSpec, root }) {
   };
 
   const records = new Map(); // name -> record IR (null while in progress)
+  const errorSites = new Map(); // method IR -> its Throws error type node (diagnostics)
   const unions = new Map();
   const typeOrigins = new Map(); // name -> declaration (collision check)
 
@@ -352,7 +357,7 @@ export function parseSpec(specPath, { frameworkSpec, root }) {
         fail(node, 'never is not supported');
         return ERR;
       case ts.SyntaxKind.ParenthesizedType:
-        return mapNode(node.type, ctx);
+        return mapNode(node.type, node === ctx.result ? { ...ctx, result: node.type } : ctx);
       case ts.SyntaxKind.ArrayType:
         return array(mapNode(node.elementType, { ...ctx, position: 'element' }));
       case ts.SyntaxKind.TypeOperator:
@@ -444,6 +449,7 @@ export function parseSpec(specPath, { frameworkSpec, root }) {
       fail(node, `cannot resolve type ${name}`);
       return ERR;
     }
+    if (markers.throws && decl === markers.throws) return mapThrows(node, ctx);
     if (markers.json && decl === markers.json) {
       if (!dynamicUses.has('JsonValue')) dynamicUses.set('JsonValue', node);
       return { k: 'json' };
@@ -518,7 +524,8 @@ export function parseSpec(specPath, { frameworkSpec, root }) {
         );
         if (objectish.length > 1) return mapUnionNode(body, ctx, decl.name.text, node);
       }
-      return mapNode(body, ctx); // plain alias, e.g. type Meters = number
+      // plain alias, e.g. type Meters = number (an alias of the whole result stays the result)
+      return mapNode(body, node === ctx.result ? { ...ctx, result: body } : ctx);
     }
     if (ts.isClassDeclaration(decl)) {
       fail(node, 'class instances are not value types; use a record or a native object');
@@ -530,6 +537,77 @@ export function parseSpec(specPath, { frameworkSpec, root }) {
     }
     fail(node, `unsupported type ${name}`);
     return ERR;
+  }
+
+  /** Declared errors are plain data (no native objects, however nested), and each error type's
+   *  generated guard `is<E>` must not collide with another generated value of the wrapper. */
+  function checkDeclaredErrors(methods, module) {
+    // The one transitive rule (emit-rust.mjs): records, unions and every container, maps included.
+    const holds = valueTypesWithNatives({
+      records: [...records.values()].filter(Boolean),
+      unions: [...unions.values()].filter(Boolean),
+    });
+    const values = new Map(); // generated value name -> what it is
+    if (module) {
+      values.set(module, `the module class ${module}`);
+      values.set(module[0].toLowerCase() + module.slice(1), `the accessor of ${module}`);
+      values.set(`create${module}ForTesting`, `the test hook of ${module}`);
+    }
+    for (const o of objects.keys()) values.set(o, `the native object class ${o}`);
+    const guards = new Map(); // guard name -> error type name
+    for (const m of methods) {
+      if (!m.throws) continue;
+      const site = errorSites.get(m);
+      if (holdsNative(m.throws, holds)) {
+        fail(
+          site,
+          `${m.name}: declared errors are plain data; ${m.throws.name} contains a native object`,
+        );
+        continue;
+      }
+      const guard = `is${m.throws.name}`;
+      const other = guards.get(guard);
+      if (other !== undefined && other !== m.throws.name)
+        fail(site, `error types ${other} and ${m.throws.name} both generate the guard ${guard}`);
+      else if (values.has(guard))
+        fail(
+          site,
+          `the guard ${guard} generated for ${m.throws.name} collides with ${values.get(guard)}`,
+        );
+      guards.set(guard, m.throws.name);
+    }
+  }
+
+  /** `Throws<T, E>` (framework marker): only as the whole method result, `ctx.result` being the
+   *  method's result node (or an alias/parenthesis of it). `E` is a named record or tagged union:
+   *  the declared error the Rust method returns as `Err(E)`. */
+  function mapThrows(node, ctx) {
+    if (ctx.promised) {
+      fail(node, 'Throws must wrap the whole result: write Throws<Promise<T>, E>');
+      return ERR;
+    }
+    if (node !== ctx.result || ctx.inThrows) {
+      fail(node, 'Throws<T, E> is only supported as the whole method result');
+      return ERR;
+    }
+    const [okNode, errorNode] = node.typeArguments ?? [];
+    if (!okNode || !errorNode) {
+      fail(node, 'Throws needs a result type and an error type: Throws<T, E>');
+      return ERR;
+    }
+    const of = mapNode(okNode, { position: 'return', result: okNode, inThrows: true });
+    const error = mapNode(errorNode, { position: 'error' });
+    if (of === ERR || error === ERR) return ERR;
+    if (error.k !== 'record' && error.k !== 'union') {
+      fail(
+        errorNode,
+        ['string', 'number', 'boolean'].includes(error.k)
+          ? 'the error of Throws<T, E> must be a named record or tagged union; omit Throws for the default String error'
+          : 'the error of Throws<T, E> must be a named record or tagged union',
+      );
+      return ERR;
+    }
+    return { k: 'throws', of, error, node: errorNode };
   }
 
   /** `Record<string, T>`: a dictionary (`BTreeMap<String, T>`), converted by enumerating a
@@ -799,7 +877,13 @@ export function parseSpec(specPath, { frameworkSpec, root }) {
       }
       // The result is resolved first: whether a method is async depends on the resolved type
       // (`type Later = Promise<number>` is async too), not on how the signature is spelled.
-      let returns = mapNode(member.type, { position: 'return' });
+      let returns = mapNode(member.type, { position: 'return', result: member.type });
+      // Throws<T, E>: T is the result, E the declared error (`Result<T, E>` in Rust).
+      let declared = null;
+      if (returns !== ERR && returns.k === 'throws') {
+        declared = returns;
+        returns = returns.of;
+      }
       const isAsync = returns !== ERR && returns.k === 'promise';
       seenMethods.push({ member, name, snake: snakeOf(name), async: isAsync });
       const params = [];
@@ -859,7 +943,15 @@ export function parseSpec(specPath, { frameworkSpec, root }) {
       }
       if (returns === ERR) continue;
       if (isAsync) returns = returns.of;
-      if (ok) methods.push({ name, owner, async: isAsync, params, returns, line: lineOf(member) });
+      if (!ok) continue;
+      const method = { name, owner, async: isAsync, params, returns };
+      // Omitted (not false) without Throws, so existing specs keep their IR hash.
+      if (declared) {
+        method.throws = { k: declared.error.k, name: declared.error.name };
+        errorSites.set(method, declared.node);
+      }
+      method.line = lineOf(member);
+      methods.push(method);
     }
     // Generated validate_<method> hooks share the trait namespace with the methods.
     for (const a of seenMethods.filter((m) => m.async)) {
@@ -893,6 +985,7 @@ export function parseSpec(specPath, { frameworkSpec, root }) {
         );
     }
   }
+  checkDeclaredErrors(methods, moduleDecl ? moduleDecl.name.text : null);
   // The generated interface imports these names only when used; a spec type of the same name
   // would collide with the import.
   for (const [name, site] of dynamicUses)

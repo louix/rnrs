@@ -324,14 +324,28 @@ export function installWebBackend(
       const backend: Backend & { dispose(): void } = {
         dispose,
         platform: 'web',
-        install(name: string, hash: string, maxInFlight: number, settle: SettleFn): NativeAdapter {
+        install(
+          name: string,
+          hash: string,
+          maxInFlight: number,
+          settle: SettleFn,
+          hostHelpers?: typeof conversionHelpers,
+        ): NativeAdapter {
           if (stopped) throw new Error('Web backend is disposed');
           const wasm = owners.get(name);
           if (!wasm)
             throw new Error(
               `@rnrs/runtime: module ${name} is not linked into this app (linked: ${[...owners.keys()].join(', ') || 'none'})`,
             );
-          const helpers = helpersOf.get(wasm)!;
+          // The instance's own helpers (numbers, wrap/unwrap: one handle map) win; the host's
+          // add its declared errors' domainError.
+          const helpers = hostHelpers
+            ? Object.freeze({
+                ...hostHelpers,
+                ...helpersOf.get(wasm)!,
+                domainError: hostHelpers.domainError,
+              })
+            : helpersOf.get(wasm)!;
           let scheduled = false;
           // Called by Rust with its host lock held: only schedule, never re-enter.
           const adapter = new wasm.RnrsWebAdapter(

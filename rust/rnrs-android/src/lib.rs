@@ -600,6 +600,8 @@ impl Env for JsiEnv<'_> {
 pub const RNRS_CALL_OK: u32 = 0;
 pub const RNRS_CALL_ERROR: u32 = 1;
 pub const RNRS_CALL_THROWN: u32 = 2;
+/// A declared error (`Throws<T, E>`): `out` holds the converted `E`; no message.
+pub const RNRS_CALL_DOMAIN: u32 = 3;
 
 pub type SettleFn = extern "C" fn(*mut c_void, u64, u32, u32, *const u8, usize);
 
@@ -711,11 +713,18 @@ pub unsafe extern "C" fn rnrs_scalar_call(adapter: *const RnrsAdapter, binding: 
             RNRS_CALL_ERROR
         }
         Err(BindError::Thrown) => unreachable!("scalar leaf cannot run JS"),
+        // Methods with declared errors have no scalar leaf; never unwind across the C ABI.
+        Err(BindError::Domain { .. }) => {
+            unsafe { error_kind.write(error_kind_code(ErrorKind::Error)) };
+            write_message(error, error_cap, "rnrs: internal error: a scalar leaf reported a declared error");
+            RNRS_CALL_ERROR
+        }
     }
 }
 
 /// Calls method `method` (IR order). On `RNRS_CALL_ERROR` writes the error kind (0 TypeError,
-/// 1 RangeError, 2 Error) and message; on `RNRS_CALL_THROWN` the context holds a JS exception.
+/// 1 RangeError, 2 Error) and message; on `RNRS_CALL_THROWN` the context holds a JS exception;
+/// on `RNRS_CALL_DOMAIN` `out` holds a declared error's converted value.
 ///
 /// # Safety
 /// `adapter` is live; `vt`/`ctx` form a live call context on the calling runtime's thread
@@ -748,6 +757,10 @@ pub unsafe extern "C" fn rnrs_adapter_call(
             RNRS_CALL_OK
         }
         Err(BindError::Thrown) => RNRS_CALL_THROWN,
+        Err(BindError::Domain { value }) => {
+            unsafe { out.write(value.index()) };
+            RNRS_CALL_DOMAIN
+        }
         Err(BindError::Js { kind, message }) => {
             unsafe { error_kind.write(error_kind_code(kind)) };
             write_message(error, error_cap, &message);
@@ -1144,7 +1157,7 @@ mod abi_contract {
 
     #[test]
     fn exchanged_values() {
-        use rnrs_core::bind::{BytesError, ADMIT_CLOSED, ADMIT_OVERLOADED, ADMIT_SATURATED, SETTLE_CANCELLED, SETTLE_FAILED, SETTLE_LOST, SETTLE_OK};
+        use rnrs_core::bind::{BytesError, ADMIT_CLOSED, ADMIT_OVERLOADED, ADMIT_SATURATED, SETTLE_CANCELLED, SETTLE_DOMAIN, SETTLE_FAILED, SETTLE_LOST, SETTLE_OK};
         // kind(): kKind* in RnrsAbi.h.
         assert_eq!(KINDS, [Kind::Undefined, Kind::Null, Kind::Boolean, Kind::Number, Kind::String, Kind::Array, Kind::Function, Kind::Object, Kind::Other]);
         // toBytes(): kBytes* (1 and anything unknown: not an ArrayBuffer).
@@ -1158,14 +1171,110 @@ mod abi_contract {
         assert_eq!((RNRS_UNWRAP_OK, RNRS_UNWRAP_NOT_NATIVE, RNRS_UNWRAP_CLOSED, RNRS_UNWRAP_DISPOSED), (0, 1, 2, 3));
         assert_eq!((RNRS_DELIVERY_QUEUED, RNRS_DELIVERY_RUNNING, RNRS_DELIVERY_DONE, RNRS_DELIVERY_DROPPED), (0, 1, 2, 3));
         // Values the binary produces for the JS runtime (settle status, admission failure code).
-        assert_eq!((SETTLE_OK, SETTLE_CANCELLED, SETTLE_FAILED, SETTLE_LOST), (0, 1, 2, 3));
+        assert_eq!((SETTLE_OK, SETTLE_CANCELLED, SETTLE_FAILED, SETTLE_LOST, SETTLE_DOMAIN), (0, 1, 2, 3, 4));
         assert_eq!((ADMIT_CLOSED, ADMIT_OVERLOADED, ADMIT_SATURATED), (-1.0, -2.0, -3.0));
     }
 
     #[test]
     fn status_codes() {
-        assert_eq!((RNRS_CALL_OK, RNRS_CALL_ERROR, RNRS_CALL_THROWN), (0, 1, 2));
+        assert_eq!((RNRS_CALL_OK, RNRS_CALL_ERROR, RNRS_CALL_THROWN, RNRS_CALL_DOMAIN), (0, 1, 2, 3));
         assert_eq!((RNRS_TEARDOWN_EXPLICIT, RNRS_TEARDOWN_LIFECYCLE, RNRS_TEARDOWN_DESTRUCTOR, RNRS_TEARDOWN_REFUSED), (0, 1, 2, 3));
         assert_eq!([ErrorKind::TypeError, ErrorKind::RangeError, ErrorKind::Error].map(error_kind_code), [0, 1, 2]);
+    }
+}
+
+#[cfg(test)]
+mod declared_error_tests {
+    //! `rnrs_adapter_call` reports a declared error (spec `Throws<T, E>`) as `RNRS_CALL_DOMAIN`
+    //! with the converted value in `out` and no message.
+    use super::*;
+    use rnrs_core::bind::{domain_error, Call, MethodDef};
+
+    /// A call context that only records the values it creates: (kind, payload).
+    #[derive(Default)]
+    struct Ctx(Vec<(&'static str, String)>);
+    fn ctx<'a>(raw: *mut c_void) -> &'a mut Ctx {
+        unsafe { &mut *raw.cast::<Ctx>() }
+    }
+    fn push(raw: *mut c_void, kind: &'static str, payload: String) -> u32 {
+        ctx(raw).0.push((kind, payload));
+        ctx(raw).0.len() as u32 - 1
+    }
+    extern "C" fn string(raw: *mut c_void, p: *const u8, n: usize) -> u32 {
+        let text = unsafe { str_arg(p, n) }.to_owned();
+        push(raw, "string", text)
+    }
+    extern "C" fn object(raw: *mut c_void) -> u32 {
+        push(raw, "object", String::new())
+    }
+    extern "C" fn undefined(raw: *mut c_void) -> u32 {
+        push(raw, "undefined", String::new())
+    }
+    extern "C" fn set_property(raw: *mut c_void, o: u32, p: *const u8, n: usize, v: u32) -> bool {
+        let entry = format!("{}={}", unsafe { str_arg(p, n) }, ctx(raw).0[v as usize].1);
+        let target = &mut ctx(raw).0[o as usize].1;
+        if !target.is_empty() {
+            target.push(',');
+        }
+        target.push_str(&entry);
+        true
+    }
+    // Entries this test never reaches (no argument is read, no other value is created).
+    extern "C" fn kind(_: *mut c_void, _: u32) -> u32 { unreachable!() }
+    extern "C" fn to_number(_: *mut c_void, _: u32) -> f64 { unreachable!() }
+    extern "C" fn to_bool(_: *mut c_void, _: u32) -> bool { unreachable!() }
+    extern "C" fn get_property(_: *mut c_void, _: u32, _: *const u8, _: usize, _: *mut u32) -> bool { unreachable!() }
+    extern "C" fn array_length(_: *mut c_void, _: u32, _: *mut f64) -> bool { unreachable!() }
+    extern "C" fn get_index(_: *mut c_void, _: u32, _: u32, _: *mut u32) -> bool { unreachable!() }
+    extern "C" fn null(_: *mut c_void) -> u32 { unreachable!() }
+    extern "C" fn number(_: *mut c_void, _: f64) -> u32 { unreachable!() }
+    extern "C" fn boolean(_: *mut c_void, _: bool) -> u32 { unreachable!() }
+    extern "C" fn array(_: *mut c_void, _: u32) -> u32 { unreachable!() }
+    extern "C" fn set_index(_: *mut c_void, _: u32, _: u32, _: u32) -> bool { unreachable!() }
+    extern "C" fn wrap_native(_: *mut c_void, _: *mut c_void, _: *mut u32) -> bool { unreachable!() }
+    extern "C" fn unwrap_native(_: *mut c_void, _: u32, _: *mut *const c_void) -> u32 { unreachable!() }
+    extern "C" fn to_bytes(_: *mut c_void, _: u32, _: extern "C" fn(*mut c_void, usize) -> *mut u8, _: *mut c_void) -> u32 { unreachable!() }
+    extern "C" fn new_bytes(_: *mut c_void, _: *mut u8, _: usize, _: usize, _: *mut u32) { unreachable!() }
+    extern "C" fn to_string_into(_: *mut c_void, _: u32, _: extern "C" fn(*mut c_void, usize) -> *mut u8, _: *mut c_void) -> usize { unreachable!() }
+    extern "C" fn number_array(_: *mut c_void, _: u32, _: u32, _: extern "C" fn(*mut c_void, usize, usize) -> *mut f64, _: *mut c_void, _: *mut u32, _: *mut u32) -> u32 { unreachable!() }
+    extern "C" fn own_entries(_: *mut c_void, _: u32, _: *mut u32) -> u32 { unreachable!() }
+    static VT: JsiVTable = JsiVTable {
+        kind, to_number, to_bool, get_property, array_length, get_index, undefined, null, number, boolean, string, object, set_property,
+        array, set_index, wrap_native, unwrap_native, to_bytes, new_bytes, to_string_into, number_array, own_entries,
+    };
+
+    static METHODS: [MethodDef; 1] = [MethodDef { name: "busy", kind: MethodKind::Sync }];
+    struct Instance;
+    static DEF: ModuleDef = ModuleDef {
+        name: "DeclaredErrorProbe", hash: "test", methods: &METHODS, scalars: &[], native_types: &[],
+        instantiate: || Ok(Box::new(Instance)),
+        // What generated glue does for `Err(LookupError::Busy)`.
+        call: |cx: &mut Call<'_>, _, _, _| {
+            Err(domain_error(cx.env, |env| {
+                let o = env.object();
+                let tag = env.string("busy");
+                env.set_property(o, "kind", tag)?;
+                Ok(o)
+            }))
+        },
+    };
+    extern "C" fn noop(_: *mut c_void) {}
+    extern "C" fn delivery(_: *mut c_void) -> u8 { 0 }
+
+    #[test]
+    fn a_declared_error_returns_its_value_with_status_domain() {
+        let notifier = Notifier { notify: noop, release: noop, delivery, ctx: std::ptr::null_mut() };
+        let adapter = RnrsAdapter::new(&DEF, 4, Budget::new(4), notifier).unwrap();
+        let mut c = Ctx::default();
+        let this = push(&mut c as *mut Ctx as *mut c_void, "undefined", String::new());
+        let (mut out, mut kind, mut error) = (u32::MAX, u32::MAX, [0u8; 64]);
+        let status = unsafe {
+            rnrs_adapter_call(&adapter, &VT, &mut c as *mut Ctx as *mut c_void, 7, 0, this, std::ptr::null(), 0, &mut out, &mut kind,
+                error.as_mut_ptr(), error.len())
+        };
+        assert_eq!(status, RNRS_CALL_DOMAIN);
+        assert_eq!(c.0[out as usize], ("object", "kind=busy".to_string()));
+        assert_eq!((kind, error[0]), (u32::MAX, 0), "no error kind or message is written");
+        adapter.teardown(0);
     }
 }

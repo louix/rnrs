@@ -7,7 +7,9 @@
 //   from the RN runtime, the UI runtime and worklet runtimes. Arguments and results are
 //   numbers, booleans, undefined, null and boxed native objects only; anything else throws a
 //   TypeError with code ERR_RNRS_WORKLET_SHAPE (a refused result is detected after the method
-//   ran). Async methods are refused when the endpoint is created (ERR_RNRS_WORKLET_ASYNC).
+//   ran). Async methods are refused when the endpoint is created (ERR_RNRS_WORKLET_ASYNC), and
+//   so, here in JS, are methods with declared errors (ERR_RNRS_WORKLET_THROWS); a raw endpoint
+//   created without this check would run such a method and only then refuse its error.
 //   Teardown (reload) refuses new calls: later calls throw ERR_RNRS_CLOSED. A call already in
 //   progress is not waited for; it completes and may change process-shared state after the
 //   teardown. An uncaught error in a UI-thread worklet crashes the app under Reanimated
@@ -28,7 +30,12 @@
 // Rust methods run on the calling runtime's thread (often the UI thread): they must be
 // short, bounded and non-blocking, and their state Send + Sync. The framework does not
 // enforce that.
-import { NativeObjectBase, type ModuleBase, type ModuleHost } from './runtime';
+import {
+  NativeObjectBase,
+  refuseDeclaredErrorsOnWorklets,
+  type ModuleBase,
+  type ModuleHost,
+} from './runtime';
 
 /** The part of react-native-worklets this module uses (pass the package's exports). */
 export interface WorkletsRegistrar {
@@ -69,7 +76,9 @@ export function workletEndpoint<M extends ModuleBase, K extends string>(
     throw new Error(
       '@rnrs/runtime/worklets: this platform backend has no worklet endpoint (prototype: Android only)',
     );
-  const endpoint = create(Array.from(methods));
+  const list = Array.from(methods);
+  refuseDeclaredErrorsOnWorklets(module, list);
+  const endpoint = create(list);
   endpoints.set(host, endpoint);
   return endpoint as WorkletEndpoint<Pick<M, Extract<K, keyof M>>>;
 }

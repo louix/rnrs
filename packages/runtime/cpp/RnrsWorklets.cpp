@@ -248,6 +248,10 @@ jsi::Value invoke(jsi::Runtime& rt, const EndpointState& ep, const Method& m, co
     gRefusedClosed++;
     throwCoded(rt, "Error", "rnrs: " + ep.adapter.name + " is closed (its React Native runtime was torn down or reloaded)", "ERR_RNRS_CLOSED");
   }
+  if (status == abi::kCallDomain) {  // refused when the endpoint is created (worklets.ts)
+    gRefusedShape++;
+    throwCoded(rt, "TypeError", m.prop + ": declared errors (Throws) do not cross worklet endpoints", "ERR_RNRS_WORKLET_SHAPE");
+  }
   if (status == 1) {
     const char* ctor = kind == 0 ? "TypeError" : kind == 1 ? "RangeError" : "Error";
     throw jsi::JSError(rt, rt.global().getPropertyAsFunction(rt, ctor).callAsConstructor(rt, jsi::String::createFromUtf8(rt, error)));

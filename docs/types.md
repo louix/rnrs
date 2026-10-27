@@ -1,7 +1,8 @@
 # TypeScript → Rust types
 
 Declare types in your `.spec.ts`; rnrs generates the Rust traits, structs and enums.
-Every method returns `Result<T, String>`: `Err` throws in JS or rejects an async call.
+Every method returns `Result<T, String>`: `Err` throws in JS or rejects an async call. A method
+can instead declare a structured error with `Throws<T, E>`; see [declared errors](#declared-errors).
 
 | TypeScript | Rust | Notes |
 | --- | --- | --- |
@@ -19,6 +20,7 @@ Every method returns `Result<T, String>`: `Err` throws in JS or rejects an async
 | `ArrayBuffer` | `Vec<u8>` | Input is copied. Native output transfers ownership to JS; web output is copied. |
 | Interface extending `NativeObject` | Generated trait and `Native<T>` handle | A persistent Rust object, not a value copy. |
 | `Promise<T>` result | `async fn` returning `Result<T, String>` | Receives a `CancelToken`; see [async methods](generator.md#async-methods). |
+| `Throws<T, E>` result from `@rnrs/runtime/spec` | `Result<T, E>` | `E` is a named record or union; `Err` throws or rejects a `DomainError`. |
 
 ## Records
 
@@ -187,6 +189,60 @@ Converted handles are owned `Native` clones: a failed conversion drops the ones 
 
 Call `dispose()` when finished with an object. See the [counter tutorial](headless.md) for
 objects passed to and returned from Rust, and [ownership](ownership.md) for async lifetimes.
+
+## Declared errors
+
+By default a method's error is a string. Wrap the whole result in `Throws<T, E>` to return a
+named record or tagged union instead (`Throws<Promise<T>, E>` for async methods):
+
+```ts
+import type { NativeModule, Throws } from '@rnrs/runtime/spec';
+
+export type KvError = { kind: 'notFound'; key: string } | { kind: 'busy' };
+
+export interface KvModule extends NativeModule {
+  get(key: string): Throws<string, KvError>;
+  load(key: string): Throws<Promise<string>, KvError>;
+}
+```
+
+```rust
+fn get(&self, key: String) -> Result<String, KvError> {
+    self.read(&key).ok_or(KvError::NotFound { key })
+}
+```
+
+`Err(e)` throws, or rejects the promise with, a `DomainError` from `@rnrs/runtime`. Its `data`
+is `e`, converted like a result. Its `name` is the type name (`KvError`); its message is
+`KvModule.get failed: notFound` (the method and tag, never payload content). The wrapper exports
+a guard per error type; TypeScript does not type `catch`, so test with it:
+
+```ts
+try {
+  kvModule().get(key);
+} catch (e) {
+  if (!isKvError(e)) throw e;
+  switch (e.data.kind) {
+    case 'notFound': /* … */ break;
+    case 'busy': /* … */ break;
+  }
+}
+```
+
+- The guard is true for errors raised for that type by that wrapper, including errors of a torn-down
+  instance. It checks the error, not `data`, which is plain, mutable data.
+- Only `Err(e)` produces a `DomainError`. Argument validation, `validate_` hooks, conversion
+  failures, closed runtimes, cancellation and the other framework errors keep their usual
+  errors, so the declared union never covers every failure. Exceptions thrown by getters while
+  arguments are read propagate unchanged.
+- If `e` itself cannot be converted (a non-finite `JsonValue` number, for example), the call
+  fails with `error conversion failed: …` instead: a `TypeError`/`RangeError`, or an
+  `RnrsError` rejection.
+- Cancellation wins only before completion: once an outcome is queued, `cancel` has no effect
+  and the declared error is delivered.
+- `E` must not contain native objects. Methods with declared errors have no prepared scalar entry
+  and are not available on [worklet endpoints](../packages/runtime/src/worklets.ts).
+- `Throws` elsewhere (parameters, fields, inside `Promise`) and other error types are rejected.
 
 ## Validation and limits
 

@@ -19,3 +19,9 @@ export type JsonValue =
   | string
   | JsonValue[]
   | { [key: string]: JsonValue };
+
+/** A method result `T` whose Rust implementation returns `Result<T, E>`: `Err(e)` throws (sync)
+ *  or rejects (async: `Throws<Promise<T>, E>`) a `DomainError` whose `data` is `e`. `E` is a
+ *  named record or tagged union of the spec. Only as the whole method result; recognized by
+ *  this declaration. (Evaluates to `T`; the conditional only keeps `E` used.) */
+export type Throws<T, E extends object> = [E] extends [never] ? T : T;

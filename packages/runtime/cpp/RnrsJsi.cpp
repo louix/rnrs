@@ -156,7 +156,7 @@ struct CallCtx {
   // proxy on a non-genuine host); helpers are only used inside guarded or try/catch callbacks.
   const jsi::Value* helpersArg = nullptr;
   const jsi::Value* helpersHost = nullptr;
-  std::optional<jsi::Function> define, isArray, bufferKind, allocBuffer, entries;
+  std::optional<jsi::Function> define, isArray, bufferKind, allocBuffer, entries, domainError;
   // The array most recently read by `length` or index (its arena index), so elements are read
   // without a handle clone each; arena values never change during the call, so the index
   // identifies the value.
@@ -530,13 +530,19 @@ jsi::Value invokeAdapter(jsi::Runtime& rt, Adapter& adapter, CallCtx& c, uint32_
   uint32_t out = 0, kind = 0;
   char error[512];
   error[0] = 0;  // Rust writes a terminated message only for kCallError
-  switch (adapter.table->adapterCall(adapter.rust, &kVTable, &c, c.epoch, index, self, args, count, &out, &kind, error, sizeof error)) {
+  const uint32_t status = adapter.table->adapterCall(adapter.rust, &kVTable, &c, c.epoch, index, self, args, count, &out, &kind, error, sizeof error);
+  switch (status) {
     case kCallOk: return std::move(c.at(out));
     case kCallThrown:
       if (c.thrown) throw *c.thrown;
       throw jsi::JSError(rt, "native call failed");
-    case kCallError:
-    default: throw jsi::JSError(rt, makeError(rt, kind, error));
+    case kCallDomain:
+      // A declared error (spec Throws<T, E>): the calling host's helpers build the DomainError
+      // from its wrapper's metadata (the shared helpers refuse: no declared errors there).
+      throw jsi::JSError(rt, c.helper(c.domainError, "domainError").call(rt, static_cast<double>(index), c.at(out)));
+    case kCallError: throw jsi::JSError(rt, makeError(rt, kind, error));
+    default:
+      throw jsi::JSError(rt, makeError(rt, kErrorPlain, ("rnrs: unsupported call status " + std::to_string(status) + " from " + adapter.name).c_str()));
   }
 }
 

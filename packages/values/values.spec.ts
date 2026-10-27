@@ -1,7 +1,7 @@
 // Value-conversion fixture module: records, strings, arrays, optional and nullable values,
-// discriminated unions, dictionaries (Record<string, T>) and JsonValue.
+// discriminated unions, dictionaries (Record<string, T>), JsonValue and declared errors (Throws).
 // Rust implementation: rust/values. Used by the shared value suite on Android and web.
-import type { JsonValue, NativeModule, NativeObject } from '@rnrs/runtime/spec';
+import type { JsonValue, NativeModule, NativeObject, Throws } from '@rnrs/runtime/spec';
 import type { Size } from './shared';
 
 export interface Point {
@@ -66,10 +66,26 @@ export interface Inventory {
   meta: JsonValue;
 }
 
+/** A declared error: thrown (sync) or rejected (async) as a DomainError with this as `data`.
+ *  `detail` with a non-finite number fails its conversion (a framework error instead). */
+export type LookupError =
+  | { kind: 'notFound'; key: string }
+  | { kind: 'invalid'; reason: string; at: number }
+  | { kind: 'busy' }
+  | { kind: 'detail'; info: JsonValue };
+
+/** A record as a declared error (no discriminator). */
+export interface Overflow {
+  limit: number;
+  got: number[];
+}
+
 /** A native object taking records, to check receiver handling around getters. */
 export interface Bag extends NativeObject {
   add(p: Point): number;
   count(): number;
+  /** The point at `index`; notFound outside the bag (a declared error of an object method). */
+  at(index: number): Throws<Point, LookupError>;
 }
 
 /** Native-object composition: objects that create, take and hold other native objects, and
@@ -194,4 +210,15 @@ export interface ValuesModule extends NativeModule {
     sql: string[],
     ms: number,
   ): Promise<Record<string, Statement>>;
+  /** 'one' → 1; 'missing' → notFound, 'bad' → invalid, 'busy' → busy, 'nan' → detail(NaN,
+   *  unconvertible); anything else → 0. Each call counts (lookupCalls). */
+  lookup(key: string): Throws<number, LookupError>;
+  /** The same after `ms`, async. */
+  lookupLater(key: string, ms: number): Throws<Promise<number>, LookupError>;
+  /** How many times lookup/lookupLater/half ran. */
+  lookupCalls(): number;
+  /** x / 2 for even x, invalid otherwise: scalar-shaped, so it takes the generic call. */
+  half(x: number): Throws<number, LookupError>;
+  /** The sum of `xs`, or Overflow when it exceeds `limit` (a record error). */
+  limitedSum(xs: number[], limit: number): Throws<number, Overflow>;
 }

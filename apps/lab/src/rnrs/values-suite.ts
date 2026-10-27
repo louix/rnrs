@@ -7,8 +7,11 @@ import {
   Shader,
   Statement,
   createValuesModuleForTesting,
+  isLookupError,
+  isOverflow,
   valuesModule,
   type Event,
+  type LookupError,
   type Labeled,
   type Shape,
   type Tagged,
@@ -1460,6 +1463,72 @@ export async function runValuesSuite(env: ValuesEnv): Promise<CheckResult[]> {
     },
   );
 
+  await check(
+    'declared errors: worklet endpoints refuse Throws methods; raw endpoints refuse their errors',
+    () => {
+      const t = createValuesModuleForTesting(4);
+      try {
+        const raw = (t.host.adapter as any).workletEndpoint;
+        // The JSI backend (Android, iOS) always has endpoints; only the browser backend has none.
+        if (!raw) {
+          expect(env.growWasmMemory !== undefined, 'a native backend has no worklet endpoint');
+          return 'skipped: the browser backend has no worklet endpoints';
+        }
+        // Refused when the endpoint is created (JS), before any call.
+        try {
+          workletEndpoint(t, ['echoNumber', 'lookup']);
+          throw new CheckFailure('an endpoint over a Throws method was created');
+        } catch (error) {
+          expect((error as any)?.code === 'ERR_RNRS_WORKLET_THROWS', `creation refusal: ${error}`);
+        }
+        // A raw endpoint (bypassing that check) runs the method, then its C++ path refuses the
+        // declared error as a shape error; successes still pass.
+        const ep: any = raw(['half']);
+        expect(ep.half(4) === 2, 'a success passes');
+        const before = v.lookupCalls();
+        try {
+          ep.half(3);
+          throw new CheckFailure('a declared error crossed the endpoint');
+        } catch (error) {
+          expect((error as any)?.code === 'ERR_RNRS_WORKLET_SHAPE', `error refusal: ${error}`);
+        }
+        expect(v.lookupCalls() === before + 1, 'the method ran once');
+        return 'refused';
+      } finally {
+        t.teardown();
+      }
+    },
+  );
+
+  await check("native objects: worklet boxes pass as arguments of another type's methods", () => {
+    const t = createValuesModuleForTesting(4);
+    try {
+      const adapter = t.host.adapter as any;
+      if (!adapter.workletEndpoint) {
+        expect(env.growWasmMemory !== undefined, 'a native backend has no worklet endpoint');
+        return 'skipped: the browser backend has no worklet endpoints';
+      }
+      // A Shader method on the allow-list lets Shaders be boxed; it is not called (its string
+      // result would not cross the endpoint).
+      const endpoint = workletEndpoint(t, ['Paint.setShader', 'Shader.name']);
+      const paint = t.paint();
+      const shader = t.shader('boxed');
+      const paintBox: any = adapter.workletBox(endpoint, paint.handle);
+      const shaderBox: any = adapter.workletBox(endpoint, shader.handle);
+      // Paint.setShader(Shader) called through the endpoint with a boxed Shader argument.
+      paintBox.setShader(shaderBox);
+      // (Read back on the RN side: string results do not cross worklet endpoints.)
+      expect(paint.shader()?.name() === 'boxed', 'the paint holds the boxed shader');
+      // A box of the wrong native type is refused with the parameter's type.
+      throws(() => paintBox.setShader(paintBox), 'TypeError: shader must be a Shader');
+      paintBox.setShader(null);
+      expect(paint.shader() === null, 'null clears');
+      return 'passed';
+    } finally {
+      t.teardown();
+    }
+  });
+
   await check('native objects compose: factories, consumers and graph cycles', () => {
     const db = v.openDatabase('main');
     const statement = db.prepare('select 1');
@@ -1568,6 +1637,103 @@ export async function runValuesSuite(env: ValuesEnv): Promise<CheckResult[]> {
     shader.dispose();
     expect((await name) === 'held', 'the task still had the shader');
   });
+
+  await check(
+    'declared errors: thrown and rejected DomainErrors narrow by their data',
+    async () => {
+      /** Exhaustive over the declared union: a new variant fails to compile here. */
+      const describeError = (error: LookupError): string => {
+        switch (error.kind) {
+          case 'notFound':
+            return `notFound:${error.key}`;
+          case 'invalid':
+            return `invalid:${error.reason}@${error.at}`;
+          case 'busy':
+            return 'busy';
+          case 'detail':
+            return 'detail';
+          default: {
+            const never: never = error;
+            return never;
+          }
+        }
+      };
+      const caught = (fn: () => unknown): unknown => {
+        try {
+          fn();
+        } catch (error) {
+          return error;
+        }
+        throw new CheckFailure('expected a throw');
+      };
+      expect(v.lookup('one') === 1, 'success value');
+      const missing = caught(() => v.lookup('missing'));
+      expect(isLookupError(missing), `a LookupError: ${missing}`);
+      expect(
+        missing instanceof Error && missing.name === 'LookupError',
+        'an Error named LookupError',
+      );
+      expect(missing.message === 'ValuesModule.lookup failed: notFound', missing.message);
+      expect(describeError(missing.data) === 'notFound:missing', describeError(missing.data));
+      const odd = caught(() => v.half(3));
+      expect(isLookupError(odd) && describeError(odd.data) === 'invalid:odd@3', `half: ${odd}`);
+      expect(v.half(4) === 2, 'half success');
+      const over = caught(() => v.limitedSum([2, 3], 4));
+      expect(isOverflow(over) && !isLookupError(over), 'record error');
+      expect(
+        over.message === 'ValuesModule.limitedSum failed' &&
+          same(over.data, { limit: 4, got: [2, 3] }),
+        over.message,
+      );
+      const bag = v.bag();
+      const outside = caught(() => bag.at(0));
+      expect(
+        isLookupError(outside) && outside.message === 'Bag.at failed: notFound',
+        `object method: ${outside}`,
+      );
+      bag.dispose();
+      // Framework failures are not declared errors.
+      const unconvertible = caught(() => v.lookup('nan'));
+      expect(!isLookupError(unconvertible), 'conversion failure is not a LookupError');
+      expect(
+        String(unconvertible).startsWith('TypeError: error conversion failed: '),
+        String(unconvertible),
+      );
+      const boom = new Error('boom');
+      const thrown = caught(() =>
+        v.limitedSum(
+          Object.defineProperty([0], 0, {
+            get() {
+              throw boom;
+            },
+          }),
+          1,
+        ),
+      );
+      expect(thrown === boom, 'getter exception propagates unchanged');
+      expect(
+        !isLookupError(new Error('x')) && !isLookupError({ name: 'LookupError', data: {} }),
+        'look-alikes',
+      );
+      // Async: rejections, same shape.
+      const busy = await v.lookupLater('busy', 0).then(
+        () => undefined,
+        (e: unknown) => e,
+      );
+      expect(isLookupError(busy) && describeError(busy.data) === 'busy', `async: ${busy}`);
+      expect(busy.message === 'ValuesModule.lookupLater failed: busy', busy.message);
+      expect((await v.lookupLater('one', 0)) === 1, 'async success');
+      const lost = await v.lookupLater('nan', 0).then(
+        () => undefined,
+        (e: unknown) => e,
+      );
+      expect(
+        !isLookupError(lost) && /error conversion failed: /.test(String(lost)),
+        `async conversion: ${lost}`,
+      );
+      expect(!/result conversion failed/.test(String(lost)), 'one prefix');
+    },
+  );
 
   await check('no settlement violations', () => {
     expect(v.violations.length === 0, v.violations.join('; '));

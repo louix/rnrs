@@ -14,7 +14,14 @@ if (!process.execArgv.includes(FLAG)) {
   test('ModuleHost backend compatibility (runtime.ts under the Node type transform)', () => {
     const run = spawnSync(
       process.execPath,
-      [FLAG, '--no-warnings', '--test', '--test-reporter=tap', fileURLToPath(import.meta.url)],
+      [
+        FLAG,
+        '--expose-gc',
+        '--no-warnings',
+        '--test',
+        '--test-reporter=tap',
+        fileURLToPath(import.meta.url),
+      ],
       // Without NODE_TEST_CONTEXT the inner run is a top-level test run whose exit status
       // reflects its own failures (inherited, it reports to this runner and exits 0).
       { encoding: 'utf8', env: { ...process.env, NODE_TEST_CONTEXT: undefined } },
@@ -160,7 +167,9 @@ if (!process.execArgv.includes(FLAG)) {
     const { log } = backend({ entry: () => () => 0 });
     assert.throws(
       () => createModuleForTesting(moduleClass('Future', { protocol: rt.RUNTIME_PROTOCOL + 1 }), 4),
-      /Future was generated for call protocol 4, but this @rnrs\/runtime implements up to 3/,
+      new RegExp(
+        `Future was generated for call protocol ${rt.RUNTIME_PROTOCOL + 1}, but this @rnrs/runtime implements up to ${rt.RUNTIME_PROTOCOL}`,
+      ),
     );
     assert.equal(log.installs, 0);
   });
@@ -236,5 +245,170 @@ if (!process.execArgv.includes(FLAG)) {
     assert.equal(Object.getPrototypeOf(out), Object.prototype);
     assert.deepEqual(Object.keys(out), ['__proto__']);
     assert.equal({}.polluted, undefined);
+  });
+
+  // ---- Declared errors (spec Throws<T, E>) ----
+
+  const { DomainError, RnrsError, isDomainError } = rt;
+  const ERRORS = [
+    [0, 'Kv.get', 'KvError', 'kind'],
+    [2, 'Kv.load', 'KvError', 'kind'],
+    [3, 'Kv.sum', 'Overflow', null],
+  ];
+  /** A backend that records what install received; `retain` keeps helpers like a native root. */
+  const recordingBackend = () => {
+    const installs = [];
+    const adapter = {
+      generation: 1,
+      call: () => 1,
+      call0: () => 0,
+      call1: () => 0,
+      call2: () => 0,
+      call3: () => 0,
+      call4: () => 0,
+      cancel: () => false,
+      dispose() {},
+      teardown() {},
+      stats: () => ({}),
+    };
+    setBackend({
+      platform: 'test',
+      install(name, hash, maxInFlight, settle, helpers) {
+        installs.push({ name, helpers, settle: new WeakRef(settle) });
+        return adapter;
+      },
+    });
+    return { installs, adapter };
+  };
+  const errorModule = (errors = ERRORS) =>
+    class Kv extends ModuleBase {
+      static descriptor = { name: 'Kv', hash: 'h', defaultMaxInFlight: 4, protocol: 4, errors };
+    };
+
+  test('declared errors: hosts with errors pass their own helpers; others the shared ones', () => {
+    const { installs } = recordingBackend();
+    const plain = createModuleForTesting(moduleClass('Plain', { protocol: 2 }), 4);
+    assert.equal(installs[0].helpers, undefined);
+    assert.equal(plain.host['rnrs:helpers'], conversionHelpers);
+    const kv = createModuleForTesting(errorModule(), 4);
+    const helpers = installs[1].helpers;
+    assert.ok(Object.isFrozen(helpers));
+    assert.notEqual(helpers, conversionHelpers);
+    assert.equal(kv.host['rnrs:helpers'], helpers, 'every sync path of the host carries them');
+    for (const key of Object.keys(conversionHelpers))
+      if (key !== 'domainError') assert.equal(helpers[key], conversionHelpers[key], key);
+    plain.teardown();
+    kv.teardown();
+  });
+
+  test('declared errors: DomainError shape, message and brand', () => {
+    const { installs } = recordingBackend();
+    const Kv = errorModule();
+    const kv = createModuleForTesting(Kv, 4);
+    const raise = installs[0].helpers.domainError;
+    const data = { kind: 'corrupt', offset: 3 };
+    const error = raise(0, data);
+    assert.ok(error instanceof DomainError && error instanceof Error);
+    assert.ok(!(error instanceof RnrsError));
+    assert.equal(error.name, 'KvError');
+    assert.equal(error.message, 'Kv.get failed: corrupt');
+    assert.equal(error.data, data);
+    assert.equal(Object.isFrozen(error.data), false);
+    assert.equal(error.code, undefined);
+    assert.equal(error.cause, undefined);
+    assert.ok(isDomainError(error, Kv.descriptor, 'KvError'));
+    assert.ok(!isDomainError(error, Kv.descriptor, 'Overflow'));
+    // A second copy of the wrapper (same names, another descriptor object) does not match.
+    assert.ok(!isDomainError(error, errorModule().descriptor, 'KvError'));
+    // Look-alikes and unbranded instances do not match.
+    assert.ok(!isDomainError({ name: 'KvError', data }, Kv.descriptor, 'KvError'));
+    assert.ok(!isDomainError(new DomainError('KvError', 'x', data), Kv.descriptor, 'KvError'));
+    assert.ok(!isDomainError(undefined, Kv.descriptor, 'KvError'));
+    // A record error has no tag; a method without an entry is an explicit framework error.
+    const overflow = raise(3, { limit: 1, got: [2] });
+    assert.equal(overflow.message, 'Kv.sum failed');
+    assert.ok(isDomainError(overflow, Kv.descriptor, 'Overflow'));
+    const unknown = raise(1, {});
+    assert.ok(unknown instanceof RnrsError && unknown.code === 'failed');
+    assert.match(
+      unknown.message,
+      /Kv method #1 reported a declared error its wrapper does not declare/,
+    );
+    // The shared helpers refuse explicitly.
+    const shared = conversionHelpers.domainError(5, {});
+    assert.ok(shared instanceof RnrsError);
+    assert.match(shared.message, /wrapper declares none; regenerate/);
+    // Stale: a torn-down host's errors still describe their data.
+    kv.teardown();
+    assert.ok(isDomainError(error, Kv.descriptor, 'KvError'));
+  });
+
+  test('declared errors: settlement status 4 rejects with the DomainError', async () => {
+    const { installs, adapter } = recordingBackend();
+    let next = 10;
+    adapter.call = () => next++;
+    const Kv = errorModule();
+    const kv = createModuleForTesting(Kv, 4);
+    const settle = installs[0].settle.deref();
+    const load = kv.host.start(2, undefined, ['k'], undefined);
+    settle(10, 4, { kind: 'notFound', key: 'k' }, '');
+    const error = await load.then(
+      () => assert.fail('resolved'),
+      (e) => e,
+    );
+    assert.ok(isDomainError(error, Kv.descriptor, 'KvError'));
+    assert.equal(error.message, 'Kv.load failed: notFound');
+    assert.deepEqual(error.data, { kind: 'notFound', key: 'k' });
+    // Status 4 for a method without a declared error: explicit failure and a violation.
+    const other = kv.host.start(1, undefined, [], undefined);
+    settle(11, 4, {}, '');
+    await assert.rejects(other, (e) => e instanceof RnrsError && e.code === 'failed');
+    assert.equal(kv.violations.length, 1);
+    // Existing statuses are unchanged.
+    const failed = kv.host.start(2, undefined, [], undefined);
+    settle(12, 2, undefined, 'plain failure');
+    await assert.rejects(failed, (e) => e instanceof RnrsError && e.message === 'plain failure');
+    const cancelled = kv.host.start(2, undefined, [], undefined);
+    settle(13, 1, undefined, '');
+    await assert.rejects(cancelled, (e) => e.name === 'AbortError');
+    kv.teardown();
+  });
+
+  test('declared errors: the helper holds no host (a torn-down host is collectable)', async () => {
+    assert.equal(typeof globalThis.gc, 'function', 'run with --expose-gc');
+    const { installs } = recordingBackend();
+    const Kv = errorModule();
+    const host = (() => {
+      const kv = createModuleForTesting(Kv, 4);
+      kv.teardown();
+      return new WeakRef(kv.host);
+    })();
+    // Retained like a native root (JSI callh binding, web adapter helpers) plus an error.
+    const helpers = installs[0].helpers;
+    const error = helpers.domainError(0, { kind: 'x' });
+    for (let i = 0; i < 10 && host.deref() !== undefined; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      globalThis.gc();
+    }
+    assert.equal(host.deref(), undefined);
+    assert.ok(isDomainError(error, Kv.descriptor, 'KvError'));
+  });
+
+  test('declared errors: worklet endpoints refuse methods that declare them', () => {
+    recordingBackend();
+    const kv = createModuleForTesting(errorModule(), 4);
+    const refuse = (methods) => rt.refuseDeclaredErrorsOnWorklets(kv, methods);
+    assert.throws(
+      () => refuse(['size', 'get']),
+      (e) =>
+        e instanceof TypeError &&
+        e.code === 'ERR_RNRS_WORKLET_THROWS' &&
+        e.message.startsWith('get:'),
+    );
+    assert.doesNotThrow(() => refuse(['size', 'Snapshot.read']));
+    assert.doesNotThrow(() =>
+      rt.refuseDeclaredErrorsOnWorklets(createModuleForTesting(moduleClass('W', {}), 4), ['get']),
+    );
+    kv.teardown();
   });
 }

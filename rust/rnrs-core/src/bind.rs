@@ -90,6 +90,10 @@ pub enum BindError {
     /// JS code run during conversion (a getter, a proxy trap) threw; the backend holds the
     /// original exception and rethrows it.
     Thrown,
+    /// A method declared with `Throws<T, E>` returned `Err(E)`: `value` is the converted `E`.
+    /// The JS runtime builds the `DomainError` (message, brand) from the wrapper's metadata.
+    /// Created only by generated glue ([`domain_error`], [`pending_declared`]).
+    Domain { value: Val },
 }
 
 impl BindError {
@@ -106,6 +110,7 @@ impl BindError {
         match self {
             BindError::Js { message, .. } => message,
             BindError::Thrown => "a JS exception was thrown during conversion",
+            BindError::Domain { .. } => "a declared error",
         }
     }
 }
@@ -259,6 +264,10 @@ pub enum UnwrapError {
 ///
 /// Readers that can run JS return `BindError::Thrown` when that JS throws. Value readers
 /// (`to_number`, ...) are only called after `kind` agreed.
+///
+/// Custom implementations (test environments, other backends) must also provide `own_entries`,
+/// a required method since `Record<string, T>` and `JsonValue` (after 0.3.0); returning
+/// `Ok(None)` refuses every dictionary and JSON object.
 pub trait Env {
     fn kind(&mut self, v: Val) -> Kind;
     fn to_number(&mut self, v: Val) -> f64;
@@ -639,6 +648,11 @@ pub type Pending = Box<dyn IntoJsBoxed>;
 
 pub trait IntoJsBoxed: MaybeSend {
     fn into_js_boxed(self: Box<Self>, env: &mut dyn Env) -> Result<Val, BindError>;
+    /// Whether this converts a declared error ([`pending_declared`]): its conversion failures
+    /// already carry their own prefix, so the drain does not add `result conversion failed`.
+    fn declared(&self) -> bool {
+        false
+    }
 }
 
 /// Wraps a conversion closure; generated glue uses it so async results convert on the JS
@@ -653,6 +667,37 @@ impl<F: FnOnce(&mut dyn Env) -> Result<Val, BindError> + MaybeSend> IntoJsBoxed 
 
 pub fn pending<F: FnOnce(&mut dyn Env) -> Result<Val, BindError> + MaybeSend + 'static>(convert: F) -> Pending {
     Box::new(Deferred(convert))
+}
+
+/// Prefix of a declared error whose payload could not be converted (a framework failure, not
+/// a declared error): sync throws it with the conversion error's kind, async rejects with it.
+pub const ERROR_CONVERSION_FAILED: &str = "error conversion failed: ";
+
+/// Converts the `Err(E)` of a `Throws<T, E>` method: `BindError::Domain` with the payload, or
+/// the conversion failure prefixed [`ERROR_CONVERSION_FAILED`].
+pub fn domain_error(env: &mut dyn Env, convert: impl FnOnce(&mut dyn Env) -> Result<Val, BindError>) -> BindError {
+    match convert(env) {
+        Ok(value) => BindError::Domain { value },
+        Err(BindError::Js { kind, message }) => BindError::Js { kind, message: format!("{ERROR_CONVERSION_FAILED}{message}") },
+        Err(other) => BindError::Js { kind: ErrorKind::Error, message: format!("{ERROR_CONVERSION_FAILED}{}", other.message()) },
+    }
+}
+
+struct Declared<F>(F);
+
+impl<F: FnOnce(&mut dyn Env) -> Result<Val, BindError> + MaybeSend> IntoJsBoxed for Declared<F> {
+    fn into_js_boxed(self: Box<Self>, env: &mut dyn Env) -> Result<Val, BindError> {
+        Err(domain_error(env, self.0))
+    }
+    fn declared(&self) -> bool {
+        true
+    }
+}
+
+/// The outcome of an async `Throws<T, E>` method that returned `Err(E)`: converted on the JS
+/// thread like a result, then settled as a declared error.
+pub fn pending_declared<F: FnOnce(&mut dyn Env) -> Result<Val, BindError> + MaybeSend + 'static>(convert: F) -> Pending {
+    Box::new(Declared(convert))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -788,6 +833,8 @@ pub const SETTLE_OK: u32 = 0;
 pub const SETTLE_CANCELLED: u32 = 1;
 pub const SETTLE_FAILED: u32 = 2;
 pub const SETTLE_LOST: u32 = 3;
+/// A declared error (`Throws<T, E>`): the value is the converted `E`, the message empty.
+pub const SETTLE_DOMAIN: u32 = 4;
 
 /// Platform-specific spawner for an adapter's async work.
 #[cfg(not(target_arch = "wasm32"))]
@@ -859,10 +906,15 @@ impl<N: Notify + MaybeSend + 'static> Adapter<N> {
         let count = outcomes.len();
         for outcome in outcomes {
             let (status, value, message) = match outcome.result {
-                Ok(pending) => match pending.into_js_boxed(env) {
-                    Ok(value) => (SETTLE_OK, value, String::new()),
-                    Err(error) => (SETTLE_FAILED, env.undefined(), format!("result conversion failed: {}", error.message())),
-                },
+                Ok(pending) => {
+                    let declared = pending.declared();
+                    match pending.into_js_boxed(env) {
+                        Ok(value) => (SETTLE_OK, value, String::new()),
+                        Err(BindError::Domain { value }) => (SETTLE_DOMAIN, value, String::new()),
+                        Err(error) if declared => (SETTLE_FAILED, env.undefined(), error.message().to_owned()),
+                        Err(error) => (SETTLE_FAILED, env.undefined(), format!("result conversion failed: {}", error.message())),
+                    }
+                }
                 Err(OpError::Cancelled) => (SETTLE_CANCELLED, env.undefined(), String::new()),
                 Err(OpError::Failed(message)) => (SETTLE_FAILED, env.undefined(), message),
                 Err(OpError::Lost) => (SETTLE_LOST, env.undefined(), String::new()),

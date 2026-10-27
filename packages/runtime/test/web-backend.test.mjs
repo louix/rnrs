@@ -46,7 +46,7 @@ if (!process.execArgv.includes(FLAG)) {
   const { installWebBackend, WEB_ABI } = await import('../src/web-backend.ts');
 
   // Signatures by method index: [slot, argument kinds (2 bits each), result kind].
-  const install = ({ signatures = {}, legacy = false } = {}) => {
+  const install = ({ signatures = {}, legacy = false, hostHelpers } = {}) => {
     const log = [];
     let helpers;
     let next = 0;
@@ -87,11 +87,17 @@ if (!process.execArgv.includes(FLAG)) {
       rnrs_web_abi: () => 1,
       rnrs_web_modules: () => ['M'],
     });
-    const adapter = backend.install('M', 'h', 4, () => {});
+    const adapter = backend.install('M', 'h', 4, () => {}, hostHelpers);
+    const installed = helpers;
     return {
       log,
       adapter,
-      helpers,
+      helpers: installed,
+      /** The helpers a plain install of the same instance receives (for comparisons). */
+      instanceHelpers() {
+        backend.install('M', 'h', 4, () => {});
+        return helpers;
+      },
       returns(value) {
         next = value;
       },
@@ -303,5 +309,24 @@ if (!process.execArgv.includes(FLAG)) {
       bootstrap: (instances) => ((given = instances), { dispose() {} }),
     });
     assert.deepEqual(given, [p, q]);
+  });
+
+  test('declared errors: host helpers add domainError and keep the instance helpers', async () => {
+    const { conversionHelpers } = await import('../src/runtime.ts');
+    const plain = install();
+    assert.equal(plain.helpers.domainError, conversionHelpers.domainError, 'shared refusal');
+    const domainError = () => new Error('declared');
+    const t = install({ hostHelpers: Object.freeze({ ...conversionHelpers, domainError }) });
+    assert.equal(t.helpers.domainError, domainError);
+    assert.ok(Object.isFrozen(t.helpers));
+    // The instance's own helpers (one handle map per instance) win over the shared ones.
+    const own = t.instanceHelpers();
+    assert.notEqual(own, t.helpers);
+    for (const key of ['numbers', 'wrap', 'unwrap']) assert.equal(t.helpers[key], own[key], key);
+    assert.equal(t.helpers.get, conversionHelpers.get);
+    const handle = t.helpers.wrap(3, 7);
+    assert.deepEqual(t.helpers.unwrap(handle), [3, 7]);
+    plain.dispose();
+    t.dispose();
   });
 }

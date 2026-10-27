@@ -53,8 +53,14 @@ test('web ABI: version, exports and codes', () => {
   for (const [name, count] of Object.entries(exports)) assert.equal(params(name), count, name);
   for (const name of Object.keys(exports).filter((n) => n !== 'new' && n !== 'generation'))
     assert.match(backend, new RegExp(`\\b${name}\\b`), `web-backend.ts uses ${name}`);
-  // Settlement statuses (Rust SETTLE_OK..SETTLE_LOST = 0..3) and admission codes (-1..-3).
-  assert.match(runtime, /const Status = \{ Ok: 0, Cancelled: 1, Failed: 2, Lost: 3 \} as const;/);
+  // Settlement statuses (Rust SETTLE_OK..SETTLE_DOMAIN = 0..4) and admission codes (-1..-3).
+  // Domain (4, declared errors) was added without a web ABI bump: only Wasm generated from a
+  // spec with Throws settles it, and that spec's wrapper requires call protocol 4, which an
+  // older @rnrs/runtime refuses before installing; older Wasm never produces it.
+  assert.match(
+    runtime,
+    /const Status = \{ Ok: 0, Cancelled: 1, Failed: 2, Lost: 3, Domain: 4 \} as const;/,
+  );
   assert.match(runtime, /case -1:\s*return new RnrsError\('closed'/);
   assert.match(
     runtime,

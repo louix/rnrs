@@ -133,7 +133,7 @@ export function checkNativeAdapter(
 function jsiBackend(platform: JsiPlatform): Backend {
   return {
     platform,
-    install(name, hash, maxInFlight, settle) {
+    install(name, hash, maxInFlight, settle, hostHelpers) {
       const raw = runtimeBindings().install(name, hash, maxInFlight);
       try {
         checkNativeAdapter(raw, name);
@@ -163,10 +163,12 @@ function jsiBackend(platform: JsiPlatform): Backend {
         Object.defineProperty(entry, 'helpers', { value: conversionHelpers });
         global.__rnrsSettle = entry;
       }
-      const callh = bindThis(raw.callh, conversionHelpers);
+      // Every sync path of this adapter carries the host's helpers (its declared errors).
+      const helpers = hostHelpers ?? conversionHelpers;
+      const callh = bindThis(raw.callh, helpers);
       const adapter: NativeAdapter = {
         generation: raw.generation,
-        call: (index, receiver, args) => raw.call(conversionHelpers, index, receiver, args),
+        call: (index, receiver, args) => raw.call(helpers, index, receiver, args),
         // Fixed arities: callh bound to the helpers as `this` (captured bind), so a generated
         // wrapper calls the host function with its explicit parameters directly (no spread or
         // rest, no forwarding frame, no extra helpers argument). The callers pass exactly

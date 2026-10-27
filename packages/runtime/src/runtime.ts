@@ -33,6 +33,10 @@ const reflectGet = Reflect.get;
 const defineProperty = Object.defineProperty;
 const arrayIsArray = Array.isArray;
 const getPrototypeOf = Object.getPrototypeOf;
+const objectCreate = Object.create;
+const objectFreeze = Object.freeze;
+const weakMapGet = WeakMap.prototype.get;
+const weakMapSet = WeakMap.prototype.set;
 const objectEntries = Object.entries;
 const objectPrototype = Object.prototype;
 const isView = ArrayBuffer.isView;
@@ -163,12 +167,89 @@ export const conversionHelpers = Object.freeze({
   allocBuffer(length: number): ArrayBuffer {
     return new ArrayBufferCtor(length);
   },
+  /** The error to throw for a declared error (spec `Throws<T, E>`) of method `method`. Hosts
+   *  whose wrapper declares errors pass their own helpers (see ModuleHost); these shared ones
+   *  only report the mismatch. */
+  domainError(method: number, _data?: unknown): Error {
+    return new RnrsError(
+      'failed',
+      `@rnrs/runtime: method #${method} reported a declared error, but its wrapper declares none; regenerate the module package and rebuild the app`,
+    );
+  },
 });
 
 /** Value type of the spec's `JsonValue` (generated wrappers use it in signatures). */
 export type { JsonValue } from './spec';
 
 export type ErrorCode = 'cancelled' | 'overloaded' | 'closed' | 'failed' | 'lost';
+
+// DomainError brands: error -> [wrapper descriptor, declared type name]. Only errors built
+// here have one; not a security boundary.
+const domainBrands = new WeakMap<object, readonly [object, string]>();
+
+/** A declared error of a module method (spec `Throws<T, E>`): thrown by sync methods, rejected
+ *  by async ones. `name` is the declared type, `data` the Rust `Err` value converted like a
+ *  result (plain data, not frozen). Framework failures (argument validation, conversion,
+ *  closed, cancelled, lost, overloaded, String errors) are never DomainErrors. Test with the
+ *  generated guard (`isKvError(e)`), which checks the brand of the wrapper that declared it. */
+export class DomainError<E = unknown> extends Error {
+  readonly data: E;
+  /** @internal Built by the runtime; a constructed instance has no brand. */
+  constructor(name: string, message: string, data: E) {
+    super(message);
+    this.name = name;
+    this.data = data;
+  }
+}
+
+/** Whether `error` is a DomainError raised for declared type `type` by a module whose wrapper's
+ *  descriptor is `descriptor` (generated guards pass their own). */
+export function isDomainError(error: unknown, descriptor: object, type: string): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+  const brand = reflectApply(weakMapGet, domainBrands, [error]) as
+    | readonly [object, string]
+    | undefined;
+  return brand !== undefined && brand[0] === descriptor && brand[1] === type;
+}
+
+/** `[method index, label ('Module.method' / 'Object.method'), declared type, discriminator]`. */
+export type DeclaredErrorEntry = readonly [number, string, string, string | null];
+
+/** The `domainError` helper of a wrapper's declared errors, or undefined if it declares none.
+ *  Closes over the immutable descriptor and a frozen copy of its table only (never a host). */
+function declaredErrors(
+  descriptor: ModuleDescriptor,
+): ((method: number, data: unknown) => Error) | undefined {
+  const list = descriptor.errors;
+  if (!list || list.length === 0) return undefined;
+  const table: Record<number, DeclaredErrorEntry> = objectCreate(null);
+  // Indexed loop: no iterator protocol (Array.prototype may be patched).
+  for (let i = 0; i < list.length; i++) {
+    const entry = list[i] as unknown as DeclaredErrorEntry;
+    table[entry[0]] = objectFreeze([entry[0], entry[1], entry[2], entry[3]] as const);
+  }
+  objectFreeze(table);
+  return (method, data) => {
+    const entry = table[method];
+    if (entry === undefined)
+      return new RnrsError(
+        'failed',
+        `@rnrs/runtime: ${descriptor.name} method #${method} reported a declared error its wrapper does not declare; regenerate the module package and rebuild the app`,
+      );
+    // `data` is the fresh payload: the tag is its own data property (no user code runs).
+    const tag =
+      entry[3] !== null && typeof data === 'object' && data !== null
+        ? (data as Record<string, unknown>)[entry[3]]
+        : undefined;
+    const error = new DomainError(
+      entry[2],
+      typeof tag === 'string' ? `${entry[1]} failed: ${tag}` : `${entry[1]} failed`,
+      data,
+    );
+    reflectApply(weakMapSet, domainBrands, [error, objectFreeze([descriptor, entry[2]] as const)]);
+    return error;
+  };
+}
 
 export class RnrsError extends Error {
   constructor(
@@ -279,7 +360,16 @@ export type SettleFn = (id: number, status: number, value: unknown, message: str
 
 export interface Backend {
   readonly platform: string;
-  install(name: string, hash: string, maxInFlight: number, settle: SettleFn): NativeAdapter;
+  /** `helpers`: this host's conversion helpers when its wrapper declares errors (the shared
+   *  `conversionHelpers` plus its own `domainError`); backends use them for every sync call of
+   *  this adapter. Absent: the shared `conversionHelpers`. */
+  install(
+    name: string,
+    hash: string,
+    maxInFlight: number,
+    settle: SettleFn,
+    helpers?: typeof conversionHelpers,
+  ): NativeAdapter;
   /** Called after a test-hook teardown, so the backend stops routing settlements. */
   release?(adapter: NativeAdapter): void;
 }
@@ -304,11 +394,12 @@ function currentBackend(): Backend {
   return backend;
 }
 
-const Status = { Ok: 0, Cancelled: 1, Failed: 2, Lost: 3 } as const;
+const Status = { Ok: 0, Cancelled: 1, Failed: 2, Lost: 3, Domain: 4 } as const;
 
 interface PendingOperation {
+  method: number;
   resolve(value: unknown): void;
-  reject(error: RnrsError): void;
+  reject(error: Error): void;
   detach(): void;
   wrap?: (value: unknown) => unknown;
 }
@@ -335,6 +426,8 @@ export class ModuleHost {
   /** Settlements that violate the contract (duplicate, unknown, or after close). */
   readonly violations: string[] = [];
   readonly adapter: NativeAdapter;
+  /** Builds the DomainError of a declared error (descriptor metadata only, no host). */
+  private readonly declared: (method: number, data: unknown) => Error;
 
   constructor(
     readonly name: string,
@@ -342,9 +435,20 @@ export class ModuleHost {
     maxInFlight: number,
     readonly runtimeOwned: boolean,
     direct: readonly (readonly number[])[] = [],
+    descriptor?: ModuleDescriptor,
   ) {
-    this.adapter = currentBackend().install(name, hash, maxInFlight, (id, status, value, message) =>
-      this.settle(id, status, value, message),
+    const declared = descriptor && declaredErrors(descriptor);
+    // Hosts of wrappers with declared errors carry their own helpers on every sync path.
+    const helpers = declared
+      ? objectFreeze({ ...conversionHelpers, domainError: declared })
+      : conversionHelpers;
+    this.declared = declared ?? conversionHelpers.domainError;
+    this.adapter = currentBackend().install(
+      name,
+      hash,
+      maxInFlight,
+      (id, status, value, message) => this.settle(id, status, value, message),
+      declared ? helpers : undefined,
     );
     const self = this as any;
     self.call0 = this.adapter.call0;
@@ -356,7 +460,7 @@ export class ModuleHost {
     // non-enumerable (descriptor defaults).
     defineProperty(this, HOST_HELPERS_KEY, {
       __proto__: null,
-      value: conversionHelpers,
+      value: helpers,
     } as PropertyDescriptor);
     // Indexed loop: no iterator protocol (Array.prototype could be patched by then). A
     // backend that cannot provide an entry refuses the module; nothing stays installed.
@@ -409,6 +513,13 @@ export class ModuleHost {
       case Status.Lost:
         operation.reject(new RnrsError('lost', 'executor dropped the operation'));
         break;
+      case Status.Domain: {
+        const error = this.declared(operation.method, value);
+        if (!(error instanceof DomainError))
+          this.violations.push(`undeclared declared error: op ${id} method ${operation.method}`);
+        operation.reject(error);
+        break;
+      }
       default:
         operation.reject(new RnrsError('failed', message));
     }
@@ -454,6 +565,7 @@ export class ModuleHost {
       };
       signal?.addEventListener('abort', onAbort);
       this.pendingOps.set(id, {
+        method: index,
         resolve,
         reject,
         wrap,
@@ -513,6 +625,26 @@ export abstract class ModuleBase {
   }
 }
 
+/** Worklet endpoints (./worklets) do not carry declared errors (spec Throws): a listed method
+ *  (`'get'`, `'Type.method'`) that declares one is refused before the endpoint exists. */
+export function refuseDeclaredErrorsOnWorklets(
+  module: ModuleBase,
+  methods: readonly string[],
+): void {
+  const errors = (module.constructor as { descriptor?: ModuleDescriptor }).descriptor?.errors;
+  if (!errors) return;
+  for (const name of methods) {
+    const label = name.includes('.') ? name : `${module.host.name}.${name}`;
+    if (errors.some((entry) => entry[1] === label)) {
+      const error = new TypeError(
+        `${name}: methods with declared errors (Throws) are not available on worklet endpoints`,
+      );
+      (error as TypeError & { code: string }).code = 'ERR_RNRS_WORKLET_THROWS';
+      throw error;
+    }
+  }
+}
+
 /** Base of generated native-object classes: a wrapper owning one native handle. */
 export abstract class NativeObjectBase {
   constructor(
@@ -531,22 +663,27 @@ export function handleOf(value: unknown): unknown {
   return value instanceof NativeObjectBase ? value.handle : value;
 }
 
+/** A generated wrapper's static descriptor. `protocol`: the wrapper/runtime call protocol the
+ *  wrapper uses (1 or absent: argument arrays only; 2: also positional host.call0..call4; 3:
+ *  also the prepared scalar entries host.m<index> listed in `direct` as [index, arity]; 4: also
+ *  declared errors, listed in `errors`). The object's identity brands its DomainErrors. */
+export interface ModuleDescriptor {
+  name: string;
+  hash: string;
+  defaultMaxInFlight: number;
+  protocol?: number;
+  direct?: readonly (readonly number[])[];
+  /** `DeclaredErrorEntry` tuples (typed loosely, like `direct`, as wrappers declare literals). */
+  errors?: readonly (readonly (number | string | null)[])[];
+}
+
 export interface ModuleClass<M extends ModuleBase> {
   new (host: ModuleHost): M;
-  /** `protocol`: the wrapper/runtime call protocol the generated wrapper uses (1 or absent:
-   *  argument arrays only; 2: also positional host.call0..call4; 3: also the prepared scalar
-   *  entries host.m<index> listed in `direct` as [index, arity]). */
-  readonly descriptor: {
-    name: string;
-    hash: string;
-    defaultMaxInFlight: number;
-    protocol?: number;
-    direct?: readonly (readonly number[])[];
-  };
+  readonly descriptor: ModuleDescriptor;
 }
 
 /** The newest wrapper call protocol this runtime implements. */
-export const RUNTIME_PROTOCOL = 3;
+export const RUNTIME_PROTOCOL = 4;
 
 /** Refuses wrappers generated for a newer runtime, with an actionable message. */
 export function checkWrapperProtocol(descriptor: { name: string; protocol?: number }): void {
@@ -566,7 +703,7 @@ export function runtimeModule<M extends ModuleBase>(cls: ModuleClass<M>): M {
   const { name, hash, defaultMaxInFlight, direct } = cls.descriptor;
   let module = runtimeModules.get(name);
   if (!module) {
-    module = new cls(new ModuleHost(name, hash, defaultMaxInFlight, true, direct));
+    module = new cls(new ModuleHost(name, hash, defaultMaxInFlight, true, direct, cls.descriptor));
     runtimeModules.set(name, module);
   }
   return module as M;
@@ -579,5 +716,5 @@ export function createModuleForTesting<M extends ModuleBase>(
 ): M {
   checkWrapperProtocol(cls.descriptor);
   const { name, hash, direct } = cls.descriptor;
-  return new cls(new ModuleHost(name, hash, maxInFlight, false, direct));
+  return new cls(new ModuleHost(name, hash, maxInFlight, false, direct, cls.descriptor));
 }

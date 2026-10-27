@@ -152,7 +152,8 @@ pub fn rnrs_diagnostics() -> Vec<f64> {
 
 // ---- Helpers -------------------------------------------------------------------------
 
-const HELPER_NAMES: [&str; 11] = ["get", "define", "isArray", "length", "byteLength", "copyBuffer", "bytesFromMemory", "numbers", "wrap", "unwrap", "entries"];
+const HELPER_NAMES: [&str; 12] =
+    ["get", "define", "isArray", "length", "byteLength", "copyBuffer", "bytesFromMemory", "numbers", "wrap", "unwrap", "entries", "domainError"];
 
 /// Elements per `numbers` helper call: the destination grows per chunk, as the generic
 /// reader's capacity does, so a lying `length` never reserves memory up front.
@@ -478,6 +479,8 @@ fn js_error(error: BindError, thrown: Option<JsValue>) -> JsValue {
             ErrorKind::RangeError => js_sys::RangeError::new(&message).into(),
             ErrorKind::Error => js_sys::Error::new(&message).into(),
         },
+        // Raised through the adapter's helpers (`RnrsWebAdapter::call_error`); never here.
+        BindError::Domain { .. } => js_sys::Error::new("rnrs: internal error: a declared error outside a method call").into(),
     }
 }
 
@@ -493,6 +496,19 @@ pub struct RnrsWebAdapter {
 }
 
 impl RnrsWebAdapter {
+    /// The JS error of a failed call `index`. A declared error (`Throws<T, E>`) is built by the
+    /// calling host's `domainError` helper from its wrapper's metadata; what it throws (the
+    /// shared helpers refuse: no declared errors there) is the error.
+    fn call_error(&self, env: &mut WebEnv<'_>, index: u32, error: BindError) -> JsValue {
+        let BindError::Domain { value } = error else { return js_error(error, env.thrown.take()) };
+        let Some(raise) = self.helpers.find("domainError") else {
+            return js_sys::Error::new("rnrs: this @rnrs/runtime cannot raise declared errors (Throws); update @rnrs/runtime").into();
+        };
+        match raise.call2(&JsValue::UNDEFINED, &JsValue::from(index), env.get(value)) {
+            Ok(built) | Err(built) => built,
+        }
+    }
+
     fn call_with<const N: usize>(&self, index: u32, receiver: JsValue, args: [JsValue; N]) -> Result<JsValue, JsValue> {
         diag(4);
         let mut env = self.env();
@@ -500,7 +516,7 @@ impl RnrsWebAdapter {
         let args = args.map(|a| env.put(a));
         match self.adapter.call(&mut env, index, this, &args) {
             Ok(v) => Ok(env.get(v).clone()),
-            Err(e) => Err(js_error(e, env.thrown.take())),
+            Err(e) => Err(self.call_error(&mut env, index, e)),
         }
     }
 }
@@ -546,7 +562,7 @@ impl RnrsWebAdapter {
         let args: Vec<Val> = args.iter().map(|a| env.put(a)).collect();
         match self.adapter.call(&mut env, index, this, &args) {
             Ok(v) => Ok(env.get(v).clone()),
-            Err(e) => Err(js_error(e, env.thrown.take())),
+            Err(e) => Err(self.call_error(&mut env, index, e)),
         }
     }
 

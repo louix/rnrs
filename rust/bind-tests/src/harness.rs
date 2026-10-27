@@ -35,6 +35,8 @@ pub enum Settled {
     Cancelled,
     Failed(String),
     Lost,
+    /// A declared error (`Throws<T, E>`); the converted `E` is the outcome's value.
+    Domain,
 }
 
 impl Harness {
@@ -57,7 +59,7 @@ impl Harness {
     }
 
     /// Calls `name` with `this` and `args`; returns the JS result or the error (with the
-    /// mock's pending exception message for `Thrown`).
+    /// mock's pending exception message for `Thrown`, and `domain: <value>` for a declared error).
     pub fn call(&self, env: &mut MockEnv, name: &str, this: V, args: Vec<V>) -> Result<V, String> {
         let this = env.put(this);
         let args: Vec<Val> = args.into_iter().map(|v| env.put(v)).collect();
@@ -65,6 +67,7 @@ impl Harness {
             Ok(v) => Ok(env.take(v)),
             Err(BindError::Thrown) => Err(format!("thrown: {}", env.thrown.take().unwrap_or_default())),
             Err(BindError::Js { kind, message }) => Err(format!("{kind:?}: {message}")),
+            Err(BindError::Domain { value }) => Err(format!("domain: {:?}", env.take(value))),
         }
     }
 
@@ -80,7 +83,9 @@ impl Harness {
                     0 => Settled::Ok(String::new()),
                     1 => Settled::Cancelled,
                     2 => Settled::Failed(message.to_string()),
-                    _ => Settled::Lost,
+                    3 => Settled::Lost,
+                    4 => Settled::Domain,
+                    other => panic!("unknown settlement status {other}"),
                 };
                 out.push((id, settled, v));
             });

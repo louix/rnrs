@@ -56,7 +56,8 @@ impl rnrs_interface::MathModule for Module {
 ```
 
 Synchronous methods run on the calling JS thread. Return `Err(String)` for an input-dependent
-failure; panics abort rather than become JS errors. Strings, records, arrays and buffers have
+failure, or a [declared error](types.md#declared-errors) for methods with `Throws<T, E>`; panics
+abort rather than become JS errors. Strings, records, arrays and buffers have
 value semantics. Native objects use reference-counted handles.
 
 ## Async methods
