@@ -253,6 +253,16 @@ if (defaultMode) {
   );
   for (const c of of('check').filter((c) => !c.ok))
     check(`suite check: ${c.name}`, false, c.detail);
+  // On a test-hooks build the number[] check must exercise its forced mid-fill failure (the
+  // shared suite only reports "hook not compiled in" when the hook is unwired).
+  const numberCheck = of('check').find((c) => c.name.startsWith('values: number[] results'));
+  check(
+    'number[] forced mid-fill failure ran (test hooks)',
+    !!numberCheck &&
+      /number fill failure forced/.test(numberCheck.detail ?? '') &&
+      !/hook not compiled in/.test(numberCheck.detail ?? ''),
+    numberCheck?.detail ?? 'no number[] check reported',
+  );
   // On iOS the next runtime starts while the old one still waits for its invalidation (queued
   // behind its busy JS thread); judge the hook once the new runtime has waited for old work.
   const firstLifecycle = after?.drained.lifecycle;

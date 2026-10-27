@@ -158,6 +158,7 @@ async function runStep(step: Step, update: (message: string) => void): Promise<b
             await sleep(0);
           },
           forceBytesCopyOut: (force) => runtimeBindings().forceBytesCopyOutForTesting!(force),
+          failNumberFill: (fail) => runtimeBindings().failNumberFillForTesting!(fail),
         })),
       );
       checks.push(...(await runBlake3Suite()));

@@ -90,6 +90,8 @@ interface RuntimeBindings {
   invalidateForTesting?(): void;
   /** Test hook: ArrayBuffer results take the copy fallback (as if external storage were refused). */
   forceBytesCopyOutForTesting?(force: boolean): void;
+  /** Test hook: number[] results throw mid-fill, before the prototype is restored. */
+  failNumberFillForTesting?(fail: boolean): void;
   /** Test hook: forced full GC through JSI instrumentation. */
   collectGarbageForTesting?(): void;
   /** Test hook (iOS only): reloads through React Native's own reload path

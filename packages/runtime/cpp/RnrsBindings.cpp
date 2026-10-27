@@ -136,6 +136,12 @@ void installRuntimeBindings(
         setForceBytesCopyOutForTesting(n > 0 && a[0].isBool() && a[0].getBool());
         return jsi::Value::undefined();
       }));
+  api.setProperty(rt, "failNumberFillForTesting", jsi::Function::createFromHostFunction(
+      rt, jsi::PropNameID::forAscii(rt, "failNumberFillForTesting"), 1,
+      [](jsi::Runtime&, const jsi::Value&, const jsi::Value* a, size_t n) -> jsi::Value {
+        setFailNumberFillForTesting(n > 0 && a[0].isBool() && a[0].getBool());
+        return jsi::Value::undefined();
+      }));
   // Test hook: a forced full GC (JSI instrumentation), for the collectibility checks.
   api.setProperty(rt, "collectGarbageForTesting", jsi::Function::createFromHostFunction(
       rt, jsi::PropNameID::forAscii(rt, "collectGarbageForTesting"), 0,

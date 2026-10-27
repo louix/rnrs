@@ -55,6 +55,9 @@ std::atomic<uint64_t> gFinalizers{0}, gFinalizersOffJsThread{0};
 // results copied because the engine refused external storage.
 std::atomic<uint64_t> gBytesFinalizedOffJsThread{0}, gBytesCopiedOut{0};
 std::atomic<bool> gForceBytesCopyOut{false};  // set only by the RNRS_TEST_HOOKS hook
+#ifdef RNRS_TEST_HOOKS
+std::atomic<bool> gFailNumberFill{false};  // test builds only: the per-element check is compiled out otherwise
+#endif
 #ifdef RNRS_DIAGNOSTICS
 // Attribution counters (diagnostics builds only): call contexts, helper lookups (property
 // reads of the helpers object), helper uses, arena pushes.
@@ -68,11 +71,11 @@ std::atomic<uint64_t> gDiagContexts{0}, gDiagHelperLookups{0}, gDiagHelperUses{0
 // collected or the runtime is destroyed, possibly off the JS thread; the release is a
 // thread-safe Rust drop. JS may read and write the bytes; Rust keeps no access to them.
 struct RustBytes : jsi::MutableBuffer {
-  const RnrsModuleV3* table;  // the binary that allocated the storage
+  const RnrsModuleV5* table;  // the binary that allocated the storage
   uint8_t* ptr;
   size_t len, cap;
   platform::ThreadId jsThread = platform::currentThread();
-  RustBytes(const RnrsModuleV3* t, uint8_t* p, size_t l, size_t c) : table(t), ptr(p), len(l), cap(c) {}
+  RustBytes(const RnrsModuleV5* t, uint8_t* p, size_t l, size_t c) : table(t), ptr(p), len(l), cap(c) {}
   ~RustBytes() override {
     if (platform::currentThread() != jsThread) gBytesFinalizedOffJsThread++;
     table->bytesFree(ptr, len, cap);
@@ -85,7 +88,7 @@ std::atomic<uint32_t> gEpoch{1};
 std::atomic<uint64_t> gNextSerial{1};
 
 struct Adapter {
-  const RnrsModuleV3* table = nullptr;  // the module's binary; static for the process
+  const RnrsModuleV5* table = nullptr;  // the module's binary; static for the process
   RnrsAdapter* rust = nullptr;
   // Process-unique serial of this adapter (JS `generation`): wrappers of other modules or
   // other adapters of this module are a mismatch.
@@ -125,10 +128,10 @@ struct Adapter {
 // created it (never through an adapter, which may be freed before this finalizer runs).
 struct HandleState : jsi::NativeState {
   void* native;
-  const RnrsModuleV3* table;
+  const RnrsModuleV5* table;
   uint64_t generation;  // the creating adapter's serial
   platform::ThreadId jsThread = platform::currentThread();  // constructed on the JS thread
-  HandleState(void* n, const RnrsModuleV3* t, uint64_t g) : native(n), table(t), generation(g) {}
+  HandleState(void* n, const RnrsModuleV5* t, uint64_t g) : native(n), table(t), generation(g) {}
   ~HandleState() override {
     gFinalizers++;
     if (platform::currentThread() != jsThread) gFinalizersOffJsThread++;
@@ -489,12 +492,36 @@ const JsiVTable kVTable = {
       })) return kEntriesThrown;
       return status;
     },
+    // number[] output on a fresh array: the captured `detachPrototype` helper nulls its prototype
+    // (returning the original), a native indexed fill then creates own data properties (no
+    // inherited accessor, non-writable index or proxy can intercept it), and `restorePrototype`
+    // puts the exact original back. The array is published (pushed) only after that; on any
+    // failure it stays an unreachable local. `data` is borrowed for this call only.
+    [](void* raw, const double* data, uint32_t len, uint32_t* out) -> bool {
+      auto& c = C(raw);
+      return guarded(c, [&] {
+        jsi::Array array(c.rt, len);
+        if (len) {
+          std::optional<jsi::Function> detach, restore;  // one-shot: not cached in the context
+          jsi::Value proto = c.helper(detach, "detachPrototype").call(c.rt, jsi::Value(c.rt, array));
+          for (uint32_t i = 0; i < len; ++i) {
+            array.setValueAtIndex(c.rt, i, jsi::Value(data[i]));
+#ifdef RNRS_TEST_HOOKS
+            if (gFailNumberFill.load()) throw std::runtime_error("number fill failure forced (test hook)");
+#endif
+          }
+          c.helper(restore, "restorePrototype").call(c.rt, jsi::Value(c.rt, array), std::move(proto));
+        }
+        *out = c.push(std::move(array));
+      });
+    },
 };
 
 }  // namespace
 
 #ifdef RNRS_TEST_HOOKS
 void setForceBytesCopyOutForTesting(bool force) { gForceBytesCopyOut = force; }
+void setFailNumberFillForTesting(bool fail) { gFailNumberFill = fail; }
 #endif
 
 void throwForeignRuntime(jsi::Runtime& rt, const std::string& what) {
@@ -675,7 +702,7 @@ jsi::Object installModuleAdapter(
   if (!(maxInFlight >= 1 && maxInFlight <= 1024 && std::floor(maxInFlight) == maxInFlight))
     throw jsi::JSError(rt, makeError(rt, 1, "maxInFlight must be an integer from 1 to 1024"));
   std::string missing;
-  const RnrsModuleV3* table = findModule(name, hash, missing);
+  const RnrsModuleV5* table = findModule(name, hash, missing);
   if (!table) throw jsi::JSError(rt, makeError(rt, 2, missing.c_str()));
   char error[256] = {0};
   auto adapter = std::make_shared<Adapter>();

@@ -57,6 +57,8 @@ export interface ValuesEnv {
    *  check then also patches the ArrayBuffer/Uint8Array globals (in the browser the
    *  wasm-bindgen glue itself looks those up, so they are left alone there). */
   forceBytesCopyOut?(force: boolean): void;
+  /** Native (Android/iOS) test hook: number[] results throw mid-fill, before the prototype is restored. */
+  failNumberFill?(fail: boolean): void;
   /** Browser: grows the bundle's Wasm memory by one page (detaching its old buffer). */
   growWasmMemory?(): void;
 }
@@ -891,6 +893,102 @@ export async function runValuesSuite(env: ValuesEnv): Promise<CheckResult[]> {
       );
     },
   );
+
+  await check('number[] results: exact values and own data properties, pollution ignored', () => {
+    const specials = [1.5, -0, 0, NaN, Infinity, -Infinity, 5e-324, -Number.MAX_VALUE, 2 ** 53 + 2];
+    const exact = (out: number[], expected: number[], what: string) => {
+      expect(
+        Array.isArray(out) && Object.getPrototypeOf(out) === Array.prototype,
+        `${what}: array`,
+      );
+      expect(out.length === expected.length, `${what}: length ${out.length}`);
+      for (let i = 0; i < expected.length; i++) {
+        const d = Object.getOwnPropertyDescriptor(out, i);
+        expect(
+          d && Object.is(d.value, expected[i]) && d.writable && d.enumerable && d.configurable,
+          `${what}[${i}]: ${String(d?.value)}`,
+        );
+      }
+    };
+    exact(v.echoNumbers(specials), specials, 'specials');
+    exact(v.echoNumbers([]), [], 'empty');
+    const large = Array.from({ length: 100_000 }, (_, i) => i * 0.25 - 3);
+    exact(v.echoNumbers(large), large, 'large');
+    let intercepted = 0;
+    const trap = { get: () => -1, set: () => void intercepted++ };
+    polluted(Array.prototype, 0, trap, () =>
+      polluted(Object.prototype, 1, trap, () =>
+        // `get` innermost: `polluted` itself uses ordinary descriptors, which a polluted
+        // Object.prototype.get would turn into invalid accessor-plus-value descriptors.
+        polluted(Object.prototype, 'writable', { value: false, writable: true }, () =>
+          polluted(Object.prototype, 'get', { value: () => 0, writable: true }, () => {
+            exact(v.echoNumbers(specials), specials, 'polluted');
+            exact(
+              v.byteLengths([new ArrayBuffer(0), new ArrayBuffer(3)]),
+              [0, 3],
+              'polluted byteLengths',
+            );
+          }),
+        ),
+      ),
+    );
+    expect(intercepted === 0, `setter calls ${intercepted}`);
+    // Inherited non-writable indices neither drop nor reject elements.
+    polluted(Array.prototype, 0, { value: 9, writable: false }, () =>
+      polluted(Object.prototype, 1, { value: 9, writable: false }, () =>
+        exact(v.echoNumbers([1, 2, 3]), [1, 2, 3], 'non-writable inherited'),
+      ),
+    );
+    // A proxy in the prototype chain is never trapped while the result is built.
+    const traps: string[] = [];
+    let recording = false;
+    const record =
+      (name: string) =>
+      (...args: unknown[]) => {
+        if (recording) traps.push(`${name} ${String(args[1])}`);
+        return (Reflect as any)[name](...args);
+      };
+    const proxy = new Proxy(Object.create(Object.prototype), {
+      get: record('get'),
+      set: record('set'),
+      has: record('has'),
+      getOwnPropertyDescriptor: record('getOwnPropertyDescriptor'),
+      defineProperty: record('defineProperty'),
+    });
+    const arrayParent = Object.getPrototypeOf(Array.prototype);
+    Object.setPrototypeOf(Array.prototype, proxy);
+    let viaProxy: number[] = [];
+    try {
+      recording = true;
+      viaProxy = v.echoNumbers([4, 5, 6]);
+    } finally {
+      recording = false;
+      Object.setPrototypeOf(Array.prototype, arrayParent);
+    }
+    expect(traps.length === 0, `proxy traps: ${traps.join(', ')}`);
+    exact(viaProxy, [4, 5, 6], 'proxy ancestor');
+    // A failure between the prototype detach and its restore publishes nothing.
+    let failure = 'hook not compiled in';
+    if (env.failNumberFill) {
+      env.failNumberFill(true);
+      try {
+        exact(v.echoNumbers([]), [], 'empty under the failure hook');
+        let result: unknown = 'none';
+        try {
+          result = v.echoNumbers([1, 2, 3]);
+        } catch (e) {
+          failure = String(e);
+        }
+        expect(result === 'none', `a result was published: ${String(result)}`);
+        expect(/number fill failure forced/.test(failure), `failure: ${failure}`);
+      } finally {
+        env.failNumberFill(false);
+      }
+      expect(Object.getPrototypeOf(Array.prototype) === Object.prototype, 'Array.prototype intact');
+      exact(v.echoNumbers([7, 8]), [7, 8], 'after the failure');
+    }
+    return `${specials.length} specials, ${large.length} elements; forced fill failure: ${failure}`;
+  });
 
   await check(
     'proxies: traps run identically; throwing and invalid lengths; revoked proxies',

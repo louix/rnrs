@@ -126,6 +126,7 @@ async function phaseSuites(main: CounterModule, update: (s: string) => void) {
     ...(await runValuesSuite({
       collectGarbage,
       forceBytesCopyOut: (force) => runtimeBindings().forceBytesCopyOutForTesting!(force),
+      failNumberFill: (fail) => runtimeBindings().failNumberFillForTesting!(fail),
     })),
   );
   checks.push(...(await runBlake3Suite()));
@@ -273,6 +274,7 @@ export async function runIosDeviceTest(update: (s: string) => void) {
         hooksExposed: [
           'invalidateForTesting',
           'forceBytesCopyOutForTesting',
+          'failNumberFillForTesting',
           'collectGarbageForTesting',
           'reloadForTesting',
         ].filter((name) => typeof (runtimeBindings() as any)[name] === 'function'),

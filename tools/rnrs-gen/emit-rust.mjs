@@ -311,6 +311,7 @@ function writeExpr(t, value) {
     case 'native':
       return `native_into_js(env, ${value}, ${JSON.stringify(t.name)})`;
     case 'array':
+      if (t.of.k === 'number') return `number_array_into_js(${value}, env)`;
       return `array_into_js_with(${value}, env, &mut |value, env| ${writeExpr(t.of, 'value')})`;
     case 'nullable':
       return `nullable_into_js_with(${value}, env, &mut |value, env| ${writeExpr(t.of, 'value')})`;

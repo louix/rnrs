@@ -187,8 +187,8 @@ impl Drop for RnrsAdapter {
 /// Version of the C boundary (`ModuleTable`, `JsiVTable`, `ScalarBinding`, callbacks and
 /// status codes) mirrored by packages/runtime/cpp/RnrsAbi.h. The framework C++ accepts a table
 /// only with exactly this number and the struct sizes it was compiled with; any change to
-/// the boundary bumps it, and the exported symbol names carry it (`rnrs_module_v3_<crate>`).
-pub const RNRS_ABI: u32 = 3;
+/// the boundary bumps it, and the exported symbol names carry it (`rnrs_module_v5_<crate>`).
+pub const RNRS_ABI: u32 = 5;
 
 /// What one binary exports per module: identity, version data and every entry point the C++
 /// runtime calls for that module. Tables are immutable statics; the binary is linked
@@ -198,7 +198,7 @@ pub const RNRS_ABI: u32 = 3;
 /// through the table of the binary that allocated it.
 ///
 /// Built by generated code: `static T: ModuleTable = ModuleTable::new(&glue::x::MODULE, init);`
-/// plus `#[no_mangle] extern "C" fn rnrs_module_v3_<crate>() -> &'static ModuleTable`; a module
+/// plus `#[no_mangle] extern "C" fn rnrs_module_v5_<crate>() -> &'static ModuleTable`; a module
 /// that renders to surfaces adds `.with_surface(rnrs_surface::host::table())`.
 #[repr(C)]
 pub struct ModuleTable {
@@ -335,6 +335,10 @@ pub struct JsiVTable {
     /// `Object.entries` of a plain object (`Record<string, T>`, `JsonValue`); writes the new
     /// array's index. 0 ok, 1 not a plain object, 2 thrown.
     pub own_entries: extern "C" fn(*mut c_void, u32, *mut u32) -> u32,
+    /// A new array of `len` doubles read from `data` (borrowed for the whole synchronous call;
+    /// C++ may run framework JS before and while reading it), as own data properties; writes its
+    /// index. False if JS threw.
+    pub new_numbers: extern "C" fn(*mut c_void, *const f64, u32, *mut u32) -> bool,
 }
 
 static BYTES_ADOPTED: AtomicU64 = AtomicU64::new(0);
@@ -552,6 +556,13 @@ impl Env for JsiEnv<'_> {
     }
     fn set_index(&mut self, array: Val, index: u32, value: Val) -> Result<(), BindError> {
         if (self.vt.set_index)(self.ctx, self.ix(array), index, self.ix(value)) { Ok(()) } else { Err(BindError::Thrown) }
+    }
+    fn new_number_array(&mut self, values: &[f64]) -> Result<Val, BindError> {
+        let len = u32::try_from(values.len()).map_err(|_| BindError::range_error("array too long"))?;
+        let mut out = 0u32;
+        // `values` outlives the call (the caller's Vec is not touched until it returns); C++ never
+        // reads it after returning (or for len 0).
+        if (self.vt.new_numbers)(self.ctx, values.as_ptr(), len, &mut out) { Ok(self.val(out)) } else { Err(BindError::Thrown) }
     }
     fn to_bytes(&mut self, v: Val, out: &mut Vec<u8>) -> Result<(), BytesError> {
         let status = (self.vt.to_bytes)(self.ctx, self.ix(v), alloc_bytes, out as *mut Vec<u8> as *mut c_void);
@@ -991,6 +1002,76 @@ mod tests {
     }
 }
 
+#[cfg(test)]
+mod new_numbers_tests {
+    use super::*;
+    use std::cell::RefCell;
+
+    // A fake C++ side: only `new_numbers` (and `number`, for comparison) may be called.
+    #[derive(Default)]
+    struct Fake {
+        seen: RefCell<Vec<(usize, Vec<u64>)>>,
+        throw: bool,
+    }
+    extern "C" fn new_numbers(ctx: *mut c_void, data: *const f64, len: u32, out: *mut u32) -> bool {
+        let fake = unsafe { &*(ctx as *const Fake) };
+        let values = if len == 0 { Vec::new() } else { unsafe { std::slice::from_raw_parts(data, len as usize) }.iter().map(|x| x.to_bits()).collect() };
+        fake.seen.borrow_mut().push((len as usize, values));
+        unsafe { *out = 7 };
+        !fake.throw
+    }
+    extern "C" fn no_u32(_: *mut c_void, _: u32) -> u32 { unreachable!() }
+    extern "C" fn no_f64(_: *mut c_void, _: u32) -> f64 { unreachable!() }
+    extern "C" fn no_bool(_: *mut c_void, _: u32) -> bool { unreachable!() }
+    extern "C" fn no_prop(_: *mut c_void, _: u32, _: *const u8, _: usize, _: *mut u32) -> bool { unreachable!() }
+    extern "C" fn no_len(_: *mut c_void, _: u32, _: *mut f64) -> bool { unreachable!() }
+    extern "C" fn no_index(_: *mut c_void, _: u32, _: u32, _: *mut u32) -> bool { unreachable!() }
+    extern "C" fn no_value(_: *mut c_void) -> u32 { unreachable!() }
+    extern "C" fn no_number(_: *mut c_void, _: f64) -> u32 { unreachable!() }
+    extern "C" fn no_boolean(_: *mut c_void, _: bool) -> u32 { unreachable!() }
+    extern "C" fn no_string(_: *mut c_void, _: *const u8, _: usize) -> u32 { unreachable!() }
+    extern "C" fn no_set_property(_: *mut c_void, _: u32, _: *const u8, _: usize, _: u32) -> bool { unreachable!() }
+    extern "C" fn no_set_index(_: *mut c_void, _: u32, _: u32, _: u32) -> bool { unreachable!() }
+    extern "C" fn no_wrap(_: *mut c_void, _: *mut c_void, _: *mut u32) -> bool { unreachable!() }
+    extern "C" fn no_unwrap(_: *mut c_void, _: u32, _: *mut *const c_void) -> u32 { unreachable!() }
+    extern "C" fn no_to_bytes(_: *mut c_void, _: u32, _: extern "C" fn(*mut c_void, usize) -> *mut u8, _: *mut c_void) -> u32 { unreachable!() }
+    extern "C" fn no_new_bytes(_: *mut c_void, _: *mut u8, _: usize, _: usize, _: *mut u32) { unreachable!() }
+    extern "C" fn no_to_string(_: *mut c_void, _: u32, _: extern "C" fn(*mut c_void, usize) -> *mut u8, _: *mut c_void) -> usize { unreachable!() }
+    extern "C" fn no_numbers_in(_: *mut c_void, _: u32, _: u32, _: extern "C" fn(*mut c_void, usize, usize) -> *mut f64, _: *mut c_void, _: *mut u32, _: *mut u32) -> u32 { unreachable!() }
+    extern "C" fn no_entries(_: *mut c_void, _: u32, _: *mut u32) -> u32 { unreachable!() }
+
+    const VT: JsiVTable = JsiVTable {
+        kind: no_u32, to_number: no_f64, to_bool: no_bool, get_property: no_prop, array_length: no_len, get_index: no_index,
+        undefined: no_value, null: no_value, number: no_number, boolean: no_boolean, string: no_string, object: no_value,
+        set_property: no_set_property, array: no_u32, set_index: no_set_index, wrap_native: no_wrap, unwrap_native: no_unwrap,
+        to_bytes: no_to_bytes, new_bytes: no_new_bytes, to_string_into: no_to_string, number_array: no_numbers_in,
+        own_entries: no_entries, new_numbers,
+    };
+
+    #[test]
+    fn one_call_with_the_borrowed_doubles() {
+        let mut fake = Fake::default();
+        let values = [1.5, -0.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY];
+        {
+            let mut env = unsafe { JsiEnv::new(&VT, &raw mut fake as *mut c_void, 3) };
+            assert_eq!(env.new_number_array(&values), Ok(Val::new(7, 3)));
+            // Through the generated writer too; empty arrays still make one call (len 0).
+            assert_eq!(rnrs_core::bind::number_array_into_js(Vec::new(), &mut env), Ok(Val::new(7, 3)));
+        }
+        let seen = fake.seen.borrow();
+        assert_eq!(seen.len(), 2);
+        assert_eq!(seen[0], (5, values.iter().map(|x| x.to_bits()).collect()));
+        assert_eq!(seen[1], (0, vec![]));
+    }
+
+    #[test]
+    fn false_is_a_retained_exception() {
+        let mut fake = Fake { throw: true, ..Fake::default() };
+        let mut env = unsafe { JsiEnv::new(&VT, &raw mut fake as *mut c_void, 1) };
+        assert_eq!(env.new_number_array(&[1.0]), Err(BindError::Thrown));
+    }
+}
+
 /// Attribution counters (diagnostics builds only): writes [allocations, allocated bytes,
 /// events 0..8] to `out` (10 values). Rust-side event 4 counts adapter calls.
 ///
@@ -1112,7 +1193,7 @@ mod abi_contract {
 
     #[test]
     fn module_table_layout() {
-        assert_eq!(RNRS_ABI, 3);
+        assert_eq!(RNRS_ABI, 5);
         assert_eq!((offset_of!(ModuleTable, abi), offset_of!(ModuleTable, size)), (0, 4), "frozen prefix");
         assert_eq!((offset_of!(ModuleTable, vtable_size), offset_of!(ModuleTable, scalar_binding_size)), (8, 12));
         let slots = [
@@ -1142,12 +1223,12 @@ mod abi_contract {
             offset_of!(JsiVTable, set_property), offset_of!(JsiVTable, array), offset_of!(JsiVTable, set_index),
             offset_of!(JsiVTable, wrap_native), offset_of!(JsiVTable, unwrap_native), offset_of!(JsiVTable, to_bytes),
             offset_of!(JsiVTable, new_bytes), offset_of!(JsiVTable, to_string_into), offset_of!(JsiVTable, number_array),
-            offset_of!(JsiVTable, own_entries),
+            offset_of!(JsiVTable, own_entries), offset_of!(JsiVTable, new_numbers),
         ];
         for (i, offset) in slots.into_iter().enumerate() {
             assert_eq!(offset, i * P, "JsiVTable slot {i}");
         }
-        assert_eq!(size_of::<JsiVTable>(), 22 * P);
+        assert_eq!(size_of::<JsiVTable>(), 23 * P);
         assert_eq!(
             (offset_of!(ScalarBinding, args), offset_of!(ScalarBinding, result), offset_of!(ScalarBinding, definition), offset_of!(ScalarBinding, instance)),
             (0, 4, 8, 8 + P)
@@ -1238,9 +1319,10 @@ mod declared_error_tests {
     extern "C" fn to_string_into(_: *mut c_void, _: u32, _: extern "C" fn(*mut c_void, usize) -> *mut u8, _: *mut c_void) -> usize { unreachable!() }
     extern "C" fn number_array(_: *mut c_void, _: u32, _: u32, _: extern "C" fn(*mut c_void, usize, usize) -> *mut f64, _: *mut c_void, _: *mut u32, _: *mut u32) -> u32 { unreachable!() }
     extern "C" fn own_entries(_: *mut c_void, _: u32, _: *mut u32) -> u32 { unreachable!() }
+    extern "C" fn new_numbers(_: *mut c_void, _: *const f64, _: u32, _: *mut u32) -> bool { unreachable!() }
     static VT: JsiVTable = JsiVTable {
         kind, to_number, to_bool, get_property, array_length, get_index, undefined, null, number, boolean, string, object, set_property,
-        array, set_index, wrap_native, unwrap_native, to_bytes, new_bytes, to_string_into, number_array, own_entries,
+        array, set_index, wrap_native, unwrap_native, to_bytes, new_bytes, to_string_into, number_array, own_entries, new_numbers,
     };
 
     static METHODS: [MethodDef; 1] = [MethodDef { name: "busy", kind: MethodKind::Sync }];

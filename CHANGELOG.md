@@ -10,7 +10,12 @@
 - Opt-in declared errors: a method result `Throws<T, E>` makes the Rust method return
   `Result<T, E>`; `Err` throws or rejects a `DomainError` whose `data` is `E`, tested with the
   generated `is<E>` guard. Methods without `Throws` keep `Result<T, String>`.
-- The native module ABI is now 3: prebuilt module binaries must be rebuilt with this
+- Faster `number[]` results on Android and iOS (the native JSI backend): the whole array is
+  converted in one native call instead of one JS call per element. Results are unchanged: an ordinary array whose elements are own
+  data properties (inherited setters and read-only indices cannot intercept them). Generated
+  glue uses the new defaulted `rnrs_core::bind::Env::new_number_array`; custom backends work
+  unchanged, and the authoring API does not change.
+- The native module ABI is now 5: prebuilt module binaries must be rebuilt with this
   `@rnrs/runtime` (older ones are refused with a rebuild message). Web binaries are unaffected.
   Wrappers that declare errors need this `@rnrs/runtime` (call protocol 4).
 

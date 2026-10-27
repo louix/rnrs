@@ -33,6 +33,7 @@ const reflectGet = Reflect.get;
 const defineProperty = Object.defineProperty;
 const arrayIsArray = Array.isArray;
 const getPrototypeOf = Object.getPrototypeOf;
+const setPrototypeOf = Object.setPrototypeOf;
 const objectCreate = Object.create;
 const objectFreeze = Object.freeze;
 const weakMapGet = WeakMap.prototype.get;
@@ -112,6 +113,19 @@ export const conversionHelpers = Object.freeze({
       enumerable: true,
       configurable: true,
     } as PropertyDescriptor);
+  },
+  /** Native (Android/iOS JSI) number[] output, before the native fill of a fresh, unpublished array: sets its
+   *  prototype to null (so no inherited accessor, non-writable index or proxy can intercept the
+   *  indexed writes) and returns the original prototype for `restorePrototype`. */
+  detachPrototype(array: object): object | null {
+    const prototype = getPrototypeOf(array);
+    setPrototypeOf(array, null);
+    return prototype;
+  },
+  /** Native (Android/iOS JSI) number[] output, after the fill: puts back the exact prototype `detachPrototype`
+   *  returned, before the array is published. */
+  restorePrototype(array: object, prototype: object | null): void {
+    setPrototypeOf(array, prototype);
   },
   isArray(value: unknown): boolean {
     return arrayIsArray(value);

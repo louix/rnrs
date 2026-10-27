@@ -320,6 +320,12 @@ pub trait Env {
     fn set_property(&mut self, object: Val, key: &str, value: Val) -> Result<(), BindError>;
     fn array(&mut self, length: u32) -> Val;
     fn set_index(&mut self, array: Val, index: u32, value: Val) -> Result<(), BindError>;
+    /// A new array of `values` (`number[]` output). Backends may build it in one step, but must
+    /// produce what the default does: an ordinary array whose elements are own data properties
+    /// (`set_index` semantics) holding the exact IEEE values, with "array too long" past u32.
+    fn new_number_array(&mut self, values: &[f64]) -> Result<Val, BindError> {
+        number_array_by_element(self, values)
+    }
 
     /// Copies an ArrayBuffer's bytes into `out` (replacing its contents), after checking with
     /// framework helpers that `v` is a plain ArrayBuffer: not a view, not a
@@ -1003,6 +1009,21 @@ pub fn array_into_js_with<T>(values: Vec<T>, env: &mut dyn Env, write: Writer<'_
         env.set_index(array, i as u32, value)?;
     }
     Ok(array)
+}
+
+/// `Env::new_number_array`'s default: `array`, then `number` and `set_index` per element.
+pub fn number_array_by_element<E: Env + ?Sized>(env: &mut E, values: &[f64]) -> Result<Val, BindError> {
+    let array = env.array(u32::try_from(values.len()).map_err(|_| BindError::range_error("array too long"))?);
+    for (i, &x) in values.iter().enumerate() {
+        let value = env.number(x);
+        env.set_index(array, i as u32, value)?;
+    }
+    Ok(array)
+}
+
+/// `number[]` output (generated glue): one `Env::new_number_array` call for the whole array.
+pub fn number_array_into_js(values: Vec<f64>, env: &mut dyn Env) -> Result<Val, BindError> {
+    env.new_number_array(&values)
 }
 
 pub fn nullable_from_js_with<T>(env: &mut dyn Env, v: Val, path: &Path<'_>, read: Reader<'_, T>) -> Result<Option<T>, BindError> {

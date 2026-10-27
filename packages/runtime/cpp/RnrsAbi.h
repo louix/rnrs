@@ -3,7 +3,7 @@
 // and Rust module binaries (rust/rnrs-android `ModuleTable`). Each module binary, prebuilt and
 // sealed or source-built, exports one function per module:
 //
-//   const RnrsModuleV3* rnrs_module_v3_<crate>(void);
+//   const RnrsModuleV5* rnrs_module_v5_<crate>(void);
 //
 // It is called before the table is validated, so it may only return the address of a static
 // table. The C++ runtime reaches a module only through its table, keeps the table pointer with
@@ -26,7 +26,7 @@
 #include <cstddef>
 #include <cstdint>
 
-#define RNRS_ABI 3
+#define RNRS_ABI 5
 // The surface table (RnrsSurfaceV1), versioned on its own: rust/rnrs-android builds the module
 // table, packages/surface/rust (rnrs-surface) the surface table.
 #define RNRS_SURFACE_ABI 1
@@ -73,6 +73,11 @@ struct JsiVTable {
   // helper; writes the new [key, value][] array. 0 entries, 1 not a plain object, 2 exception
   // retained in call context.
   uint32_t (*ownEntries)(void*, uint32_t, uint32_t*);
+  // number[] output: a new array of len doubles from `data`, borrowed for the whole synchronous
+  // call (the runtime may run framework JS before and while reading it; data is not read when len
+  // is 0). Elements are own data properties, as setIndex defines them. Writes the array; false if
+  // JS threw (exception retained in the call context).
+  bool (*newNumbers)(void*, const double* data, uint32_t len, uint32_t* out);
 };
 // delivery: the latest post's state (RnrsDelivery.h values), read under the host lock.
 typedef uint8_t (*RnrsDeliveryCallback)(void*);
@@ -82,10 +87,10 @@ struct RnrsScalarBinding {
   const void* instance;
 };
 
-struct RnrsModuleV3 {
+struct RnrsModuleV5 {
   // Frozen in every version.
   uint32_t abi;   // RNRS_ABI the binary was built for
-  uint32_t size;  // sizeof(RnrsModuleV3) as the binary was built
+  uint32_t size;  // sizeof(RnrsModuleV5) as the binary was built
   // Checked with abi/size before the first call into the binary.
   uint32_t vtableSize;         // sizeof(JsiVTable) the binary expects
   uint32_t scalarBindingSize;  // sizeof(RnrsScalarBinding)
@@ -99,7 +104,7 @@ struct RnrsModuleV3 {
   // Once per process, after validation and before any other entry (idempotent per binary).
   void (*init)();
   bool (*setAppDataDir)(const uint8_t*, size_t);
-  RnrsAdapter* (*adapterNew)(const RnrsModuleV3* self, uint32_t maxInFlight, RnrsCallback notify,
+  RnrsAdapter* (*adapterNew)(const RnrsModuleV5* self, uint32_t maxInFlight, RnrsCallback notify,
       RnrsDeliveryCallback delivery, RnrsCallback release, void* ctx, char* error, size_t cap);
   bool (*adapterScalar)(const RnrsAdapter*, size_t index, uint32_t* method, RnrsScalarBinding*);
   uint32_t (*scalarCall)(const RnrsAdapter*, const RnrsScalarBinding*, const double* args, double* out,
@@ -145,7 +150,7 @@ struct RnrsSurfaceV1 {
   bool (*touch)(uint64_t key, uint64_t attachment, int32_t phase, int32_t pointer, float x, float y, int64_t timeMs);
   uint32_t (*liveSurfaces)();
 };
-typedef const RnrsModuleV3* (*RnrsModuleGetter)();
+typedef const RnrsModuleV5* (*RnrsModuleGetter)();
 // One entry of the generated registry (rnrs_registry.inc).
 struct RnrsModuleEntry {
   const char* symbol;
@@ -158,9 +163,9 @@ struct RnrsModuleEntry {
 #define RNRS_SLOT(type, field, i) \
   static_assert(offsetof(type, field) == (i) * sizeof(void*), #type "." #field " offset")
 #define RNRS_TABLE_SLOT(field, i) \
-  static_assert(offsetof(RnrsModuleV3, field) == 4 * sizeof(uint32_t) + (i) * sizeof(void*), "RnrsModuleV3." #field " offset")
-static_assert(offsetof(RnrsModuleV3, abi) == 0 && offsetof(RnrsModuleV3, size) == 4, "frozen RnrsModuleV3 prefix");
-static_assert(offsetof(RnrsModuleV3, vtableSize) == 8 && offsetof(RnrsModuleV3, scalarBindingSize) == 12, "RnrsModuleV3 header");
+  static_assert(offsetof(RnrsModuleV5, field) == 4 * sizeof(uint32_t) + (i) * sizeof(void*), "RnrsModuleV5." #field " offset")
+static_assert(offsetof(RnrsModuleV5, abi) == 0 && offsetof(RnrsModuleV5, size) == 4, "frozen RnrsModuleV5 prefix");
+static_assert(offsetof(RnrsModuleV5, vtableSize) == 8 && offsetof(RnrsModuleV5, scalarBindingSize) == 12, "RnrsModuleV5 header");
 RNRS_TABLE_SLOT(name, 0); RNRS_TABLE_SLOT(nameLen, 1); RNRS_TABLE_SLOT(hash, 2); RNRS_TABLE_SLOT(hashLen, 3);
 RNRS_TABLE_SLOT(build, 4); RNRS_TABLE_SLOT(buildLen, 5); RNRS_TABLE_SLOT(def, 6); RNRS_TABLE_SLOT(init, 7);
 RNRS_TABLE_SLOT(setAppDataDir, 8); RNRS_TABLE_SLOT(adapterNew, 9); RNRS_TABLE_SLOT(adapterScalar, 10);
@@ -169,7 +174,7 @@ RNRS_TABLE_SLOT(adapterStats, 14); RNRS_TABLE_SLOT(adapterCancel, 15); RNRS_TABL
 RNRS_TABLE_SLOT(adapterFree, 17); RNRS_TABLE_SLOT(adapterMethodFind, 18); RNRS_TABLE_SLOT(nativeShare, 19);
 RNRS_TABLE_SLOT(nativeSpecName, 20); RNRS_TABLE_SLOT(nativeRelease, 21); RNRS_TABLE_SLOT(bytesFree, 22);
 RNRS_TABLE_SLOT(diagnostics, 23); RNRS_TABLE_SLOT(surface, 24);
-static_assert(sizeof(RnrsModuleV3) == 4 * sizeof(uint32_t) + 25 * sizeof(void*), "RnrsModuleV3 size");
+static_assert(sizeof(RnrsModuleV5) == 4 * sizeof(uint32_t) + 25 * sizeof(void*), "RnrsModuleV5 size");
 #define RNRS_SURFACE_SLOT(field, i) \
   static_assert(offsetof(RnrsSurfaceV1, field) == 2 * sizeof(uint32_t) + (i) * sizeof(void*), "RnrsSurfaceV1." #field " offset")
 static_assert(offsetof(RnrsSurfaceV1, abi) == 0 && offsetof(RnrsSurfaceV1, size) == 4, "frozen RnrsSurfaceV1 prefix");
@@ -184,8 +189,8 @@ RNRS_SLOT(JsiVTable, boolean, 9); RNRS_SLOT(JsiVTable, string, 10); RNRS_SLOT(Js
 RNRS_SLOT(JsiVTable, setProperty, 12); RNRS_SLOT(JsiVTable, array, 13); RNRS_SLOT(JsiVTable, setIndex, 14);
 RNRS_SLOT(JsiVTable, wrapNative, 15); RNRS_SLOT(JsiVTable, unwrapNative, 16); RNRS_SLOT(JsiVTable, toBytes, 17);
 RNRS_SLOT(JsiVTable, newBytes, 18); RNRS_SLOT(JsiVTable, toStringInto, 19); RNRS_SLOT(JsiVTable, numberArray, 20);
-RNRS_SLOT(JsiVTable, ownEntries, 21);
-static_assert(sizeof(JsiVTable) == 22 * sizeof(void*), "JsiVTable size");
+RNRS_SLOT(JsiVTable, ownEntries, 21); RNRS_SLOT(JsiVTable, newNumbers, 22);
+static_assert(sizeof(JsiVTable) == 23 * sizeof(void*), "JsiVTable size");
 static_assert(offsetof(RnrsScalarBinding, args) == 0 && offsetof(RnrsScalarBinding, result) == 4 &&
                   offsetof(RnrsScalarBinding, definition) == 8 &&
                   offsetof(RnrsScalarBinding, instance) == 8 + sizeof(void*) &&

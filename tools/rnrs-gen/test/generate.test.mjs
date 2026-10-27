@@ -1,7 +1,7 @@
 // Generation: determinism, hash semantics, committed-interface staleness, Counter/Meter IR.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { appPackages, main, plan, FRAMEWORK_SPEC, ROOT } from '../cli.mjs';
 import { emitGlue } from '../emit-rust.mjs';
@@ -23,6 +23,59 @@ test('numeric input arrays select the fused reader while generic containers rema
   assert.match(generated, /env\.number_array\(/);
   assert.match(generated, /array_from_js_with\(/);
   assert.match(generated, /array_into_js_with\(/);
+});
+
+test('numeric output arrays select the bulk writer at every nesting level', () => {
+  const dir = path.join(ROOT, '.generated/rnrs-test-specs/number-output');
+  mkdirSync(dir, { recursive: true });
+  const spec = path.join(dir, 'number-output.spec.ts');
+  writeFileSync(
+    spec,
+    `import type { NativeModule } from '@rnrs/runtime/spec';
+export interface Row { xs: number[]; maybe: number[] | null; note?: number[] }
+export type Pick = { kind: 'some'; xs: number[] } | { kind: 'none' };
+export interface NumbersModule extends NativeModule {
+  flat(): number[];
+  grid(): number[][];
+  maybe(): number[] | null;
+  row(): Row;
+  pick(): Pick;
+  later(): Promise<number[]>;
+  strings(): string[];
+  sum(xs: number[]): number;
+}
+`,
+  );
+  const { ir, diagnostics } = parseSpec(spec, { frameworkSpec: FRAMEWORK_SPEC, root: ROOT });
+  assert.deepEqual(diagnostics, []);
+  const glue = emitGlue(ir, { crate: 'test', moduleType: 'Numbers' });
+  const bulk = (v) => `number_array_into_js(${v}, env)`;
+  assert.ok(glue.includes(bulk('result')), 'top-level and async results');
+  assert.equal(
+    glue.split(`Ok(pending(move |env: &mut dyn Env| ${bulk('result')}))`).length,
+    2,
+    'async',
+  );
+  assert.ok(
+    glue.includes(`array_into_js_with(result, env, &mut |value, env| ${bulk('value')})`),
+    'number[][]',
+  );
+  assert.ok(
+    glue.includes(`nullable_into_js_with(result, env, &mut |value, env| ${bulk('value')})`),
+    'number[] | null',
+  );
+  assert.ok(glue.includes(`let value = ${bulk('record.xs')}?;`), 'record field');
+  assert.ok(
+    glue.includes(`nullable_into_js_with(record.maybe, env, &mut |value, env| ${bulk('value')})?;`),
+    'nullable field',
+  );
+  assert.ok(glue.includes(`let value = ${bulk('value')}?;`), 'optional field');
+  assert.ok(glue.includes(`let value = ${bulk('field_xs')}?;`), 'union variant field');
+  // Element-wise output remains for other element types; numeric input keeps its fused reader.
+  assert.ok(
+    glue.includes('array_into_js_with(result, env, &mut |value, env| IntoJs::into_js(value, env))'),
+  );
+  assert.match(glue, /env\.number_array\(/);
 });
 
 test('scalar entries select only required synchronous module primitives', () => {

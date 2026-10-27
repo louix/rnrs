@@ -41,10 +41,10 @@ bool dirSecond(const uint8_t*, size_t) {
 void neverInit() { neverCalled(); }
 bool neverDir(const uint8_t*, size_t) { neverCalled(); }
 
-RnrsModuleV3 table(const char* name, const char* hash, void (*init)(), bool (*dir)(const uint8_t*, size_t)) {
-  RnrsModuleV3 t{};
+RnrsModuleV5 table(const char* name, const char* hash, void (*init)(), bool (*dir)(const uint8_t*, size_t)) {
+  RnrsModuleV5 t{};
   t.abi = RNRS_ABI;
-  t.size = sizeof(RnrsModuleV3);
+  t.size = sizeof(RnrsModuleV5);
   t.vtableSize = sizeof(JsiVTable);
   t.scalarBindingSize = sizeof(RnrsScalarBinding);
   t.name = name, t.nameLen = std::strlen(name);
@@ -54,10 +54,10 @@ RnrsModuleV3 table(const char* name, const char* hash, void (*init)(), bool (*di
   return t;
 }
 
-const RnrsModuleV3 kGood = table("Good", "h1", initGood, dirGood);
-const RnrsModuleV3 kSecond = table("Second", "h2", initGood, dirSecond);
-const RnrsModuleV3 kDuplicate = table("Good", "h1", neverInit, neverDir);
-const RnrsModuleV3 kBadVtable = [] {
+const RnrsModuleV5 kGood = table("Good", "h1", initGood, dirGood);
+const RnrsModuleV5 kSecond = table("Second", "h2", initGood, dirSecond);
+const RnrsModuleV5 kDuplicate = table("Good", "h1", neverInit, neverDir);
+const RnrsModuleV5 kBadVtable = [] {
   auto t = table("BadVtable", "h", neverInit, neverDir);
   t.vtableSize += sizeof(void*);
   return t;
@@ -69,13 +69,13 @@ struct OtherAbi {
 } kOtherAbi{};
 }  // namespace
 
-extern "C" const RnrsModuleV3* rnrs_module_v3_good() { return &kGood; }
-extern "C" const RnrsModuleV3* rnrs_module_v3_second() { return &kSecond; }
-extern "C" const RnrsModuleV3* rnrs_module_v3_duplicate() { return &kDuplicate; }
-extern "C" const RnrsModuleV3* rnrs_module_v3_bad_vtable() { return &kBadVtable; }
-extern "C" const RnrsModuleV3* rnrs_module_v3_other_abi() {
+extern "C" const RnrsModuleV5* rnrs_module_v5_good() { return &kGood; }
+extern "C" const RnrsModuleV5* rnrs_module_v5_second() { return &kSecond; }
+extern "C" const RnrsModuleV5* rnrs_module_v5_duplicate() { return &kDuplicate; }
+extern "C" const RnrsModuleV5* rnrs_module_v5_bad_vtable() { return &kBadVtable; }
+extern "C" const RnrsModuleV5* rnrs_module_v5_other_abi() {
   std::memset(kOtherAbi.garbage, 0xff, sizeof kOtherAbi.garbage);
-  return reinterpret_cast<const RnrsModuleV3*>(&kOtherAbi);
+  return reinterpret_cast<const RnrsModuleV5*>(&kOtherAbi);
 }
 
 int main() {
@@ -89,9 +89,9 @@ int main() {
   CHECK(rnrs::findModule("Good", "h1", error) == &kGood, "found: %s", error.c_str());
   CHECK(!rnrs::findModule("Good", "stale", error) && error.find("different specs") != std::string::npos, "%s", error.c_str());
   CHECK(!rnrs::findModule("BadVtable", "h", error), "a table with other struct sizes is not used");
-  CHECK(error.find("rnrs_module_v3_other_abi was built for rnrs ABI 4") != std::string::npos, "%s", error.c_str());
-  CHECK(error.find("rnrs_module_v3_bad_vtable was built with different boundary struct sizes") != std::string::npos, "%s", error.c_str());
-  CHECK(error.find("rnrs_module_v3_duplicate defines module Good, which another linked binary also defines") != std::string::npos,
+  CHECK(error.find("rnrs_module_v5_other_abi was built for rnrs ABI 6") != std::string::npos, "%s", error.c_str());
+  CHECK(error.find("rnrs_module_v5_bad_vtable was built with different boundary struct sizes") != std::string::npos, "%s", error.c_str());
+  CHECK(error.find("rnrs_module_v5_duplicate defines module Good, which another linked binary also defines") != std::string::npos,
         "%s", error.c_str());
   CHECK(error.find("linked: Good, Second") != std::string::npos, "%s", error.c_str());
   CHECK(gInits == 2, "init does not run again");

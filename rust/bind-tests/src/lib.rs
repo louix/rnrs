@@ -149,12 +149,14 @@ pub struct MockEnv {
     pub thrown: Option<String>,
     /// `Array.prototype`: array holes and indices past the end read from here (keys "0", "1", ...).
     pub array_proto: Rc<Obj>,
+    /// Lengths of the arrays built through `new_number_array` (the generated `number[]` path).
+    pub number_arrays: Vec<usize>,
 }
 
 impl MockEnv {
     pub fn new(generation: u64) -> Self {
         static EPOCH: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(1);
-        Self { arena: Vec::new(), epoch: EPOCH.fetch_add(1, std::sync::atomic::Ordering::Relaxed), generation, open: true, thrown: None, array_proto: Rc::default() }
+        Self { arena: Vec::new(), epoch: EPOCH.fetch_add(1, std::sync::atomic::Ordering::Relaxed), generation, open: true, thrown: None, array_proto: Rc::default(), number_arrays: Vec::new() }
     }
     pub fn put(&mut self, v: V) -> Val {
         self.arena.push(v);
@@ -300,6 +302,10 @@ impl Env for MockEnv {
             }
             _ => Err(BindError::type_error("not an array")),
         }
+    }
+    fn new_number_array(&mut self, values: &[f64]) -> Result<Val, BindError> {
+        self.number_arrays.push(values.len());
+        rnrs_core::bind::number_array_by_element(self, values)
     }
     fn to_bytes(&mut self, v: Val, out: &mut Vec<u8>) -> Result<(), rnrs_core::bind::BytesError> {
         use rnrs_core::bind::BytesError;

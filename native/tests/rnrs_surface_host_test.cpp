@@ -107,10 +107,10 @@ const RnrsSurfaceV1 kOtherAbi = [] {
 void init() { event("init"); }
 bool dir(const uint8_t*, size_t) { return true; }
 
-RnrsModuleV3 module(const char* name, const RnrsSurfaceV1* surface) {
-  RnrsModuleV3 t{};
+RnrsModuleV5 module(const char* name, const RnrsSurfaceV1* surface) {
+  RnrsModuleV5 t{};
   t.abi = RNRS_ABI;
-  t.size = sizeof(RnrsModuleV3);
+  t.size = sizeof(RnrsModuleV5);
   t.vtableSize = sizeof(JsiVTable);
   t.scalarBindingSize = sizeof(RnrsScalarBinding);
   t.name = name, t.nameLen = std::strlen(name);
@@ -120,12 +120,12 @@ RnrsModuleV3 module(const char* name, const RnrsSurfaceV1* surface) {
   t.surface = surface;
   return t;
 }
-const RnrsModuleV3 kA = module("A", &A::table);
-const RnrsModuleV3 kHeadless = module("Headless", nullptr);
-const RnrsModuleV3 kOther = module("OtherSurfaceAbi", &kOtherAbi);
-const RnrsModuleV3 kB1 = module("B1", &B::table);
-const RnrsModuleV3 kB2 = module("B2", &B::table);
-const RnrsModuleV3 kUnbindable = [] {
+const RnrsModuleV5 kA = module("A", &A::table);
+const RnrsModuleV5 kHeadless = module("Headless", nullptr);
+const RnrsModuleV5 kOther = module("OtherSurfaceAbi", &kOtherAbi);
+const RnrsModuleV5 kB1 = module("B1", &B::table);
+const RnrsModuleV5 kB2 = module("B2", &B::table);
+const RnrsModuleV5 kUnbindable = [] {
   Unbindable::owner = 77;  // already bound elsewhere: binding to another owner fails
   return module("Unbindable", &Unbindable::table);
 }();
@@ -136,12 +136,12 @@ void releaseWindow(void*) { gWindowRefsReleased++; }
 uint64_t key(uint32_t owner, uint32_t local) { return (uint64_t{owner} << 32) | local; }
 }  // namespace
 
-extern "C" const RnrsModuleV3* rnrs_module_v3_a() { return &kA; }
-extern "C" const RnrsModuleV3* rnrs_module_v3_headless() { return &kHeadless; }
-extern "C" const RnrsModuleV3* rnrs_module_v3_other_surface_abi() { return &kOther; }
-extern "C" const RnrsModuleV3* rnrs_module_v3_b1() { return &kB1; }
-extern "C" const RnrsModuleV3* rnrs_module_v3_b2() { return &kB2; }
-extern "C" const RnrsModuleV3* rnrs_module_v3_unbindable() { return &kUnbindable; }
+extern "C" const RnrsModuleV5* rnrs_module_v5_a() { return &kA; }
+extern "C" const RnrsModuleV5* rnrs_module_v5_headless() { return &kHeadless; }
+extern "C" const RnrsModuleV5* rnrs_module_v5_other_surface_abi() { return &kOther; }
+extern "C" const RnrsModuleV5* rnrs_module_v5_b1() { return &kB1; }
+extern "C" const RnrsModuleV5* rnrs_module_v5_b2() { return &kB2; }
+extern "C" const RnrsModuleV5* rnrs_module_v5_unbindable() { return &kUnbindable; }
 
 int main() {
   using namespace rnrs;

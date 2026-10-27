@@ -24,5 +24,8 @@ facebook::jsi::Object installModuleAdapter(
 // Test hook: make ArrayBuffer results take the copy fallback, as if the engine refused
 // external storage, so that path can be exercised on an engine that never refuses.
 void setForceBytesCopyOutForTesting(bool force);
+// Test hook: number[] results throw after the first native element write, between the
+// prototype detach and its restore, so failure before publication can be exercised.
+void setFailNumberFillForTesting(bool fail);
 #endif
 }  // namespace rnrs
