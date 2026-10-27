@@ -260,7 +260,7 @@ export function plan(packages, { genDir = GEN_DIR } = {}) {
     }
     outputs.push({
       file: path.join(pkg.cratePath, 'src/rnrs_interface.rs'),
-      content: emitInterface(ir, { core }),
+      content: emitInterface(ir, { core, moduleType: pkg.moduleType }),
       committed: true,
       kind: 'interface',
     });

@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { parseSpec } from '../parse.mjs';
-import { emitInterface } from '../emit-rust.mjs';
+import { emitInterface, holdsNative, valueTypesWithNatives } from '../emit-rust.mjs';
 import { emitTs } from '../emit-ts.mjs';
 import { FRAMEWORK_SPEC, ROOT } from '../cli.mjs';
 
@@ -63,12 +63,6 @@ const cases = [
     mod('  f(): Record<string, Promise<number>>;'),
     2,
     /Promise is only supported as a method result/,
-  ],
-  [
-    'native in Record',
-    `export interface O extends NativeObject {\n  v(): number;\n}\n${mod('  f(x: Record<string, O>): void;')}`,
-    5,
-    /native objects in Record values are not supported yet/,
   ],
   [
     'recursive record through Record',
@@ -215,12 +209,6 @@ const cases = [
     2,
     /dispose is reserved/,
   ],
-  [
-    'object method other native',
-    `export interface A extends NativeObject {\n  b(): B;\n}\nexport interface B extends NativeObject {\n  x(): number;\n}\n${mod('  a(): A;')}`,
-    2,
-    /object methods may only return their own native type/,
-  ],
   ['module passed', mod('  f(m: M): void;'), 2, /NativeModule cannot be passed or returned/],
   [
     'generic alias',
@@ -263,12 +251,6 @@ const cases = [
     `interface Node {\n  next: Node | null;\n}\n${mod('  f(n: Node): void;')}`,
     2,
     /recursive value types are not supported yet/,
-  ],
-  [
-    'native in record',
-    `export interface O extends NativeObject {\n  v(): number;\n}\ninterface R {\n  o: O;\n}\n${mod('  f(r: R): void;')}`,
-    5,
-    /native objects inside value types are not supported yet/,
   ],
   [
     'undefined field',
@@ -323,12 +305,6 @@ const cases = [
     `type U =\n  | {k: '1'}\n  | {k: '2'};\n${mod('  f(u: U): void;')}`,
     2,
     /cannot be turned into a Rust variant name/,
-  ],
-  [
-    'native in variant',
-    `export interface O extends NativeObject {\n  v(): number;\n}\ntype U =\n  | {k: 'a'; o: O}\n  | {k: 'b'};\n${mod('  f(u: U): void;')}`,
-    5,
-    /native objects inside value types are not supported yet/,
   ],
   ['TS error', mod('  f(x: Nope): void;'), 2, /TypeScript: Cannot find name 'Nope'/],
 ];
@@ -641,6 +617,99 @@ test('Record<string, T> and JsonValue compose with the other value types', () =>
     }).ir,
   );
   assert.doesNotMatch(plain, /BTreeMap|JsonValue/);
+});
+
+test('native objects compose: other native types in object methods, records, unions and arrays', () => {
+  const file = path.join(dir, 'composition.spec.ts');
+  writeFileSync(
+    file,
+    `import type {NativeModule, NativeObject} from '@rnrs/runtime/spec';
+export interface Statement extends NativeObject {
+  database(): Database;
+}
+export interface Database extends NativeObject {
+  prepare(sql: string): Statement;
+  prepareAll(sql: string[]): Promise<Statement[]>;
+  prepared(sql: string): Prepared;
+  pick(slot: Slot | null): Statement | null;
+}
+export interface Prepared {
+  statement: Statement;
+  others: Statement[];
+  maybe?: Statement;
+}
+export type Slot = {kind: 'stmt'; statement: Statement | null} | {kind: 'empty'};
+export interface M extends NativeModule {
+  open(): Database;
+}
+`,
+  );
+  const { ir, diagnostics } = parseSpec(file, { frameworkSpec: FRAMEWORK_SPEC, root: ROOT });
+  assert.deepEqual(diagnostics, []);
+  const method = (name) => ir.methods.find((m) => m.name === name);
+  const statement = { k: 'native', name: 'Statement' };
+  assert.deepEqual(method('database').returns, { k: 'native', name: 'Database' });
+  assert.deepEqual(method('prepare').returns, statement);
+  assert.deepEqual(method('prepareAll').returns, { k: 'array', of: statement });
+  assert.deepEqual(method('pick').params[0].type, {
+    k: 'nullable',
+    of: { k: 'union', name: 'Slot' },
+  });
+  assert.deepEqual(ir.records[0].fields, [
+    { name: 'statement', type: statement, optional: false },
+    { name: 'others', type: { k: 'array', of: statement }, optional: false },
+    { name: 'maybe', type: statement, optional: true },
+  ]);
+  assert.deepEqual(ir.unions[0].variants[0].fields, [
+    { name: 'statement', type: { k: 'nullable', of: statement }, optional: false },
+  ]);
+});
+
+test('Record values may hold native objects, directly or inside records', () => {
+  const file = path.join(dir, 'native-map.spec.ts');
+  writeFileSync(
+    file,
+    `import type {NativeModule, NativeObject} from '@rnrs/runtime/spec';
+export interface Item extends NativeObject {
+  byName(): Record<string, Item>;
+}
+export interface Held {
+  item: Item;
+}
+export interface Plain {
+  n: number;
+}
+export interface M extends NativeModule {
+  f(a: Record<string, Item | null>, b: Record<string, Held>[]): Promise<Record<string, Held>>;
+  g(p: Record<string, Plain>): Plain;
+}
+`,
+  );
+  const { ir, diagnostics } = parseSpec(file, { frameworkSpec: FRAMEWORK_SPEC, root: ROOT });
+  assert.deepEqual(diagnostics, []);
+  const item = { k: 'native', name: 'Item' };
+  const f = ir.methods.find((m) => m.name === 'f');
+  assert.deepEqual(f.params[0].type, { k: 'map', of: { k: 'nullable', of: item } });
+  assert.deepEqual(f.returns, { k: 'map', of: { k: 'record', name: 'Held' } });
+  // One transitive rule: Held holds a handle, Plain does not.
+  const holds = valueTypesWithNatives(ir);
+  assert.deepEqual([...holds], ['Held']);
+  assert.ok(holdsNative(f.returns, holds) && holdsNative(f.params[1].type, holds));
+  assert.ok(!holdsNative(ir.methods.find((m) => m.name === 'g').params[0].type, holds));
+  const rust = emitInterface(ir, { moduleType: 'Module' });
+  assert.match(rust, /pub type ItemImpl = <crate::Module as M>::ItemImpl;/);
+  assert.match(rust, /fn by_name\(&self\) -> Result<BTreeMap<String, Native<Self>>, String>;/);
+  assert.match(rust, /#\[derive\(Debug, Clone\)\]\npub struct Held/);
+  assert.match(rust, /#\[derive\(Debug, Clone, PartialEq\)\]\npub struct Plain/);
+});
+
+test('a record reached again through a native object is not a recursive value type', () => {
+  assert.deepEqual(
+    diagnose(
+      `export interface Tree extends NativeObject {\n  root(): Node;\n}\ninterface Node {\n  tree: Tree;\n  label: string;\n}\n${mod('  t(): Tree;\n  n(n: Node): Node;')}`,
+    ),
+    [],
+  );
 });
 
 test('a valid spec has no diagnostics', () => {

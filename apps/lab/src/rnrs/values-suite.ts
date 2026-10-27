@@ -4,6 +4,8 @@
 // they also agree on the observable JS behaviour.
 import {
   Bag,
+  Shader,
+  Statement,
   createValuesModuleForTesting,
   valuesModule,
   type Event,
@@ -1457,6 +1459,115 @@ export async function runValuesSuite(env: ValuesEnv): Promise<CheckResult[]> {
       }
     },
   );
+
+  await check('native objects compose: factories, consumers and graph cycles', () => {
+    const db = v.openDatabase('main');
+    const statement = db.prepare('select 1');
+    expect(statement instanceof Statement && statement.sql() === 'select 1', 'prepare');
+    expect(statement.database().name() === 'main', 'statement -> database');
+    const paint = v.paint();
+    expect(paint.shader() === null, 'no shader yet');
+    paint.setShader(v.shader('linear'));
+    const held = paint.shader();
+    expect(held instanceof Shader && held.name() === 'linear', 'paint holds the shader');
+    paint.setShader(null);
+    expect(paint.shader() === null, 'cleared');
+  });
+
+  await check('native handles inside records, unions, arrays and optional values', async () => {
+    const db = v.openDatabase('main');
+    const shader = v.shader('s');
+    const prepared = db.prepared('q', shader);
+    expect(
+      prepared.statement instanceof Statement &&
+        prepared.statement.sql() === 'q' &&
+        prepared.shader instanceof Shader &&
+        prepared.shader.name() === 's',
+      'record output',
+    );
+    const bare = db.prepared('r');
+    expect(!Object.prototype.hasOwnProperty.call(bare, 'shader'), 'absent optional handle');
+    const [a, b] = [db.prepare('a'), db.prepare('b')];
+    const record = { statement: prepared.statement, sql: 'q', shader, others: [a, b] };
+    expect(db.describePrepared(record) === 'q|s|a,b', 'record input');
+    const echoed = v.echoPrepared(record);
+    expect(echoed.others[1] instanceof Statement && echoed.others[1].sql() === 'b', 'round trip');
+    expect(v.maybePrepared(null) === null, 'nullable record');
+    const slots = v.statementSlots(db);
+    const many = slots[1];
+    expect(
+      slots[0].kind === 'one' &&
+        slots[0].statement.sql() === 'a' &&
+        many.kind === 'many' &&
+        many.first === null &&
+        many.statements.map((s) => s.sql()).join() === 'a,b' &&
+        slots[2].kind === 'empty',
+      'union output',
+    );
+    expect(db.pick({ kind: 'many', statements: [], first: b })?.sql() === 'b', 'union input');
+    expect(db.pick(null) === null, 'nullable union');
+    const all = await db.prepareAll(['x', 'y']);
+    expect(all.map((s) => s.sql()).join() === 'x,y', 'async array');
+    const later = await v.preparedLater(db, 'later', 1);
+    expect(later.statement.sql() === 'later' && later.others[0].sql() === 'later', 'async record');
+  });
+
+  await check('nested handles: wrong type, disposed and other-generation handles fail', () => {
+    const db = v.openDatabase('main');
+    const shader = v.shader('s');
+    const record = (statement: unknown) =>
+      ({ statement, sql: 'q', others: [] }) as unknown as Parameters<typeof db.describePrepared>[0];
+    throws(() => db.describePrepared(record(shader)), 'TypeError: p.statement must be a Statement');
+    throws(() => db.describePrepared(record({})), 'TypeError: p.statement must be a Statement');
+    throws(
+      () => db.describePrepared(record(1)),
+      'TypeError: p.statement must be a Statement, got a number',
+    );
+    const gone = db.prepare('gone');
+    gone.dispose();
+    throws(() => db.describePrepared(record(gone)), 'Error: Statement is disposed');
+    const other = createValuesModuleForTesting(4);
+    try {
+      const foreign = other.openDatabase('other').prepare('x');
+      throws(
+        () => db.describePrepared(record(foreign)),
+        'Error: Statement belongs to a closed runtime adapter',
+      );
+    } finally {
+      other.teardown();
+    }
+  });
+
+  await check('native handles in Record values, directly and inside records', async () => {
+    const db = v.openDatabase('main');
+    const [a, b] = [db.prepare('a'), db.prepare('b')];
+    const direct = v.echoStatementsByName({ x: a, y: b });
+    expect(
+      direct.x instanceof Statement && direct.x.sql() === 'a' && direct.y.sql() === 'b',
+      'direct',
+    );
+    const nested = v.echoPreparedByName({ p: { statement: a, sql: 'a', others: [b] }, n: null });
+    expect(
+      nested.p?.statement instanceof Statement &&
+        nested.p.others[0].sql() === 'b' &&
+        nested.n === null,
+      'inside records',
+    );
+    throws(
+      () => v.echoStatementsByName({ s: v.shader('s') } as any),
+      'TypeError: m.s must be a Statement',
+    );
+    const later = await v.statementsByNameLater(db, ['x'], 1);
+    expect(later.x instanceof Statement && later.x.sql() === 'x', 'async');
+  });
+
+  await check('async calls own their handles after JS disposes them', async () => {
+    const paint = v.paint();
+    const shader = v.shader('held');
+    const name = paint.shaderNameLater(shader, 20);
+    shader.dispose();
+    expect((await name) === 'held', 'the task still had the shader');
+  });
 
   await check('no settlement violations', () => {
     expect(v.violations.length === 0, v.violations.join('; '));

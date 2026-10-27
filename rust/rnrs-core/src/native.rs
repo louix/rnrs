@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt;
 use std::ops::Deref;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -83,6 +84,14 @@ impl<T: ?Sized> Drop for Counted<T> {
 impl<T: ?Sized> Clone for Native<T> {
     fn clone(&self) -> Self {
         Self(Arc::clone(&self.0))
+    }
+}
+
+/// Opaque: the implementation type's name, not its contents (`T` need not be `Debug`), so
+/// generated records holding handles can derive `Debug`.
+impl<T: ?Sized> fmt::Debug for Native<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Native<{}>", std::any::type_name::<T>())
     }
 }
 

@@ -542,10 +542,6 @@ export function parseSpec(specPath, { frameworkSpec, root }) {
     }
     const of = mapNode(value, { ...ctx, position: 'element' });
     if (of === ERR) return ERR;
-    if (containsNative(of)) {
-      fail(node, 'native objects in Record values are not supported yet');
-      return ERR;
-    }
     if (!dynamicUses.has('BTreeMap')) dynamicUses.set('BTreeMap', node);
     return { k: 'map', of };
   }
@@ -624,10 +620,6 @@ export function parseSpec(specPath, { frameworkSpec, root }) {
           member,
           `${owner}.${name}: optional field of a nullable type has three states (missing, null, value) and is rejected; choose x?: T or x: T | null`,
         );
-        continue;
-      }
-      if (containsNative(type)) {
-        fail(member, `${owner}.${name}: native objects inside value types are not supported yet`);
         continue;
       }
       fields.push({ name, type, optional });
@@ -764,10 +756,6 @@ export function parseSpec(specPath, { frameworkSpec, root }) {
     return { k: 'union', name };
   }
 
-  function containsNative(type) {
-    return type.k === 'native' || (type.of && containsNative(type.of));
-  }
-
   function methodsOf(decl, owner) {
     const reserved = owner ? RESERVED_OBJECT : RESERVED_MODULE;
     const methods = [];
@@ -867,21 +855,10 @@ export function parseSpec(specPath, { frameworkSpec, root }) {
           ok = false;
           continue;
         }
-        if (type.k === 'native' && owner && type.name !== owner) {
-          fail(p, `${name}: object methods may only take their own native type (${owner}) for now`);
-          ok = false;
-        }
         params.push({ name: p.name.text, type, optional });
       }
       if (returns === ERR) continue;
       if (isAsync) returns = returns.of;
-      if (owner && containsNative(returns) && !(returns.k === 'native' && returns.name === owner)) {
-        fail(
-          member.type,
-          `${name}: object methods may only return their own native type (${owner}) for now`,
-        );
-        continue;
-      }
       if (ok) methods.push({ name, owner, async: isAsync, params, returns, line: lineOf(member) });
     }
     // Generated validate_<method> hooks share the trait namespace with the methods.

@@ -89,7 +89,7 @@ fn counts(&self) -> Result<BTreeMap<String, f64>, String>;
 ```
 
 `Record<string, T>` takes any supported value type `T`, including records, unions, nested
-records and `JsonValue`. Keys must be `string`; index signatures are rejected in favour of
+records, `JsonValue` and [native objects](#native-objects). Keys must be `string`; index signatures are rejected in favour of
 `Record<string, T>`.
 
 `JsonValue` is `null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue }`.
@@ -142,9 +142,48 @@ An interface extending `NativeObject` describes a Rust object held by reference.
 trait is implemented by an associated type of the module, such as `type CounterImpl = Counter`.
 Methods receive and return `Native<T>` handles; rnrs validates their type, runtime and liveness.
 
-Module methods can use any native-object type declared in the spec. Object methods can use
-only their own native-object type. Native objects cannot be embedded in records or unions;
-arrays of native objects returned by object methods are unsupported.
+Native objects compose like other types. Module and object methods can take and return any
+native-object type declared in the spec, and records, union variants, arrays, `Record` values
+and optional or nullable values can hold them:
+
+```ts
+export interface Statement extends NativeObject {
+  sql(): string;
+}
+export interface Database extends NativeObject {
+  prepare(sql: string): Statement;
+  prepared(sql: string): Prepared;
+}
+export interface Prepared {
+  statement: Statement;
+  others: Statement[];
+}
+```
+
+Outside the module trait, the interface names each such type through a generated alias of the
+module's associated type, `pub type StatementImpl = <crate::Db as DbModule>::StatementImpl;`
+(`crate::Db` is `rustNative.rust.module`). Implementations write their concrete types:
+
+```rust
+impl spec::Database for Database {
+    fn prepare(&self, sql: String) -> Result<Native<Statement>, String> {
+        Ok(Native::new(Statement { sql }))
+    }
+    fn prepared(&self, sql: String) -> Result<spec::Prepared, String> { /* ... */ }
+}
+```
+
+The aliases always name the configured module's types. Another type implementing the module
+trait (a test double, say) may choose its own associated types, but wherever an alias appears
+(other objects' methods, records, unions) it still means the configured module's type, so the
+double must use that type there. Native types named only by module methods and by their own
+trait are not affected. The generated bindings only ever use the configured module. Records and unions holding handles derive `Debug` and
+`Clone` but not `PartialEq`. Native-object types belong to one spec; other modules' objects are
+rejected.
+
+A handle inside a value is passed as its JS wrapper. Rust reads the wrapper's `handle`
+property once and applies the same checks as to an argument; results arrive as wrappers.
+Converted handles are owned `Native` clones: a failed conversion drops the ones already read.
 
 Call `dispose()` when finished with an object. See the [counter tutorial](headless.md) for
 objects passed to and returned from Rust, and [ownership](ownership.md) for async lifetimes.

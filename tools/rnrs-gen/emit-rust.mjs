@@ -28,7 +28,11 @@ const header = (ir, what) =>
 
 // ---- Interface -------------------------------------------------------------------------
 
-function interfaceType(t, owner) {
+/** Rust type of `t` in the interface. `scope` is where it appears: `'module'` (the module
+ *  trait, whose associated types name native types), an object name (that object's trait,
+ *  where its own type is `Self`) or undefined (records and unions). Native types elsewhere name
+ *  the module-level `<Name>Impl` aliases (see nativeAliases). */
+function interfaceType(t, scope) {
   switch (t.k) {
     case 'number':
       return 'f64';
@@ -41,21 +45,80 @@ function interfaceType(t, owner) {
     case 'void':
       return '()';
     case 'array':
-      return `Vec<${interfaceType(t.of, owner)}>`;
+      return `Vec<${interfaceType(t.of, scope)}>`;
     case 'nullable':
-      return `Option<${interfaceType(t.of, owner)}>`;
+      return `Option<${interfaceType(t.of, scope)}>`;
     case 'map':
-      return `BTreeMap<String, ${interfaceType(t.of, owner)}>`;
+      return `BTreeMap<String, ${interfaceType(t.of, scope)}>`;
     case 'json':
       return 'JsonValue';
     case 'record':
     case 'union':
       return t.name;
     case 'native':
-      return owner === t.name ? 'Native<Self>' : `Native<Self::${t.name}Impl>`;
+      if (scope === t.name) return 'Native<Self>';
+      return scope === 'module' ? `Native<Self::${t.name}Impl>` : `Native<${t.name}Impl>`;
     default:
       throw new Error(`no Rust type for ${t.k}`);
   }
+}
+
+/** Native type names `t` refers to directly (through containers, not through records). */
+function nativesIn(t, out = new Set()) {
+  if (t.k === 'native') out.add(t.name);
+  else if (t.of) nativesIn(t.of, out);
+  return out;
+}
+
+/** Records and unions that hold native handles, directly or through other records, unions or
+ *  containers (arrays, nullables, `Record<string, T>` maps). With holdsNative, the one rule for
+ *  "this type contains a native object" (derives, TS result wrapping, error-type checks). */
+export function valueTypesWithNatives(ir) {
+  const fieldsOf = new Map([
+    ...ir.records.map((r) => [r.name, r.fields]),
+    ...ir.unions.map((u) => [u.name, u.variants.flatMap((v) => v.fields)]),
+  ]);
+  const memo = new Map();
+  // Value types are not recursive, so each name is resolved once, depth first.
+  const named = {
+    has(name) {
+      if (!memo.has(name))
+        memo.set(
+          name,
+          fieldsOf.get(name).some((f) => holdsNative(f.type, named)),
+        );
+      return memo.get(name);
+    },
+  };
+  return new Set([...fieldsOf.keys()].filter((name) => named.has(name)));
+}
+
+/** Whether type `t` contains a native object: itself, inside a container (`.of`), or inside a
+ *  record or union named in `holds` (the result of valueTypesWithNatives). */
+export function holdsNative(t, holds) {
+  return (
+    t.k === 'native' ||
+    ((t.k === 'record' || t.k === 'union') && holds.has(t.name)) ||
+    (t.of !== undefined && holdsNative(t.of, holds))
+  );
+}
+
+/** `<Name>Impl` aliases for the native types named outside the module trait and their own
+ *  object trait: other objects' methods and records/unions. They project the module's
+ *  associated types through the configured module type, so object traits and records name
+ *  concrete implementation types without associated types of their own. */
+function nativeAliases(ir) {
+  const used = new Set();
+  for (const m of ir.methods.filter((m) => m.owner)) {
+    for (const t of [m.returns, ...m.params.map((p) => p.type)])
+      for (const name of nativesIn(t)) if (name !== m.owner) used.add(name);
+  }
+  for (const f of [
+    ...ir.records.flatMap((r) => r.fields),
+    ...ir.unions.flatMap((u) => u.variants.flatMap((v) => v.fields)),
+  ])
+    for (const name of nativesIn(f.type)) used.add(name);
+  return ir.objects.map((o) => o.name).filter((name) => used.has(name));
 }
 
 function paramType(p, owner) {
@@ -102,7 +165,16 @@ function usesKind(ir, k) {
 
 /** `core`: the path of rnrs-core in the module crate (`rnrs_core`, `rnrs::core`, or a renamed
  *  dependency's identifier; see interfaceCore in cli.mjs). */
-export function emitInterface(ir, { core = 'rnrs_core' } = {}) {
+export function emitInterface(ir, { core = 'rnrs_core', moduleType } = {}) {
+  const aliases = nativeAliases(ir);
+  if (aliases.length && !moduleType)
+    throw new Error(
+      'emitInterface: native types used in object methods or value types need moduleType',
+    );
+  const withNatives = valueTypesWithNatives(ir);
+  // Handles compare by identity, values by content: types holding handles do not derive PartialEq.
+  const derive = (name) =>
+    withNatives.has(name) ? '#[derive(Debug, Clone)]' : '#[derive(Debug, Clone, PartialEq)]';
   const parts = [
     header(ir, 'Public Rust interface of the module: implement these traits.'),
     '#![allow(dead_code)]\n',
@@ -114,9 +186,18 @@ export function emitInterface(ir, { core = 'rnrs_core' } = {}) {
     usesKind(ir, 'json') && `use ${core}::JsonValue;`,
   ].filter(Boolean);
   if (dynamic.length) parts.push(dynamic.join('\n') + '\n');
+  if (aliases.length)
+    parts.push(
+      aliases
+        .map(
+          (name) =>
+            `/// Implementation type of native object \`${name}\`: \`${ir.module}::${name}Impl\` of \`crate::${moduleType}\`.\npub type ${name}Impl = <crate::${moduleType} as ${ir.module}>::${name}Impl;\n`,
+        )
+        .join('\n'),
+    );
   for (const r of ir.records) {
     parts.push(
-      `/// Record \`${r.name}\`: converted field by field, by value.\n#[derive(Debug, Clone, PartialEq)]\npub struct ${r.name} {\n${r.fields
+      `/// Record \`${r.name}\`: converted field by field, by value.\n${derive(r.name)}\npub struct ${r.name} {\n${r.fields
         .map(
           (f) =>
             `    pub ${ident(f.name)}: ${f.optional ? `Option<${interfaceType(f.type)}>` : interfaceType(f.type)},`,
@@ -134,7 +215,7 @@ export function emitInterface(ir, { core = 'rnrs_core' } = {}) {
       return `${doc}\n    ${v.rustName} {\n${v.fields.map((f) => `        ${ident(f.name)}: ${f.optional ? `Option<${interfaceType(f.type)}>` : interfaceType(f.type)},`).join('\n')}\n    },`;
     });
     parts.push(
-      `/// Discriminated union \`${u.name}\` (discriminator \`${u.discriminator}\`).\n#[derive(Debug, Clone, PartialEq)]\npub enum ${u.name} {\n${variants.join('\n')}\n}\n`,
+      `/// Discriminated union \`${u.name}\` (discriminator \`${u.discriminator}\`).\n${derive(u.name)}\npub enum ${u.name} {\n${variants.join('\n')}\n}\n`,
     );
   }
   for (const o of ir.objects) {
@@ -146,7 +227,7 @@ export function emitInterface(ir, { core = 'rnrs_core' } = {}) {
   const moduleMethods = ir.methods.filter((m) => !m.owner);
   const assoc = ir.objects.map((o) => `    type ${o.name}Impl: ${o.name};`).join('\n');
   parts.push(
-    `/// Module \`${ir.module}\`: one instance per JS runtime (adapter generation), created with\n/// \`Default\`.\npub trait ${ir.module}: NativeObject + Default {\n${assoc}${assoc && moduleMethods.length ? '\n\n' : ''}${traitMethods(moduleMethods, null)}\n}\n`,
+    `/// Module \`${ir.module}\`: one instance per JS runtime (adapter generation), created with\n/// \`Default\`.\npub trait ${ir.module}: NativeObject + Default {\n${assoc}${assoc && moduleMethods.length ? '\n\n' : ''}${traitMethods(moduleMethods, 'module')}\n}\n`,
   );
   return parts.join('\n');
 }

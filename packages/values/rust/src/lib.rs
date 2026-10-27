@@ -1,14 +1,14 @@
 //! Implementation of the Values fixture spec (packages/values/values.spec.ts): plain Rust
 //! over the generated records, arrays, strings and options.
 use std::collections::BTreeMap;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use rnrs_core::{CancelToken, JsonValue, Native};
 
 pub mod rnrs_interface;
 use rnrs_interface as spec;
-use spec::{Blob, Event, Inventory, Labeled, Point, Shape, Size, Slot, Tagged};
+use spec::{Blob, Event, Inventory, Labeled, Point, Prepared, Shape, Size, Slot, StatementSlot, Tagged};
 
 #[derive(Default)]
 pub struct Values;
@@ -28,8 +28,93 @@ impl spec::Bag for PointBag {
     }
 }
 
+/// Native-object composition: plain Rust types holding `Native` handles of each other.
+pub struct NamedShader(String);
+
+impl spec::Shader for NamedShader {
+    fn name(&self) -> Result<String, String> {
+        Ok(self.0.clone())
+    }
+}
+
+#[derive(Default)]
+pub struct ShaderPaint(Mutex<Option<Native<NamedShader>>>);
+
+impl spec::Paint for ShaderPaint {
+    fn set_shader(&self, shader: Option<Native<NamedShader>>) -> Result<(), String> {
+        *self.0.lock().unwrap_or_else(|e| e.into_inner()) = shader;
+        Ok(())
+    }
+    fn shader(&self) -> Result<Option<Native<NamedShader>>, String> {
+        Ok(self.0.lock().unwrap_or_else(|e| e.into_inner()).clone())
+    }
+    async fn shader_name_later(&self, shader: Native<NamedShader>, ms: f64, _cancel: CancelToken) -> Result<String, String> {
+        sleep(Duration::from_secs_f64(ms.clamp(0.0, 1000.0) / 1000.0)).await;
+        Ok(shader.0.clone())
+    }
+}
+
+/// Shared by a database and its statements; each `Database` handle is a view of it.
+struct DatabaseState {
+    name: String,
+}
+
+pub struct Database(Arc<DatabaseState>);
+
+pub struct Statement {
+    sql: String,
+    database: Arc<DatabaseState>,
+}
+
+impl Database {
+    fn statement(&self, sql: String) -> Native<Statement> {
+        Native::new(Statement { sql, database: self.0.clone() })
+    }
+}
+
+impl spec::Statement for Statement {
+    fn sql(&self) -> Result<String, String> {
+        Ok(self.sql.clone())
+    }
+    fn database(&self) -> Result<Native<Database>, String> {
+        Ok(Native::new(Database(self.database.clone())))
+    }
+}
+
+impl spec::Database for Database {
+    fn name(&self) -> Result<String, String> {
+        Ok(self.0.name.clone())
+    }
+    fn prepare(&self, sql: String) -> Result<Native<Statement>, String> {
+        Ok(self.statement(sql))
+    }
+    async fn prepare_all(&self, sql: Vec<String>, _cancel: CancelToken) -> Result<Vec<Native<Statement>>, String> {
+        sleep(Duration::from_millis(1)).await;
+        Ok(sql.into_iter().map(|sql| self.statement(sql)).collect())
+    }
+    fn prepared(&self, sql: String, shader: Option<Native<NamedShader>>) -> Result<Prepared, String> {
+        Ok(Prepared { statement: self.statement(sql.clone()), sql, shader, others: vec![] })
+    }
+    fn describe_prepared(&self, p: Prepared) -> Result<String, String> {
+        let shader = p.shader.as_ref().map_or("<none>".into(), |s| s.0.clone());
+        let others: Vec<&str> = p.others.iter().map(|s| s.sql.as_str()).collect();
+        Ok(format!("{}|{}|{}", p.statement.sql, shader, others.join(",")))
+    }
+    fn pick(&self, slot: Option<StatementSlot>) -> Result<Option<Native<Statement>>, String> {
+        Ok(match slot {
+            Some(StatementSlot::One { statement }) => Some(statement),
+            Some(StatementSlot::Many { first, .. }) => first,
+            Some(StatementSlot::Empty) | None => None,
+        })
+    }
+}
+
 impl spec::ValuesModule for Values {
     type BagImpl = PointBag;
+    type ShaderImpl = NamedShader;
+    type PaintImpl = ShaderPaint;
+    type StatementImpl = Statement;
+    type DatabaseImpl = Database;
 
     fn echo_number(&self, x: f64) -> Result<f64, String> {
         Ok(x)
@@ -226,6 +311,44 @@ impl spec::ValuesModule for Values {
     }
     fn bag(&self) -> Result<Native<PointBag>, String> {
         Ok(Native::new(PointBag::default()))
+    }
+    fn open_database(&self, name: String) -> Result<Native<Database>, String> {
+        Ok(Native::new(Database(Arc::new(DatabaseState { name }))))
+    }
+    fn paint(&self) -> Result<Native<ShaderPaint>, String> {
+        Ok(Native::new(ShaderPaint::default()))
+    }
+    fn shader(&self, name: String) -> Result<Native<NamedShader>, String> {
+        Ok(Native::new(NamedShader(name)))
+    }
+    fn statement_slots(&self, db: Native<Database>) -> Result<Vec<StatementSlot>, String> {
+        let (a, b) = (db.statement("a".into()), db.statement("b".into()));
+        Ok(vec![
+            StatementSlot::One { statement: a.clone() },
+            StatementSlot::Many { statements: vec![a, b], first: None },
+            StatementSlot::Empty,
+        ])
+    }
+    fn echo_prepared(&self, p: Prepared) -> Result<Prepared, String> {
+        Ok(p)
+    }
+    fn maybe_prepared(&self, p: Option<Prepared>) -> Result<Option<Prepared>, String> {
+        Ok(p)
+    }
+    async fn prepared_later(&self, db: Native<Database>, sql: String, ms: f64, _cancel: CancelToken) -> Result<Prepared, String> {
+        sleep(Duration::from_secs_f64(ms.clamp(0.0, 1000.0) / 1000.0)).await;
+        let statement = db.statement(sql.clone());
+        Ok(Prepared { others: vec![statement.clone()], statement, sql, shader: None })
+    }
+    fn echo_statements_by_name(&self, m: BTreeMap<String, Native<Statement>>) -> Result<BTreeMap<String, Native<Statement>>, String> {
+        Ok(m)
+    }
+    fn echo_prepared_by_name(&self, m: BTreeMap<String, Option<Prepared>>) -> Result<BTreeMap<String, Option<Prepared>>, String> {
+        Ok(m)
+    }
+    async fn statements_by_name_later(&self, db: Native<Database>, sql: Vec<String>, ms: f64, _cancel: CancelToken) -> Result<BTreeMap<String, Native<Statement>>, String> {
+        sleep(Duration::from_secs_f64(ms.clamp(0.0, 1000.0) / 1000.0)).await;
+        Ok(sql.into_iter().map(|sql| (sql.clone(), db.statement(sql))).collect())
     }
 }
 

@@ -37,7 +37,7 @@ export interface CounterModule extends NativeModule {
 ```
 
 - `Counter extends NativeObject`, so JS holds a handle to a Rust value instead of a copy.
-- `add` and `combine` return a `Counter`, and `combine` takes one as an argument. Object methods can take and return their own type; module methods can take and return any of the spec's native objects.
+- `add` and `combine` return a `Counter`, and `combine` takes one as an argument. Module and object methods can take and return any of the spec's native objects, also inside records, unions and arrays ([types](types.md#native-objects)).
 - Numbers are always `f64`.
 
 ## Implement it in Rust

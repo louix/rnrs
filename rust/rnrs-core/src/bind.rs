@@ -594,25 +594,39 @@ pub trait NativeObject: MaybeSendSync + 'static {}
 impl<T: MaybeSendSync + 'static> NativeObject for T {}
 
 /// Takes an owned clone of the native object in `v`, checking spec type and generation.
+///
+/// `v` is a handle, or an object holding one in its `handle` property: the generated JS
+/// wrapper classes do, so wrappers nested in records, unions and arrays need no JS-side
+/// rewriting. That property is read once, ordinarily, and its value must itself be a handle;
+/// every check applies to it exactly as to a handle passed directly.
 pub fn native_from_js<T: NativeObject>(env: &mut dyn Env, v: Val, path: &Path<'_>, spec_name: &'static str) -> Result<Native<T>, BindError> {
     // Wrappers are always plain (non-array, non-function) objects, and unwrapping runs no JS
     // on any backend, so trying it first decides exactly what checking kind() first did;
     // kind() (which for objects may call the isArray helper) is only needed to word the
     // error for values that are not wrappers.
-    match env.unwrap_native(v) {
-        Ok(native) if native.spec_name == spec_name => match native.value.downcast_ref::<Native<T>>() {
-            Some(native) => Ok(native.clone()),
-            None => Err(BindError::type_error(format!("{path} must be a {spec_name}"))),
-        },
-        Ok(_) => Err(BindError::type_error(format!("{path} must be a {spec_name}"))),
-        Err(UnwrapError::NotNative) => {
+    match native_clone(env, v, path, spec_name) {
+        Err(None) => {
             if env.kind(v) != Kind::Object {
                 return Err(expected(env, v, path, &format!("a {spec_name}")));
             }
-            Err(BindError::type_error(format!("{path} must be a {spec_name}")))
+            let handle = env.get_property(v, "handle")?;
+            native_clone(env, handle, path, spec_name).map_err(|e| e.unwrap_or_else(|| BindError::type_error(format!("{path} must be a {spec_name}"))))
         }
-        Err(UnwrapError::Closed) => Err(BindError::error(format!("{spec_name} belongs to a closed runtime adapter"))),
-        Err(UnwrapError::Disposed) => Err(BindError::error(format!("{spec_name} is disposed"))),
+        result => result.map_err(|e| e.expect("only NotNative has no error")),
+    }
+}
+
+/// The checked clone of the handle `v`; `Err(None)` if `v` is not a handle.
+fn native_clone<T: NativeObject>(env: &mut dyn Env, v: Val, path: &Path<'_>, spec_name: &'static str) -> Result<Native<T>, Option<BindError>> {
+    match env.unwrap_native(v) {
+        Ok(native) if native.spec_name == spec_name => match native.value.downcast_ref::<Native<T>>() {
+            Some(native) => Ok(native.clone()),
+            None => Err(Some(BindError::type_error(format!("{path} must be a {spec_name}")))),
+        },
+        Ok(_) => Err(Some(BindError::type_error(format!("{path} must be a {spec_name}")))),
+        Err(UnwrapError::NotNative) => Err(None),
+        Err(UnwrapError::Closed) => Err(Some(BindError::error(format!("{spec_name} belongs to a closed runtime adapter")))),
+        Err(UnwrapError::Disposed) => Err(Some(BindError::error(format!("{spec_name} is disposed")))),
     }
 }
 

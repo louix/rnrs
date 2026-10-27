@@ -72,6 +72,48 @@ export interface Bag extends NativeObject {
   count(): number;
 }
 
+/** Native-object composition: objects that create, take and hold other native objects, and
+ *  handles inside records, unions, arrays and optional or nullable values. */
+export interface Shader extends NativeObject {
+  name(): string;
+}
+
+export interface Paint extends NativeObject {
+  setShader(shader: Shader | null): void;
+  shader(): Shader | null;
+  /** Holds `shader` for `ms`, then returns its name (the task owns it meanwhile). */
+  shaderNameLater(shader: Shader, ms: number): Promise<string>;
+}
+
+export interface Statement extends NativeObject {
+  sql(): string;
+  /** A handle to the database that prepared this statement (an object graph cycle). */
+  database(): Database;
+}
+
+export interface Database extends NativeObject {
+  name(): string;
+  prepare(sql: string): Statement;
+  prepareAll(sql: string[]): Promise<Statement[]>;
+  prepared(sql: string, shader?: Shader): Prepared;
+  /** sql|shader name or <none>|other statements' sql. */
+  describePrepared(p: Prepared): string;
+  /** The statement a slot holds, if any. */
+  pick(slot: StatementSlot | null): Statement | null;
+}
+
+export interface Prepared {
+  statement: Statement;
+  sql: string;
+  shader?: Shader;
+  others: Statement[];
+}
+
+export type StatementSlot =
+  | { kind: 'one'; statement: Statement }
+  | { kind: 'many'; statements: Statement[]; first: Statement | null }
+  | { kind: 'empty' };
+
 export interface ValuesModule extends NativeModule {
   echoNumber(x: number): number;
   echoBool(b: boolean): boolean;
@@ -135,4 +177,21 @@ export interface ValuesModule extends NativeModule {
   echoBlob(b: Blob): Blob;
   bytesLater(b: ArrayBuffer, ms: number): Promise<ArrayBuffer>;
   bag(): Bag;
+  openDatabase(name: string): Database;
+  paint(): Paint;
+  shader(name: string): Shader;
+  /** one, many and empty slots over statements of `db`. */
+  statementSlots(db: Database): StatementSlot[];
+  echoPrepared(p: Prepared): Prepared;
+  maybePrepared(p: Prepared | null): Prepared | null;
+  preparedLater(db: Database, sql: string, ms: number): Promise<Prepared>;
+  /** Record values holding handles, directly and inside records. */
+  echoStatementsByName(m: Record<string, Statement>): Record<string, Statement>;
+  echoPreparedByName(m: Record<string, Prepared | null>): Record<string, Prepared | null>;
+  /** Statements of `db` keyed by their sql, after `ms`. */
+  statementsByNameLater(
+    db: Database,
+    sql: string[],
+    ms: number,
+  ): Promise<Record<string, Statement>>;
 }

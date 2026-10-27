@@ -20,7 +20,7 @@ Strings, records and arrays become owned Rust values. Conversion validates runti
 
 ## Native objects
 
-A JS wrapper owns a reference-counted native handle. Calls validate its type and runtime identity. `dispose()` releases the wrapper's ownership; in-flight operations retain the receiver until they finish. GC finalization is a nondeterministic fallback. Resource-specific `close()` methods must define their own shutdown rules; releasing a wrapper does not forcibly cancel all native work.
+A JS wrapper owns a reference-counted native handle. Calls validate its type and runtime identity, also for handles inside records, unions and arrays. `dispose()` releases the wrapper's ownership; in-flight operations retain the receiver until they finish. GC finalization is a nondeterministic fallback. Resource-specific `close()` methods must define their own shutdown rules; releasing a wrapper does not forcibly cancel all native work.
 
 Implementations choose synchronization. Concurrent async calls are not automatically serialized, and Rust ownership cycles require weak references or explicit cleanup.
 
