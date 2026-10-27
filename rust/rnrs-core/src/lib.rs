@@ -60,6 +60,7 @@ mod budget;
 mod cancel;
 pub mod exec;
 mod host;
+mod json;
 pub mod lifecycle;
 mod native;
 pub mod platform;
@@ -72,4 +73,5 @@ pub use host::{
     AdmitError, Delivery, Host, HostStats, Notify, OpError, Outcome, Spawn, SpawnLocal, TeardownReport, Ticket, Timer,
     DELIVERY_CHECK_FIRST, DELIVERY_CHECK_MAX,
 };
+pub use json::{JsonValue, JSON_MAX_DEPTH};
 pub use native::{live_counts, live_counts_by_name, LiveCounts, Native};

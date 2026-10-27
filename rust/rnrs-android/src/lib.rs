@@ -187,8 +187,8 @@ impl Drop for RnrsAdapter {
 /// Version of the C boundary (`ModuleTable`, `JsiVTable`, `ScalarBinding`, callbacks and
 /// status codes) mirrored by packages/runtime/cpp/RnrsAbi.h. The framework C++ accepts a table
 /// only with exactly this number and the struct sizes it was compiled with; any change to
-/// the boundary bumps it, and the exported symbol names carry it (`rnrs_module_v2_<crate>`).
-pub const RNRS_ABI: u32 = 2;
+/// the boundary bumps it, and the exported symbol names carry it (`rnrs_module_v3_<crate>`).
+pub const RNRS_ABI: u32 = 3;
 
 /// What one binary exports per module: identity, version data and every entry point the C++
 /// runtime calls for that module. Tables are immutable statics; the binary is linked
@@ -198,7 +198,7 @@ pub const RNRS_ABI: u32 = 2;
 /// through the table of the binary that allocated it.
 ///
 /// Built by generated code: `static T: ModuleTable = ModuleTable::new(&glue::x::MODULE, init);`
-/// plus `#[no_mangle] extern "C" fn rnrs_module_v2_<crate>() -> &'static ModuleTable`; a module
+/// plus `#[no_mangle] extern "C" fn rnrs_module_v3_<crate>() -> &'static ModuleTable`; a module
 /// that renders to surfaces adds `.with_surface(rnrs_surface::host::table())`.
 #[repr(C)]
 pub struct ModuleTable {
@@ -332,6 +332,9 @@ pub struct JsiVTable {
     pub to_string_into: extern "C" fn(*mut c_void, u32, extern "C" fn(*mut c_void, usize) -> *mut u8, *mut c_void) -> usize,
     /// Same layout/contract as RnrsAbi.h: 0 success, 1 invalid, 2 thrown.
     pub number_array: extern "C" fn(*mut c_void, u32, u32, extern "C" fn(*mut c_void, usize, usize) -> *mut f64, *mut c_void, *mut u32, *mut u32) -> u32,
+    /// `Object.entries` of a plain object (`Record<string, T>`, `JsonValue`); writes the new
+    /// array's index. 0 ok, 1 not a plain object, 2 thrown.
+    pub own_entries: extern "C" fn(*mut c_void, u32, *mut u32) -> u32,
 }
 
 static BYTES_ADOPTED: AtomicU64 = AtomicU64::new(0);
@@ -437,6 +440,10 @@ pub const RNRS_UNWRAP_DISPOSED: u32 = 3;
 pub const RNRS_NUMBERS_OK: u32 = 0;
 pub const RNRS_NUMBERS_INVALID: u32 = 1;
 pub const RNRS_NUMBERS_THROWN: u32 = 2;
+/// `JsiVTable::own_entries` results (2: JS threw).
+pub const RNRS_ENTRIES_OK: u32 = 0;
+pub const RNRS_ENTRIES_NOT_PLAIN: u32 = 1;
+pub const RNRS_ENTRIES_THROWN: u32 = 2;
 
 /// `JsiVTable::kind` results are indices into this table.
 const KINDS: [Kind; 9] = [Kind::Undefined, Kind::Null, Kind::Boolean, Kind::Number, Kind::String, Kind::Array, Kind::Function, Kind::Object, Kind::Other];
@@ -492,6 +499,14 @@ impl Env for JsiEnv<'_> {
     fn get_property(&mut self, object: Val, key: &str) -> Result<Val, BindError> {
         let mut out = 0u32;
         if (self.vt.get_property)(self.ctx, self.ix(object), key.as_ptr(), key.len(), &mut out) { Ok(self.val(out)) } else { Err(BindError::Thrown) }
+    }
+    fn own_entries(&mut self, v: Val) -> Result<Option<Val>, BindError> {
+        let mut out = 0u32;
+        match (self.vt.own_entries)(self.ctx, self.ix(v), &mut out) {
+            RNRS_ENTRIES_OK => Ok(Some(self.val(out))),
+            RNRS_ENTRIES_NOT_PLAIN => Ok(None),
+            _ => Err(BindError::Thrown),
+        }
     }
     fn array_length(&mut self, array: Val) -> Result<u32, BindError> {
         let mut out = 0.0f64;
@@ -1084,7 +1099,7 @@ mod abi_contract {
 
     #[test]
     fn module_table_layout() {
-        assert_eq!(RNRS_ABI, 2);
+        assert_eq!(RNRS_ABI, 3);
         assert_eq!((offset_of!(ModuleTable, abi), offset_of!(ModuleTable, size)), (0, 4), "frozen prefix");
         assert_eq!((offset_of!(ModuleTable, vtable_size), offset_of!(ModuleTable, scalar_binding_size)), (8, 12));
         let slots = [
@@ -1114,11 +1129,12 @@ mod abi_contract {
             offset_of!(JsiVTable, set_property), offset_of!(JsiVTable, array), offset_of!(JsiVTable, set_index),
             offset_of!(JsiVTable, wrap_native), offset_of!(JsiVTable, unwrap_native), offset_of!(JsiVTable, to_bytes),
             offset_of!(JsiVTable, new_bytes), offset_of!(JsiVTable, to_string_into), offset_of!(JsiVTable, number_array),
+            offset_of!(JsiVTable, own_entries),
         ];
         for (i, offset) in slots.into_iter().enumerate() {
             assert_eq!(offset, i * P, "JsiVTable slot {i}");
         }
-        assert_eq!(size_of::<JsiVTable>(), 21 * P);
+        assert_eq!(size_of::<JsiVTable>(), 22 * P);
         assert_eq!(
             (offset_of!(ScalarBinding, args), offset_of!(ScalarBinding, result), offset_of!(ScalarBinding, definition), offset_of!(ScalarBinding, instance)),
             (0, 4, 8, 8 + P)
@@ -1138,6 +1154,7 @@ mod abi_contract {
             [BytesError::NotArrayBuffer, BytesError::Shared, BytesError::Resizable, BytesError::Detached, BytesError::View, BytesError::Thrown, BytesError::TooLarge]
         );
         assert_eq!((RNRS_NUMBERS_OK, RNRS_NUMBERS_INVALID, RNRS_NUMBERS_THROWN), (0, 1, 2));
+        assert_eq!((RNRS_ENTRIES_OK, RNRS_ENTRIES_NOT_PLAIN, RNRS_ENTRIES_THROWN), (0, 1, 2));
         assert_eq!((RNRS_UNWRAP_OK, RNRS_UNWRAP_NOT_NATIVE, RNRS_UNWRAP_CLOSED, RNRS_UNWRAP_DISPOSED), (0, 1, 2, 3));
         assert_eq!((RNRS_DELIVERY_QUEUED, RNRS_DELIVERY_RUNNING, RNRS_DELIVERY_DONE, RNRS_DELIVERY_DROPPED), (0, 1, 2, 3));
         // Values the binary produces for the JS runtime (settle status, admission failure code).

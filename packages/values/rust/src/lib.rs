@@ -1,13 +1,14 @@
 //! Implementation of the Values fixture spec (packages/values/values.spec.ts): plain Rust
 //! over the generated records, arrays, strings and options.
+use std::collections::BTreeMap;
 use std::sync::Mutex;
 use std::time::Duration;
 
-use rnrs_core::{CancelToken, Native};
+use rnrs_core::{CancelToken, JsonValue, Native};
 
 pub mod rnrs_interface;
 use rnrs_interface as spec;
-use spec::{Blob, Event, Labeled, Point, Shape, Size, Slot, Tagged};
+use spec::{Blob, Event, Inventory, Labeled, Point, Shape, Size, Slot, Tagged};
 
 #[derive(Default)]
 pub struct Values;
@@ -128,6 +129,65 @@ impl spec::ValuesModule for Values {
     }
     fn size_area(&self, s: Size) -> Result<f64, String> {
         Ok(s.width * s.height)
+    }
+    fn query(&self, columns: Vec<String>, rows: Vec<Vec<JsonValue>>) -> Result<Vec<BTreeMap<String, JsonValue>>, String> {
+        rows.into_iter()
+            .enumerate()
+            .map(|(i, row)| {
+                if row.len() != columns.len() {
+                    return Err(format!("row {i} has {} values for {} columns", row.len(), columns.len()));
+                }
+                Ok(columns.iter().cloned().zip(row).collect())
+            })
+            .collect()
+    }
+    fn row_keys(&self, rows: Vec<BTreeMap<String, JsonValue>>) -> Result<Vec<Vec<String>>, String> {
+        Ok(rows.into_iter().map(|row| row.into_keys().collect()).collect())
+    }
+    fn echo_json(&self, v: JsonValue) -> Result<JsonValue, String> {
+        Ok(v)
+    }
+    async fn echo_json_later(&self, v: JsonValue, ms: f64, _cancel: CancelToken) -> Result<JsonValue, String> {
+        sleep(Duration::from_secs_f64(ms.clamp(0.0, 1000.0) / 1000.0)).await;
+        Ok(v)
+    }
+    async fn json_number_later(&self, x: f64, _cancel: CancelToken) -> Result<JsonValue, String> {
+        sleep(Duration::from_millis(1)).await;
+        Ok(JsonValue::Number(x))
+    }
+    fn nested_json(&self, depth: f64) -> Result<JsonValue, String> {
+        if !(0.0..=1000.0).contains(&depth) || depth.fract() != 0.0 {
+            return Err("depth must be an integer from 0 to 1000".into());
+        }
+        Ok((0..depth as usize).fold(JsonValue::Null, |inner, _| JsonValue::Array(vec![inner])))
+    }
+    fn optional_json(&self, v: Option<JsonValue>) -> Result<String, String> {
+        Ok(match v {
+            None => "absent",
+            Some(JsonValue::Null) => "null",
+            Some(JsonValue::Bool(_)) => "bool",
+            Some(JsonValue::Number(_)) => "number",
+            Some(JsonValue::String(_)) => "string",
+            Some(JsonValue::Array(_)) => "array",
+            Some(JsonValue::Object(_)) => "object",
+        }
+        .into())
+    }
+    fn echo_counts(&self, c: BTreeMap<String, f64>) -> Result<BTreeMap<String, f64>, String> {
+        Ok(c)
+    }
+    fn maybe_counts(&self, c: Option<BTreeMap<String, f64>>) -> Result<Option<BTreeMap<String, f64>>, String> {
+        Ok(c)
+    }
+    fn echo_inventory(&self, i: Inventory) -> Result<Inventory, String> {
+        Ok(i)
+    }
+    fn echo_shapes_by_name(&self, s: BTreeMap<String, Shape>) -> Result<BTreeMap<String, Shape>, String> {
+        Ok(s)
+    }
+    async fn byte_total_later(&self, b: BTreeMap<String, Vec<u8>>, ms: f64, _cancel: CancelToken) -> Result<f64, String> {
+        sleep(Duration::from_secs_f64(ms.clamp(0.0, 1000.0) / 1000.0)).await;
+        Ok(b.values().map(|bytes| bytes.len() as f64).sum())
     }
     fn echo_slot(&self, slot: Slot) -> Result<Slot, String> {
         Ok(slot)

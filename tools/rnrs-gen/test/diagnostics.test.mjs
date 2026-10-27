@@ -5,6 +5,8 @@ import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { parseSpec } from '../parse.mjs';
+import { emitInterface } from '../emit-rust.mjs';
+import { emitTs } from '../emit-ts.mjs';
 import { FRAMEWORK_SPEC, ROOT } from '../cli.mjs';
 
 const dir = path.join(ROOT, '.generated/rnrs-test-specs');
@@ -39,10 +41,64 @@ const cases = [
   ['Map', mod('  f(x: Map<string, number>): void;'), 2, /Map is not supported/],
   ['Set', mod('  f(x: Set<number>): void;'), 2, /Set is not supported/],
   [
-    'Record',
-    mod('  f(x: Record<string, number>): void;'),
+    'Record with number keys',
+    mod('  f(x: Record<number, number>): void;'),
     2,
-    /Record<string, T> is not supported yet/,
+    /only Record<string, T> is supported/,
+  ],
+  [
+    'Record with literal keys',
+    mod("  f(x: Record<'a' | 'b', number>): void;"),
+    2,
+    /only Record<string, T> is supported/,
+  ],
+  [
+    'void in Record',
+    mod('  f(): Record<string, void>;'),
+    2,
+    /void is only allowed as a method result/,
+  ],
+  [
+    'Promise in Record',
+    mod('  f(): Record<string, Promise<number>>;'),
+    2,
+    /Promise is only supported as a method result/,
+  ],
+  [
+    'native in Record',
+    `export interface O extends NativeObject {\n  v(): number;\n}\n${mod('  f(x: Record<string, O>): void;')}`,
+    5,
+    /native objects in Record values are not supported yet/,
+  ],
+  [
+    'recursive record through Record',
+    `interface Tree {\n  kids: Record<string, Tree>;\n}\n${mod('  f(t: Tree): void;')}`,
+    2,
+    /recursive value types are not supported yet \(Tree\)/,
+  ],
+  [
+    'JsonValue | null',
+    `import type {JsonValue} from '@rnrs/runtime/spec';\n${mod('  f(x: JsonValue | null): void;')}`,
+    3,
+    /JsonValue already includes null/,
+  ],
+  [
+    'a look-alike JsonValue (recognized by declaration, not name)',
+    `type JsonValue = null | number | JsonValue[];\n${mod('  f(x: JsonValue): void;')}`,
+    1,
+    /every union variant must be an object type/,
+  ],
+  [
+    'a spec type named BTreeMap next to Record',
+    `interface BTreeMap {\n  a: number;\n}\n${mod('  f(x: BTreeMap, y: Record<string, number>): void;')}`,
+    1,
+    /type name BTreeMap is reserved when the spec uses Record<string, T>/,
+  ],
+  [
+    'a spec type named JsonValue next to the framework JsonValue',
+    `import type {JsonValue as J} from '@rnrs/runtime/spec';\ninterface JsonValue {\n  a: number;\n}\n${mod('  f(x: JsonValue, y: J): void;')}`,
+    2,
+    /type name JsonValue is reserved when the spec uses JsonValue/,
   ],
   [
     'Uint8Array',
@@ -194,7 +250,7 @@ const cases = [
     'index signature',
     `interface R {\n  [k: string]: number;\n}\n${mod('  f(r: R): void;')}`,
     2,
-    /records contain only named properties/,
+    /index signatures are not supported; use Record<string, T>/,
   ],
   [
     'record heritage',
@@ -540,6 +596,51 @@ test('ArrayBuffer maps to bytes everywhere a value type can appear', () => {
     ],
   );
   assert.deepEqual(ir.methods[0].returns, { k: 'bytes' });
+});
+
+test('Record<string, T> and JsonValue compose with the other value types', () => {
+  const file = path.join(dir, 'dynamic.spec.ts');
+  writeFileSync(
+    file,
+    `import type {JsonValue, NativeModule} from '@rnrs/runtime/spec';\ninterface R {\n  m?: Record<string, number>;\n  j: JsonValue;\n}\ntype Row = Record<string, JsonValue>;\nexport interface M extends NativeModule {\n  f(a: Record<string, R>, b: Record<string, string[]>[], c: Record<string, number> | null, d?: JsonValue): Promise<Row[]>;\n}\n`,
+  );
+  const { ir, diagnostics } = parseSpec(file, { frameworkSpec: FRAMEWORK_SPEC, root: ROOT });
+  assert.deepEqual(diagnostics, []);
+  assert.deepEqual(
+    ir.methods[0].params.map((p) => [p.type, p.optional]),
+    [
+      [{ k: 'map', of: { k: 'record', name: 'R' } }, false],
+      [{ k: 'array', of: { k: 'map', of: { k: 'array', of: { k: 'string' } } } }, false],
+      [{ k: 'nullable', of: { k: 'map', of: { k: 'number' } } }, false],
+      [{ k: 'json' }, true],
+    ],
+  );
+  assert.deepEqual(ir.methods[0].returns, { k: 'array', of: { k: 'map', of: { k: 'json' } } });
+  assert.deepEqual(ir.records[0].fields, [
+    { name: 'm', type: { k: 'map', of: { k: 'number' } }, optional: true },
+    { name: 'j', type: { k: 'json' }, optional: false },
+  ]);
+  const rust = emitInterface(ir, { core: 'rnrs::core' });
+  assert.match(rust, /use std::collections::BTreeMap;\nuse rnrs::core::JsonValue;/);
+  assert.match(rust, /pub m: Option<BTreeMap<String, f64>>,\n    pub j: JsonValue,/);
+  assert.match(
+    rust,
+    /c: Option<BTreeMap<String, f64>>, d: Option<JsonValue>, cancel: CancelToken\) -> impl Future<Output = Result<Vec<BTreeMap<String, JsonValue>>, String>>/,
+  );
+  const ts = emitTs(ir, { runtimeImport: '@rnrs/runtime', maxInFlight: 4 });
+  assert.match(ts, /type CallOptions, type JsonValue\} from '@rnrs\/runtime'/);
+  assert.match(
+    ts,
+    /f\(a: Record<string, R>, b: Record<string, string\[\]>\[\], c: Record<string, number> \| null, d\?: JsonValue, options\?: CallOptions\): Promise<Record<string, JsonValue>\[\]>/,
+  );
+  // Specs that use neither keep their interface imports (and type names) unchanged.
+  const plain = emitInterface(
+    parseSpec(path.join(ROOT, 'packages/counter/counter.spec.ts'), {
+      frameworkSpec: FRAMEWORK_SPEC,
+      root: ROOT,
+    }).ir,
+  );
+  assert.doesNotMatch(plain, /BTreeMap|JsonValue/);
 });
 
 test('a valid spec has no diagnostics', () => {

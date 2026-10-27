@@ -18,7 +18,7 @@ namespace rnrs {
 // the module's Drop there (see RnrsWorklets.cpp). `table` is the module binary's (static).
 struct WorkletAdapterRef {
   std::shared_ptr<const void> owner;
-  const RnrsModuleV2* table = nullptr;
+  const RnrsModuleV3* table = nullptr;
   RnrsAdapter* rust = nullptr;
   const std::atomic<bool>* alive = nullptr;  // cleared by the adapter's teardown (reload)
   uint64_t generation = 0;  // the adapter's process-unique serial

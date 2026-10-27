@@ -122,10 +122,10 @@ test('prebuilt modules only: registry and archive list, no source bundle', () =>
       );
       assert.equal(source.size, 0);
       const registry = readFileSync(path.join(out(app), 'rnrs_registry.inc'), 'utf8');
-      assert.match(registry, /extern "C" const RnrsModuleV2\* rnrs_module_v2_counter\(\);/);
+      assert.match(registry, /extern "C" const RnrsModuleV3\* rnrs_module_v3_counter\(\);/);
       assert.match(
         registry,
-        /\{"rnrs_module_v2_meter", rnrs_module_v2_meter\},\n    \{nullptr, nullptr\},/,
+        /\{"rnrs_module_v3_meter", rnrs_module_v3_meter\},\n    \{nullptr, nullptr\},/,
       );
       const cmake = readFileSync(path.join(out(app), 'modules.cmake'), 'utf8');
       assert.match(cmake, /set\(RNRS_SOURCE_BUNDLE OFF\)/);
@@ -163,7 +163,7 @@ test('a source override is per module, and its prebuilt archive is not linked', 
       // Both tables are registered: counter's from the source bundle.
       assert.match(
         readFileSync(path.join(out(app), 'rnrs_registry.inc'), 'utf8'),
-        /rnrs_module_v2_counter[\s\S]*rnrs_module_v2_meter/,
+        /rnrs_module_v3_counter[\s\S]*rnrs_module_v3_meter/,
       );
     },
   ));
@@ -260,7 +260,7 @@ test('iOS: prebuilt XCFramework slices per SDK are linked; a missing slice is re
         }
         manifest.ios = {
           deploymentTarget: '15.1',
-          exports: [`rnrs_module_v2_${pkg}`, `rnrs_eh_personality_${pkg}`],
+          exports: [`rnrs_module_v3_${pkg}`, `rnrs_eh_personality_${pkg}`],
           xcframework: xc,
           slices,
         };
@@ -292,7 +292,7 @@ test('iOS: prebuilt XCFramework slices per SDK are linked; a missing slice is re
       assert.match(slices.iphonesimulator[0], /ios-arm64_x86_64-simulator\/librnrs_counter\.a$/);
       assert.match(
         readFileSync(path.join(out, 'rnrs_registry.inc'), 'utf8'),
-        /rnrs_module_v2_counter[\s\S]*rnrs_module_v2_meter/,
+        /rnrs_module_v3_counter[\s\S]*rnrs_module_v3_meter/,
       );
       // meter (no simulator slice) as a prebuilt module is refused.
       const pj = JSON.parse(readFileSync(path.join(app, 'package.json'), 'utf8'));

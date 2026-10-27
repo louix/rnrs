@@ -110,7 +110,6 @@ const LIB_REJECTIONS = {
   Set: 'Set is not supported; use an array',
   SharedArrayBuffer: 'SharedArrayBuffer is not supported (concurrent writers); pass an ArrayBuffer',
   DataView: 'pass an ArrayBuffer, not a view; slice explicitly with view.buffer.slice(start, end)',
-  Record: 'Record<string, T> is not supported yet',
   Object: 'Object is not supported; declare a record type',
   Function: 'functions and callbacks are not supported',
 };
@@ -163,7 +162,16 @@ export function parseSpec(specPath, { frameworkSpec, root }) {
   const framework = program.getSourceFile(frameworkSpec);
   const markerDecl = (name) =>
     framework?.statements.find((s) => ts.isInterfaceDeclaration(s) && s.name.text === name);
-  const markers = { object: markerDecl('NativeObject'), module: markerDecl('NativeModule') };
+  const markers = {
+    object: markerDecl('NativeObject'),
+    module: markerDecl('NativeModule'),
+    // Recognized by declaration like the interfaces: a type merely named JsonValue is not it.
+    json: framework?.statements.find(
+      (s) => ts.isTypeAliasDeclaration(s) && s.name.text === 'JsonValue',
+    ),
+  };
+  // Rust names the generated interface imports when the spec uses Record<string, T> or JsonValue.
+  const dynamicUses = new Map(); // Rust type name -> first use site
 
   const resolve = (name) => {
     let symbol = checker.getSymbolAtLocation(name);
@@ -394,6 +402,13 @@ export function parseSpec(specPath, { frameworkSpec, root }) {
       fail(node, 'void | null is not supported');
       return ERR;
     }
+    if (of.k === 'json') {
+      fail(
+        node,
+        'JsonValue already includes null; use JsonValue (or x?: JsonValue to tell absent from null)',
+      );
+      return ERR;
+    }
     return { k: 'nullable', of };
   }
 
@@ -429,8 +444,13 @@ export function parseSpec(specPath, { frameworkSpec, root }) {
       fail(node, `cannot resolve type ${name}`);
       return ERR;
     }
+    if (markers.json && decl === markers.json) {
+      if (!dynamicUses.has('JsonValue')) dynamicUses.set('JsonValue', node);
+      return { k: 'json' };
+    }
     if (isLibDecl(decl)) {
       const libName = symbol.getName();
+      if (libName === 'Record') return mapRecordType(node, ctx);
       if (libName === 'Promise') {
         if (ctx.position !== 'return' || ctx.promised) {
           fail(node, 'Promise is only supported as a method result');
@@ -512,12 +532,34 @@ export function parseSpec(specPath, { frameworkSpec, root }) {
     return ERR;
   }
 
+  /** `Record<string, T>`: a dictionary (`BTreeMap<String, T>`), converted by enumerating a
+   *  plain object's own keys; unlike records, which read declared fields. */
+  function mapRecordType(node, ctx) {
+    const [key, value] = node.typeArguments ?? [];
+    if (!key || key.kind !== ts.SyntaxKind.StringKeyword || !value) {
+      fail(node, 'only Record<string, T> is supported: keys must be the string type');
+      return ERR;
+    }
+    const of = mapNode(value, { ...ctx, position: 'element' });
+    if (of === ERR) return ERR;
+    if (containsNative(of)) {
+      fail(node, 'native objects in Record values are not supported yet');
+      return ERR;
+    }
+    if (!dynamicUses.has('BTreeMap')) dynamicUses.set('BTreeMap', node);
+    return { k: 'map', of };
+  }
+
   function fieldsFrom(owner, members, { allowLiterals }) {
     const fields = [];
     const literals = [];
     const seen = new Set();
     const seenSnake = new Map();
     for (const member of members) {
+      if (ts.isIndexSignatureDeclaration(member)) {
+        fail(member, `${owner}: index signatures are not supported; use Record<string, T>`);
+        continue;
+      }
       if (
         !ts.isPropertySignature(member) ||
         !member.type ||
@@ -874,6 +916,14 @@ export function parseSpec(specPath, { frameworkSpec, root }) {
         );
     }
   }
+  // The generated interface imports these names only when used; a spec type of the same name
+  // would collide with the import.
+  for (const [name, site] of dynamicUses)
+    if (typeOrigins.has(name))
+      fail(
+        typeOrigins.get(name),
+        `type name ${name} is reserved when the spec uses ${name === 'JsonValue' ? 'JsonValue' : 'Record<string, T>'} (${where(site)})`,
+      );
   const ir = {
     irVersion: IR_VERSION,
     module: moduleDecl ? moduleDecl.name.text : null,

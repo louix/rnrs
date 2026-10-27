@@ -38,6 +38,14 @@ pub struct Obj {
     pub props: RefCell<Vec<(String, Prop)>>,
     /// The prototype: ordinary reads continue here when a key is not an own property.
     pub proto: RefCell<Option<Rc<Obj>>>,
+    /// The prototype is something other than `Object.prototype` or `null` (a class instance, a
+    /// Date, a Map, another realm's object): `Object.entries` enumeration refuses it.
+    pub non_plain: std::cell::Cell<bool>,
+    /// Own keys that are not enumerable (skipped by `Object.entries`).
+    pub hidden: RefCell<Vec<String>>,
+    /// What `Object.entries` returns instead of the own properties (a proxy's traps, or keys
+    /// that are not valid UTF-16), or the message it throws.
+    pub entries: RefCell<Option<Result<Vec<(V, V)>, String>>>,
 }
 
 impl Obj {
@@ -202,6 +210,34 @@ impl Env for MockEnv {
             _ => None,
         };
         self.read(prop)
+    }
+    fn own_entries(&mut self, v: Val) -> Result<Option<Val>, BindError> {
+        let V::Obj(o) = self.take(v) else { return Ok(None) };
+        if o.non_plain.get() {
+            return Ok(None);
+        }
+        let pairs = match o.entries.borrow().clone() {
+            Some(Err(message)) => {
+                self.thrown = Some(message);
+                return Err(BindError::Thrown);
+            }
+            Some(Ok(pairs)) => pairs,
+            None => {
+                // Object.entries: own enumerable keys first, then each value read in order,
+                // skipping keys a getter deleted meanwhile.
+                let keys: Vec<String> = o.props.borrow().iter().map(|(k, _)| k.clone()).filter(|k| !o.hidden.borrow().contains(k)).collect();
+                let mut pairs = Vec::new();
+                for key in keys {
+                    let prop = o.props.borrow().iter().find(|(k, _)| *k == key).map(|(_, p)| p.clone());
+                    let Some(prop) = prop else { continue };
+                    let value = self.read(Some(prop))?;
+                    pairs.push((V::str(&key), self.take(value)));
+                }
+                pairs
+            }
+        };
+        let array = V::arr(pairs.into_iter().map(|(k, v)| V::arr(vec![k, v])).collect());
+        Ok(Some(self.put(array)))
     }
     fn array_length(&mut self, array: Val) -> Result<u32, BindError> {
         Ok(match self.take(array) {

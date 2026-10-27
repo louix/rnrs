@@ -1,7 +1,7 @@
 // Value-conversion fixture module: records, strings, arrays, optional and nullable values,
-// and discriminated unions.
+// discriminated unions, dictionaries (Record<string, T>) and JsonValue.
 // Rust implementation: rust/values. Used by the shared value suite on Android and web.
-import type { NativeModule, NativeObject } from '@rnrs/runtime/spec';
+import type { JsonValue, NativeModule, NativeObject } from '@rnrs/runtime/spec';
 import type { Size } from './shared';
 
 export interface Point {
@@ -56,6 +56,16 @@ export type Later = Promise<number>;
 /** Field names that match locals of the generated glue (`object`, `value`). */
 export type Slot = { kind: 'filled'; object: number; value: string } | { kind: 'vacant' };
 
+/** A SQL-style result row: column name -> value. */
+export type Row = Record<string, JsonValue>;
+
+/** Dictionaries inside a record: of numbers, of dictionaries of records, and JSON. */
+export interface Inventory {
+  counts: Record<string, number>;
+  places?: Record<string, Record<string, Point>>;
+  meta: JsonValue;
+}
+
 /** A native object taking records, to check receiver handling around getters. */
 export interface Bag extends NativeObject {
   add(p: Point): number;
@@ -94,6 +104,24 @@ export interface ValuesModule extends NativeModule {
   scaleLater(s: Shape, factor: number): Promise<Shape>;
   /** An imported record. */
   sizeArea(s: Size): number;
+  /** One Row per value list, keyed by `columns` (SQL-style). */
+  query(columns: string[], rows: JsonValue[][]): Row[];
+  /** The keys of each row as Rust holds them (sorted). */
+  rowKeys(rows: Row[]): string[][];
+  echoJson(v: JsonValue): JsonValue;
+  echoJsonLater(v: JsonValue, ms: number): Promise<JsonValue>;
+  /** JsonValue::Number(x) as an async result: NaN and infinities fail its conversion. */
+  jsonNumberLater(x: number): Promise<JsonValue>;
+  /** `depth` nested arrays around null. */
+  nestedJson(depth: number): JsonValue;
+  /** absent, null or the value's kind. */
+  optionalJson(v?: JsonValue): string;
+  echoCounts(c: Record<string, number>): Record<string, number>;
+  maybeCounts(c: Record<string, number> | null): Record<string, number> | null;
+  echoInventory(i: Inventory): Inventory;
+  echoShapesByName(s: Record<string, Shape>): Record<string, Shape>;
+  /** Sum of all byte lengths, async: the dictionary is owned by the operation. */
+  byteTotalLater(b: Record<string, ArrayBuffer>, ms: number): Promise<number>;
   echoSlot(slot: Slot): Slot;
   /** Parameter names that match locals of the generated glue. */
   mix(env: number, receiver: string, result: boolean): string;

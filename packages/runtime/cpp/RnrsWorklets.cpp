@@ -198,6 +198,11 @@ const JsiVTable kWorkletVTable = {
       W(raw).refused = true;
       return 2;
     },
+    // Dictionaries and JsonValue objects are unsupported on worklet endpoints too.
+    [](void* raw, uint32_t, uint32_t*) -> uint32_t {
+      W(raw).refused = true;
+      return abi::kEntriesThrown;
+    },
 };
 
 jsi::Value invoke(jsi::Runtime& rt, const EndpointState& ep, const Method& m, const void* receiverNative, const jsi::Value* a, size_t n) {
@@ -326,7 +331,7 @@ jsi::Object createWorkletEndpoint(jsi::Runtime& rt, WorkletAdapterRef adapter, c
 
 jsi::Object createWorkletBox(jsi::Runtime& rt, const WorkletAdapterRef& adapter, const jsi::Value& endpoint, void* shared) {
   struct Owned {
-    const RnrsModuleV2* table;
+    const RnrsModuleV3* table;
     void* p;
     ~Owned() {
       if (p) table->nativeRelease(p);

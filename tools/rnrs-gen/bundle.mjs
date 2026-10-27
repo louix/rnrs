@@ -330,7 +330,7 @@ export function generateBundle(appDir, target, outDir, { only } = {}) {
 
 /** The ABI number of the native module tables this generator emits (RNRS_ABI in
  *  packages/runtime/cpp/RnrsAbi.h and rust/rnrs-android; the symbol names carry it). */
-export const NATIVE_ABI = 2;
+export const NATIVE_ABI = 3;
 /** The surface table ABI (RNRS_SURFACE_ABI in RnrsAbi.h, SURFACE_ABI in rnrs-surface's host.rs)
  *  this framework's surface host accepts; prebuilt surface modules record theirs. */
 export const NATIVE_SURFACE_ABI = 1;

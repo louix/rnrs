@@ -8,3 +8,14 @@ export interface NativeObject {}
 /** The module itself: exactly one per spec. Its methods are the module's entry points. */
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface NativeModule {}
+
+/** A JSON data-model value: becomes `rnrs::JsonValue` in Rust, converted directly (no JSON
+ *  text). Objects are plain objects with string keys; numbers are finite. The generator
+ *  recognizes this declaration itself: a type of the same name declared elsewhere is not it. */
+export type JsonValue =
+  | null
+  | boolean
+  | number
+  | string
+  | JsonValue[]
+  | { [key: string]: JsonValue };

@@ -164,4 +164,77 @@ if (!process.execArgv.includes(FLAG)) {
     );
     assert.equal(log.installs, 0);
   });
+
+  test('entries: own enumerable string keys of plain objects only (Record and JsonValue)', () => {
+    const { entries, define } = conversionHelpers;
+    const base = { inherited: 1 };
+    const own = Object.create(base);
+    assert.equal(entries(own), null, 'another prototype: not a plain object');
+    const plain = { b: 2, 10: 'ten', a: 1, [Symbol('s')]: 3 };
+    Object.defineProperty(plain, 'hidden', { value: 4, enumerable: false });
+    assert.deepEqual(entries(plain), [
+      ['10', 'ten'],
+      ['b', 2],
+      ['a', 1],
+    ]);
+    const bare = Object.create(null);
+    bare.k = 'v';
+    assert.deepEqual(entries(bare), [['k', 'v']]);
+    for (const other of [
+      new Date(0),
+      new Map([['k', 1]]),
+      new (class Row {})(),
+      new ArrayBuffer(1),
+    ])
+      assert.equal(entries(other), null);
+    // A JSON-parsed __proto__ key is an own key like any other.
+    assert.deepEqual(entries(JSON.parse('{"__proto__": 1}')), [['__proto__', 1]]);
+    // Getters run once, in order; their exceptions and proxy traps propagate unchanged.
+    const reads = [];
+    const withGetters = {
+      get a() {
+        reads.push('a');
+        return 1;
+      },
+      get b() {
+        reads.push('b');
+        return 2;
+      },
+    };
+    assert.deepEqual(entries(withGetters), [
+      ['a', 1],
+      ['b', 2],
+    ]);
+    assert.deepEqual(reads, ['a', 'b']);
+    const boom = new Error('boom');
+    assert.throws(
+      () =>
+        entries({
+          get x() {
+            throw boom;
+          },
+        }),
+      (e) => e === boom,
+    );
+    const trap = new Error('trap');
+    const proxy = new Proxy(
+      {},
+      {
+        ownKeys: () => {
+          throw trap;
+        },
+      },
+    );
+    assert.throws(
+      () => entries(proxy),
+      (e) => e === trap,
+    );
+    assert.deepEqual(entries(new Proxy({ p: 1 }, {})), [['p', 1]]);
+    // Output side: defining __proto__ creates an own property; no prototype changes.
+    const out = {};
+    define(out, '__proto__', { polluted: true });
+    assert.equal(Object.getPrototypeOf(out), Object.prototype);
+    assert.deepEqual(Object.keys(out), ['__proto__']);
+    assert.equal({}.polluted, undefined);
+  });
 }

@@ -12,6 +12,7 @@ import {
   type Tagged,
 } from '../../../../.generated/rnrs/values';
 import { createModuleForTesting } from '../../../../packages/runtime/src/runtime';
+import { workletEndpoint } from '../../../../packages/runtime/src/worklets';
 import type { CheckResult } from './conformance';
 
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
@@ -31,6 +32,18 @@ function throws(fn: () => unknown, expected: string | RegExp): void {
   throw new CheckFailure(`expected throw: ${expected}`);
 }
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+/** Key-order-insensitive comparison (Rust returns Record and JsonValue objects in key order). */
+const sorted = (x: unknown): unknown =>
+  Array.isArray(x)
+    ? x.map(sorted)
+    : x && typeof x === 'object'
+      ? Object.fromEntries(
+          Object.keys(x)
+            .sort()
+            .map((k) => [k, sorted((x as any)[k])]),
+        )
+      : x;
+const sameEntries = (a: unknown, b: unknown) => same(sorted(a), sorted(b));
 
 export interface ValuesEnv {
   /** Best-effort forced GC plus a turn for finalizers. */
@@ -1185,6 +1198,263 @@ export async function runValuesSuite(env: ValuesEnv): Promise<CheckResult[]> {
         'results adopted Rust storage (no fallback copy)',
       );
       return `adopted ${after.bytesAdopted - before.bytesAdopted}, released ${after.bytesReleased - before.bytesReleased}, fallback copies ${after.bytesCopiedOut}`;
+    },
+  );
+
+  await check(
+    'Record<string, T> and JsonValue: SQL-style rows and nested JSON roundtrip',
+    async () => {
+      const rows = v.query(
+        ['id', 'name', 'score', 'tags'],
+        [
+          [1, 'ada', 9.5, ['x', { deep: [null, true] }]],
+          [2, 'bob', null, []],
+        ],
+      );
+      expect(
+        same(rows, [
+          { id: 1, name: 'ada', score: 9.5, tags: ['x', { deep: [null, true] }] },
+          { id: 2, name: 'bob', score: null, tags: [] },
+        ]),
+        `rows ${JSON.stringify(rows)}`,
+      );
+      const nested = { a: [1, { b: 'c', '': -0, 'two words': [[]] }], n: null, t: true, s: 'é' };
+      const back = v.echoJson(nested) as any;
+      expect(sameEntries(back, nested), `echoJson ${JSON.stringify(back)}`);
+      expect(Object.is(back.a[1][''], -0), 'echoJson keeps -0');
+      expect(Object.getPrototypeOf(back) === Object.prototype, 'outputs are ordinary objects');
+      const later = await v.echoJsonLater(nested, 1);
+      expect(sameEntries(later, nested), 'async roundtrip');
+      expect(
+        same(v.echoCounts({ b: 2, 10: 10, a: 1 }), { 10: 10, a: 1, b: 2 }),
+        'echoCounts (sorted by Rust, integer keys first by JS)',
+      );
+      expect(
+        same(v.echoShapesByName({ c: { kind: 'circle', radius: 1 } }), {
+          c: { kind: 'circle', radius: 1 },
+        }),
+        'unions in a Record',
+      );
+      expect(
+        v.optionalJson() === 'absent' && v.optionalJson(null) === 'null',
+        'optional JsonValue',
+      );
+      const big = Object.fromEntries(Array.from({ length: 1000 }, (_, i) => [`k${i}`, i]));
+      expect(Object.keys(v.echoCounts(big)).length === 1000, '1000 keys');
+      expect(
+        (await v.byteTotalLater({ a: new ArrayBuffer(3), b: new ArrayBuffer(4) }, 1)) === 7,
+        'bytes in an async Record',
+      );
+    },
+  );
+
+  await check('Record<string, T> and JsonValue: own enumerable keys of plain objects only', () => {
+    const inherited = Object.create({ inherited: 1 });
+    throws(
+      () => v.echoCounts(inherited),
+      'TypeError: c must be a plain object, got an object whose prototype is not Object.prototype or null',
+    );
+    const plain: Record<string, number> = { own: 1 };
+    Object.defineProperty(plain, 'hidden', { value: 2, enumerable: false });
+    (plain as any)[Symbol('s')] = 3;
+    expect(same(v.echoCounts(plain), { own: 1 }), 'non-enumerable and symbol keys ignored');
+    const bare = Object.create(null);
+    bare.k = 1;
+    expect(same(v.echoCounts(bare), { k: 1 }), 'null-prototype objects accepted');
+    for (const other of [new Date(0), new Map(), new (class Row {})(), new ArrayBuffer(1)])
+      throws(
+        () => v.echoJson(other as any),
+        /must be a JsonValue \(plain object\), got an object whose prototype/,
+      );
+    throws(() => v.echoCounts([] as any), 'TypeError: c must be a plain object, got an array');
+    throws(
+      () => v.echoCounts({ 'a b': '1' } as any),
+      'TypeError: c["a b"] must be a number, got a string',
+    );
+    throws(
+      () => v.echoJson({ a: [1, NaN] }),
+      'TypeError: v.a[1] must be a finite number (JsonValue), got NaN',
+    );
+    throws(
+      () => v.echoJson([Infinity]),
+      'TypeError: v[0] must be a finite number (JsonValue), got Infinity',
+    );
+    throws(
+      () => v.echoJson({ u: undefined } as any),
+      'TypeError: v.u must be a JsonValue, got undefined',
+    );
+    throws(
+      () => v.echoJson([() => 1] as any),
+      'TypeError: v[0] must be a JsonValue, got a function',
+    );
+    // A native object's JS wrapper is a class instance: refused like other non-plain objects.
+    throws(
+      () => v.echoJson(v.bag() as any),
+      /v must be a JsonValue \(plain object\), got an object whose prototype is not/,
+    );
+    throws(
+      () => v.echoJson(BigInt(1) as any),
+      'TypeError: v must be a JsonValue, got an unsupported value',
+    );
+  });
+
+  await check(
+    'Record<string, T> and JsonValue: getters, proxies, cycles and safe output',
+    async () => {
+      const boom = new Error('boom');
+      try {
+        v.echoCounts({
+          get x(): number {
+            throw boom;
+          },
+        });
+        throw new CheckFailure('getter exception swallowed');
+      } catch (error) {
+        expect(error === boom, `getter exception identity: ${error}`);
+      }
+      const trap = new Error('trap');
+      try {
+        v.echoJson(
+          new Proxy(
+            {},
+            {
+              ownKeys() {
+                throw trap;
+              },
+            },
+          ),
+        );
+        throw new CheckFailure('proxy trap exception swallowed');
+      } catch (error) {
+        expect(error === trap, `proxy trap exception identity: ${error}`);
+      }
+      expect(same(v.echoJson(new Proxy({ p: 1 }, {})), { p: 1 }), 'proxies of plain objects');
+      const cyclic: any = { a: [] };
+      cyclic.a.push(cyclic);
+      throws(
+        () => v.echoJson(cyclic),
+        /^RangeError: v\.a\[0\]\.a\[0\].*JsonValue nesting is deeper than 128 levels/,
+      );
+      expect(v.nestedJson(128) !== null, '128 levels out');
+      throws(
+        () => v.nestedJson(129),
+        /^RangeError: JsonValue result\[0\].* is nested deeper than 128 levels$/,
+      );
+      const parsed = JSON.parse('{"__proto__": 1, "constructor": 2}');
+      const out = v.echoCounts(parsed) as any;
+      expect(Object.getPrototypeOf(out) === Object.prototype, 'output prototype unchanged');
+      expect(
+        same(Object.keys(out), ['__proto__', 'constructor']) && out.constructor === 2,
+        'own keys',
+      );
+      expect(
+        ({} as any).polluted === undefined &&
+          Object.prototype.hasOwnProperty.call(out, '__proto__'),
+        '__proto__ is an own property',
+      );
+      try {
+        await v.jsonNumberLater(NaN);
+        throw new CheckFailure('non-finite result resolved');
+      } catch (error) {
+        expect(
+          /result conversion failed: JsonValue result must be a finite number, got NaN/.test(
+            String(error),
+          ),
+          `async output failure: ${error}`,
+        );
+      }
+    },
+  );
+
+  await check(
+    'Record<string, T> and JsonValue: 128 levels in, nested exceptions, class instances',
+    () => {
+      // Objects and arrays alternating, 128 containers deep, around a leaf: accepted and returned
+      // intact (the backends' recursion depth on the JS thread); one more level is refused.
+      const nest = (depth: number): any => {
+        let value: any = 'leaf';
+        for (let i = depth - 1; i >= 0; i--) value = i % 2 ? [value] : { k: value };
+        return value;
+      };
+      let back = v.echoJson(nest(128)) as any;
+      for (let i = 0; i < 128; i++) back = i % 2 ? back[0] : back.k;
+      expect(back === 'leaf', 'depth 128 roundtrip');
+      throws(
+        () => v.echoJson(nest(129)),
+        /^RangeError: v\.k\[0\]\.k.*JsonValue nesting is deeper than 128 levels/,
+      );
+      // Exceptions keep their identity from deep inside a value and from a getPrototypeOf trap.
+      const boom = new Error('nested boom');
+      const deep = {
+        a: [
+          {
+            get x(): number {
+              throw boom;
+            },
+          },
+        ],
+      };
+      const proto = new Error('proto trap');
+      const trapped = new Proxy(
+        {},
+        {
+          getPrototypeOf() {
+            throw proto;
+          },
+        },
+      );
+      for (const [run, expected] of [
+        [() => v.echoJson(deep), boom],
+        [() => v.echoCounts(trapped as any), proto],
+      ] as const) {
+        try {
+          run();
+          throw new CheckFailure('exception swallowed');
+        } catch (error) {
+          expect(error === expected, `exception identity: ${error}`);
+        }
+      }
+      throws(
+        () => v.echoCounts(new (class Row {})() as any),
+        'TypeError: c must be a plain object, got an object whose prototype is not Object.prototype or null',
+      );
+    },
+  );
+
+  await check(
+    'Record<string, T> and JsonValue: worklet endpoints refuse dictionaries and JSON objects',
+    () => {
+      const t = createValuesModuleForTesting(4);
+      try {
+        // The JSI backend (Android, iOS) always has endpoints; only the browser backend has none,
+        // and only there is the check skipped. Any failure below fails it.
+        if (!(t.host.adapter as any).workletEndpoint) {
+          expect(env.growWasmMemory !== undefined, 'a native backend has no worklet endpoint');
+          return 'skipped: the browser backend has no worklet endpoints';
+        }
+        const ep: any = workletEndpoint(t, ['echoCounts', 'echoJson', 'nestedJson']);
+        // Called from the RN runtime through the endpoint's conversion table: objects are refused
+        // by its kind check (before any entries enumeration), container results by its value
+        // creation; scalars pass as before.
+        throws(
+          () => ep.echoCounts({ a: 1 }),
+          'TypeError: c must be a plain object, got an unsupported value',
+        );
+        throws(
+          () => ep.echoJson({ a: 1 }),
+          'TypeError: v must be a JsonValue, got an unsupported value',
+        );
+        try {
+          ep.nestedJson(1);
+          throw new CheckFailure('array result crossed the endpoint');
+        } catch (error) {
+          expect((error as any)?.code === 'ERR_RNRS_WORKLET_SHAPE', `result refusal: ${error}`);
+        }
+        expect(ep.echoJson(2) === 2 && ep.echoJson(null) === null, 'scalars still pass');
+        return 'refused';
+      } finally {
+        t.teardown();
+      }
     },
   );
 

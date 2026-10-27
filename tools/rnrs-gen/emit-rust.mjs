@@ -44,6 +44,10 @@ function interfaceType(t, owner) {
       return `Vec<${interfaceType(t.of, owner)}>`;
     case 'nullable':
       return `Option<${interfaceType(t.of, owner)}>`;
+    case 'map':
+      return `BTreeMap<String, ${interfaceType(t.of, owner)}>`;
+    case 'json':
+      return 'JsonValue';
     case 'record':
     case 'union':
       return t.name;
@@ -85,6 +89,17 @@ function traitMethods(methods, owner) {
   return out.join('\n\n');
 }
 
+/** Whether any parameter, result or field of the IR has a type of kind `k`. */
+function usesKind(ir, k) {
+  const has = (t) => t.k === k || (t.of !== undefined && has(t.of));
+  const fields = [
+    ...ir.records.flatMap((r) => r.fields),
+    ...ir.unions.flatMap((u) => u.variants.flatMap((v) => v.fields)),
+    ...ir.methods.flatMap((m) => m.params),
+  ];
+  return fields.some((f) => has(f.type)) || ir.methods.some((m) => has(m.returns));
+}
+
 /** `core`: the path of rnrs-core in the module crate (`rnrs_core`, `rnrs::core`, or a renamed
  *  dependency's identifier; see interfaceCore in cli.mjs). */
 export function emitInterface(ir, { core = 'rnrs_core' } = {}) {
@@ -93,6 +108,12 @@ export function emitInterface(ir, { core = 'rnrs_core' } = {}) {
     '#![allow(dead_code)]\n',
     `#[allow(unused_imports)]\nuse std::future::Future;\n\n#[allow(unused_imports)]\nuse ${core}::bind::{MaybeSend, NativeObject};\n#[allow(unused_imports)]\nuse ${core}::{CancelToken, Native};\n`,
   ];
+  // Imported only when used (the parser then reserves the names): older specs keep theirs.
+  const dynamic = [
+    usesKind(ir, 'map') && 'use std::collections::BTreeMap;',
+    usesKind(ir, 'json') && `use ${core}::JsonValue;`,
+  ].filter(Boolean);
+  if (dynamic.length) parts.push(dynamic.join('\n') + '\n');
   for (const r of ir.records) {
     parts.push(
       `/// Record \`${r.name}\`: converted field by field, by value.\n#[derive(Debug, Clone, PartialEq)]\npub struct ${r.name} {\n${r.fields
@@ -148,6 +169,10 @@ function glueType(t) {
       return `Vec<${glueType(t.of)}>`;
     case 'nullable':
       return `Option<${glueType(t.of)}>`;
+    case 'map':
+      return `std::collections::BTreeMap<String, ${glueType(t.of)}>`;
+    case 'json':
+      return 'rnrs_core::JsonValue';
     case 'record':
     case 'union':
       return `spec::${t.name}`;
@@ -177,6 +202,10 @@ function readExpr(t, v, path) {
       return `array_from_js_with(env, ${v}, ${path}, &mut |env, v, path| ${readExpr(t.of, 'v', 'path')})`;
     case 'nullable':
       return `nullable_from_js_with(env, ${v}, ${path}, &mut |env, v, path| ${readExpr(t.of, 'v', 'path')})`;
+    case 'map':
+      return `map_from_js_with(env, ${v}, ${path}, &mut |env, v, path| ${readExpr(t.of, 'v', 'path')})`;
+    case 'json':
+      return `<rnrs_core::JsonValue as FromJs>::from_js(env, ${v}, ${path})`;
     default:
       throw new Error(t.k);
   }
@@ -201,6 +230,10 @@ function writeExpr(t, value) {
       return `array_into_js_with(${value}, env, &mut |value, env| ${writeExpr(t.of, 'value')})`;
     case 'nullable':
       return `nullable_into_js_with(${value}, env, &mut |value, env| ${writeExpr(t.of, 'value')})`;
+    case 'map':
+      return `map_into_js_with(${value}, env, &mut |value, env| ${writeExpr(t.of, 'value')})`;
+    case 'json':
+      return `IntoJs::into_js(${value}, env)`;
     default:
       throw new Error(t.k);
   }

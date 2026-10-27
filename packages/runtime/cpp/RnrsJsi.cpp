@@ -68,11 +68,11 @@ std::atomic<uint64_t> gDiagContexts{0}, gDiagHelperLookups{0}, gDiagHelperUses{0
 // collected or the runtime is destroyed, possibly off the JS thread; the release is a
 // thread-safe Rust drop. JS may read and write the bytes; Rust keeps no access to them.
 struct RustBytes : jsi::MutableBuffer {
-  const RnrsModuleV2* table;  // the binary that allocated the storage
+  const RnrsModuleV3* table;  // the binary that allocated the storage
   uint8_t* ptr;
   size_t len, cap;
   platform::ThreadId jsThread = platform::currentThread();
-  RustBytes(const RnrsModuleV2* t, uint8_t* p, size_t l, size_t c) : table(t), ptr(p), len(l), cap(c) {}
+  RustBytes(const RnrsModuleV3* t, uint8_t* p, size_t l, size_t c) : table(t), ptr(p), len(l), cap(c) {}
   ~RustBytes() override {
     if (platform::currentThread() != jsThread) gBytesFinalizedOffJsThread++;
     table->bytesFree(ptr, len, cap);
@@ -85,7 +85,7 @@ std::atomic<uint32_t> gEpoch{1};
 std::atomic<uint64_t> gNextSerial{1};
 
 struct Adapter {
-  const RnrsModuleV2* table = nullptr;  // the module's binary; static for the process
+  const RnrsModuleV3* table = nullptr;  // the module's binary; static for the process
   RnrsAdapter* rust = nullptr;
   // Process-unique serial of this adapter (JS `generation`): wrappers of other modules or
   // other adapters of this module are a mismatch.
@@ -125,10 +125,10 @@ struct Adapter {
 // created it (never through an adapter, which may be freed before this finalizer runs).
 struct HandleState : jsi::NativeState {
   void* native;
-  const RnrsModuleV2* table;
+  const RnrsModuleV3* table;
   uint64_t generation;  // the creating adapter's serial
   platform::ThreadId jsThread = platform::currentThread();  // constructed on the JS thread
-  HandleState(void* n, const RnrsModuleV2* t, uint64_t g) : native(n), table(t), generation(g) {}
+  HandleState(void* n, const RnrsModuleV3* t, uint64_t g) : native(n), table(t), generation(g) {}
   ~HandleState() override {
     gFinalizers++;
     if (platform::currentThread() != jsThread) gFinalizersOffJsThread++;
@@ -156,7 +156,7 @@ struct CallCtx {
   // proxy on a non-genuine host); helpers are only used inside guarded or try/catch callbacks.
   const jsi::Value* helpersArg = nullptr;
   const jsi::Value* helpersHost = nullptr;
-  std::optional<jsi::Function> define, isArray, bufferKind, allocBuffer;
+  std::optional<jsi::Function> define, isArray, bufferKind, allocBuffer, entries;
   // The array most recently read by `length` or index (its arena index), so elements are read
   // without a handle clone each; arena values never change during the call, so the index
   // identifies the value.
@@ -477,6 +477,18 @@ const JsiVTable kVTable = {
       })) return kNumbersThrown;
       return status;
     },
+    // Object.entries of a plain object (Record<string, T>, JsonValue), through the framework
+    // helper: getters and proxy traps run; null means another prototype.
+    [](void* raw, uint32_t v, uint32_t* out) -> uint32_t {
+      auto& c = C(raw);
+      uint32_t status = kEntriesOk;
+      if (!guarded(c, [&] {
+        auto entries = c.helper(c.entries, "entries").call(c.rt, jsi::Value(c.rt, c.at(v)));
+        if (entries.isNull()) status = kEntriesNotPlain;
+        else *out = c.push(std::move(entries));
+      })) return kEntriesThrown;
+      return status;
+    },
 };
 
 }  // namespace
@@ -657,7 +669,7 @@ jsi::Object installModuleAdapter(
   if (!(maxInFlight >= 1 && maxInFlight <= 1024 && std::floor(maxInFlight) == maxInFlight))
     throw jsi::JSError(rt, makeError(rt, 1, "maxInFlight must be an integer from 1 to 1024"));
   std::string missing;
-  const RnrsModuleV2* table = findModule(name, hash, missing);
+  const RnrsModuleV3* table = findModule(name, hash, missing);
   if (!table) throw jsi::JSError(rt, makeError(rt, 2, missing.c_str()));
   char error[256] = {0};
   auto adapter = std::make_shared<Adapter>();

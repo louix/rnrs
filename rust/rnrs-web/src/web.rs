@@ -152,7 +152,7 @@ pub fn rnrs_diagnostics() -> Vec<f64> {
 
 // ---- Helpers -------------------------------------------------------------------------
 
-const HELPER_NAMES: [&str; 10] = ["get", "define", "isArray", "length", "byteLength", "copyBuffer", "bytesFromMemory", "numbers", "wrap", "unwrap"];
+const HELPER_NAMES: [&str; 11] = ["get", "define", "isArray", "length", "byteLength", "copyBuffer", "bytesFromMemory", "numbers", "wrap", "unwrap", "entries"];
 
 /// Elements per `numbers` helper call: the destination grows per chunk, as the generic
 /// reader's capacity does, so a lying `length` never reserves memory up front.
@@ -304,6 +304,16 @@ impl Env for WebEnv<'_> {
         // Ordinary read (`object[key]`, prototype-inclusive) through the captured Reflect.get.
         let v = self.call_helper("get", &[&o, &JsValue::from_str(key)])?;
         Ok(self.put(v))
+    }
+    fn own_entries(&mut self, v: Val) -> Result<Option<Val>, BindError> {
+        // Added after web ABI 1 shipped: an older @rnrs/runtime lacks it, and only
+        // `Record<string, T>` / `JsonValue` conversions need it.
+        if self.helpers.find("entries").is_none() {
+            return Err(BindError::error("Record<string, T> and JsonValue need a newer @rnrs/runtime (its conversion helpers lack `entries`)"));
+        }
+        let o = self.get(v).clone();
+        let entries = self.call_helper("entries", &[&o])?;
+        Ok(if entries.is_null() { None } else { Some(self.put(entries)) })
     }
     fn array_length(&mut self, array: Val) -> Result<u32, BindError> {
         let a = self.get(array).clone();

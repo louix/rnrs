@@ -32,6 +32,9 @@ export function bindThisAndFirst(
 const reflectGet = Reflect.get;
 const defineProperty = Object.defineProperty;
 const arrayIsArray = Array.isArray;
+const getPrototypeOf = Object.getPrototypeOf;
+const objectEntries = Object.entries;
+const objectPrototype = Object.prototype;
 const isView = ArrayBuffer.isView;
 const getter = (proto: object | undefined, key: string) =>
   proto ? Object.getOwnPropertyDescriptor(proto, key)?.get : undefined;
@@ -84,7 +87,9 @@ function bufferStatus(value: unknown): number {
  *    backend reads natively; the web backend calls `get` (and `length`).
  *  - define: creates an own data property (null-prototype descriptor), so inherited setters
  *    or descriptor-shaped prototype properties cannot intercept output.
- *  - isArray: Array.isArray (proxies of arrays are arrays). */
+ *  - isArray: Array.isArray (proxies of arrays are arrays).
+ *  - entries: `Record<string, T>` and `JsonValue` objects enumerate own enumerable string keys
+ *    (Object.entries) of plain objects only; ordinary records never enumerate. */
 export const conversionHelpers = Object.freeze({
   /** Ordinary read `object[key]` (Reflect.get captured at init). */
   get(object: object, key: string | number): unknown {
@@ -109,6 +114,12 @@ export const conversionHelpers = Object.freeze({
   },
   length(array: object): unknown {
     return reflectGet(array, 'length');
+  },
+  /** Object.entries of a plain object (prototype Object.prototype or null), or null for any
+   *  other object. Proxy traps and getters run; their exceptions propagate. */
+  entries(value: object): [string, unknown][] | null {
+    const proto = getPrototypeOf(value);
+    return proto === objectPrototype || proto === null ? objectEntries(value) : null;
   },
   /** 0 ArrayBuffer, 1 not a buffer, 2 SharedArrayBuffer, 3 resizable, 4 detached, 5 view.
    *  Brand checks through intrinsic getters captured at init; runs no user code. (Android:
@@ -153,6 +164,9 @@ export const conversionHelpers = Object.freeze({
     return new ArrayBufferCtor(length);
   },
 });
+
+/** Value type of the spec's `JsonValue` (generated wrappers use it in signatures). */
+export type { JsonValue } from './spec';
 
 export type ErrorCode = 'cancelled' | 'overloaded' | 'closed' | 'failed' | 'lost';
 

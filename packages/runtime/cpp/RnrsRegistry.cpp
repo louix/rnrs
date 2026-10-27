@@ -23,7 +23,7 @@ namespace rnrs {
 namespace {
 
 struct Registry {
-  std::vector<const RnrsModuleV2*> modules;
+  std::vector<const RnrsModuleV3*> modules;
   std::vector<std::string> refused;
   // Bound surface tables; owner n is surfaces[n - 1].
   std::vector<const RnrsSurfaceV1*> surfaces;
@@ -36,11 +36,11 @@ const Registry& registry() {
   static std::once_flag once;
   std::call_once(once, [] {
     for (const RnrsModuleEntry* e = kRnrsModules; e->getter; ++e) {
-      const RnrsModuleV2* t = e->getter();
+      const RnrsModuleV3* t = e->getter();
       std::string why;
       if (!t) {
         why = "returned no table";
-      } else if (t->abi != RNRS_ABI || t->size != sizeof(RnrsModuleV2)) {
+      } else if (t->abi != RNRS_ABI || t->size != sizeof(RnrsModuleV3)) {
         why = "was built for rnrs ABI " + std::to_string(t->abi) + " (table size " + std::to_string(t->size) +
               "); this @rnrs/runtime uses ABI " + std::to_string(RNRS_ABI) + ". Install versions of the module and @rnrs/runtime built for the same ABI";
       } else if (t->vtableSize != sizeof(JsiVTable) || t->scalarBindingSize != sizeof(RnrsScalarBinding)) {
@@ -82,7 +82,7 @@ const Registry& registry() {
         unusable.push_back(s);
       return why;
     };
-    std::vector<const RnrsModuleV2*> accepted;
+    std::vector<const RnrsModuleV3*> accepted;
     for (const auto* t : r.modules) {
       const std::string why = bind(t->surface);
       if (why.empty()) {
@@ -102,7 +102,7 @@ const Registry& registry() {
 
 }  // namespace
 
-const RnrsModuleV2* findModule(const std::string& name, const std::string& hash, std::string& error) {
+const RnrsModuleV3* findModule(const std::string& name, const std::string& hash, std::string& error) {
   const auto& r = registry();
   for (const auto* t : r.modules) {
     if (text(t->name, t->nameLen) != name) continue;

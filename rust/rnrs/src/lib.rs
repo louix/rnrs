@@ -14,7 +14,7 @@
 
 pub use rnrs_core as core;
 pub use rnrs_core::lifecycle::{Retire, TeardownScope};
-pub use rnrs_core::{CancelToken, Cancelled, Native};
+pub use rnrs_core::{CancelToken, Cancelled, JsonValue, Native};
 
 #[cfg(feature = "surface")]
 pub use rnrs_surface as surface;

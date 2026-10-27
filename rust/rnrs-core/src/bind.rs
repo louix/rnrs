@@ -12,6 +12,7 @@
 //! never stores them beyond the call, never holds a JS value across an await, and never
 //! keeps a borrowed native object across a conversion that could run JS. Native objects are
 //! always taken as owned [`Native`] clones.
+use std::collections::BTreeMap;
 use std::fmt;
 use std::future::Future;
 
@@ -120,6 +121,8 @@ pub struct Path<'a> {
 enum Segment<'a> {
     Name(&'a str),
     Index(u32),
+    /// A dictionary key: any string, so it prints quoted unless it is identifier-like.
+    Key(&'a str),
 }
 
 impl<'a> Path<'a> {
@@ -132,6 +135,16 @@ impl<'a> Path<'a> {
     pub fn index<'b>(&'b self, index: u32) -> Path<'b> {
         Path { parent: Some(self), segment: Segment::Index(index) }
     }
+    /// A `Record<string, T>` or `JsonValue` object key: `.key` if identifier-like, else `["key"]`.
+    pub fn key<'b>(&'b self, key: &'b str) -> Path<'b> {
+        Path { parent: Some(self), segment: Segment::Key(key) }
+    }
+}
+
+fn identifier_like(key: &str) -> bool {
+    let mut chars = key.chars();
+    chars.next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_' || c == '$')
+        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '$')
 }
 
 impl fmt::Display for Path<'_> {
@@ -141,10 +154,12 @@ impl fmt::Display for Path<'_> {
             match self.segment {
                 Segment::Name(name) => write!(f, ".{name}"),
                 Segment::Index(i) => write!(f, "[{i}]"),
+                Segment::Key(key) if identifier_like(key) => write!(f, ".{key}"),
+                Segment::Key(key) => write!(f, "[{key:?}]"),
             }
         } else {
             match self.segment {
-                Segment::Name(name) => f.write_str(name),
+                Segment::Name(name) | Segment::Key(name) => f.write_str(name),
                 Segment::Index(i) => write!(f, "[{i}]"),
             }
         }
@@ -231,6 +246,10 @@ pub enum UnwrapError {
 ///   there (a revoked proxy) reads as `Other`.
 /// - `array_length` reads `length` (proxy traps run) and fails unless it is an integer in
 ///   `0..=u32::MAX`.
+/// - `own_entries` is `Object.entries` of a plain object (prototype `Object.prototype` or
+///   `null`): own enumerable string keys in property order with ordinarily read values, as a
+///   new array of `[key, value]` pairs (whose own elements read without running JS). `None`
+///   for any other object. Proxy traps and getters run; their exceptions propagate.
 ///
 /// Scope: outputs resist inherited setters and descriptor-shaped prototype properties (prototype
 /// pollution); inputs deliberately follow ordinary JS reads. It is not a sandbox: functions the
@@ -262,6 +281,9 @@ pub trait Env {
     fn get_property(&mut self, object: Val, key: &str) -> Result<Val, BindError>;
     fn array_length(&mut self, array: Val) -> Result<u32, BindError>;
     fn get_index(&mut self, array: Val, index: u32) -> Result<Val, BindError>;
+    /// `Object.entries(v)` if `v` (already known to be a non-array, non-wrapper object) is a
+    /// plain object; `None` otherwise. Used by `Record<string, T>` and `JsonValue` objects only.
+    fn own_entries(&mut self, v: Val) -> Result<Option<Val>, BindError>;
     /// Owned numeric array conversion. Backends may fuse reads, but must preserve
     /// ordinary reads, one length read, first-error ordering and IEEE numbers.
     fn number_array(&mut self, v: Val, path: &Path<'_>) -> Result<Vec<f64>, BindError> {
@@ -412,6 +434,85 @@ impl<T: IntoJs> IntoJs for Vec<T> {
         }
         Ok(array)
     }
+}
+
+/// `Record<string, T>` input: see [`map_from_js_with`].
+impl<T: FromJs> FromJs for BTreeMap<String, T> {
+    fn from_js(env: &mut dyn Env, v: Val, path: &Path<'_>) -> Result<Self, BindError> {
+        map_from_js_with(env, v, path, &mut |env, v, path| T::from_js(env, v, path))
+    }
+}
+
+impl<T: IntoJs> IntoJs for BTreeMap<String, T> {
+    fn into_js(self, env: &mut dyn Env) -> Result<Val, BindError> {
+        map_into_js_with(self, env, &mut |value, env| value.into_js(env))
+    }
+}
+
+/// The `[key, value]` pairs of a plain object (`Object.entries`, see [`Env::own_entries`]):
+/// arrays, functions, native wrappers and objects with another prototype are rejected.
+/// `what` names the expected type in errors. Calls `each` per entry in property order, with
+/// the key as a UTF-8 copy (lone surrogates become U+FFFD) and its path.
+pub fn entries_from_js(
+    env: &mut dyn Env,
+    v: Val,
+    path: &Path<'_>,
+    what: &str,
+    each: &mut dyn FnMut(&mut dyn Env, String, Val, &Path<'_>) -> Result<(), BindError>,
+) -> Result<(), BindError> {
+    match env.kind(v) {
+        Kind::Object => {}
+        _ => return Err(expected(env, v, path, what)),
+    }
+    // Unwrapping runs no JS; a wrapper is reported as such rather than as a non-plain object.
+    if !matches!(env.unwrap_native(v), Err(UnwrapError::NotNative)) {
+        return Err(BindError::type_error(format!("{path} must be {what}, got a native object")));
+    }
+    let Some(entries) = env.own_entries(v)? else {
+        return Err(BindError::type_error(format!(
+            "{path} must be {what}, got an object whose prototype is not Object.prototype or null"
+        )));
+    };
+    let length = env.array_length(entries)?;
+    for i in 0..length {
+        let pair = env.get_index(entries, i)?;
+        let key = env.get_index(pair, 0)?;
+        let value = env.get_index(pair, 1)?;
+        let key = env.string_value(key).ok_or_else(|| BindError::type_error(format!("{path}: an object key is not a string")))?;
+        each(env, key.clone(), value, &path.key(&key))?;
+    }
+    Ok(())
+}
+
+pub(crate) fn duplicate_key(path: &Path<'_>) -> BindError {
+    BindError::type_error(format!("{path}: two keys become the same Rust string (lone UTF-16 surrogates become U+FFFD)"))
+}
+
+/// `Record<string, T>` input: an owned map of a plain object's own enumerable string keys
+/// (inherited, non-enumerable and symbol keys are ignored). Keys and values are read first, in
+/// one pass (`Object.entries`), then converted in property order, stopping at the first error.
+pub fn map_from_js_with<T>(env: &mut dyn Env, v: Val, path: &Path<'_>, read: Reader<'_, T>) -> Result<BTreeMap<String, T>, BindError> {
+    let mut out = BTreeMap::new();
+    entries_from_js(env, v, path, "a plain object", &mut |env, key, value, path| {
+        if out.contains_key(&key) {
+            return Err(duplicate_key(path));
+        }
+        let value = read(env, value, path)?;
+        out.insert(key, value);
+        Ok(())
+    })?;
+    Ok(out)
+}
+
+/// `Record<string, T>` output: a new ordinary object with one own data property per entry, in
+/// key order (`__proto__` included: properties are defined, never assigned).
+pub fn map_into_js_with<T>(values: BTreeMap<String, T>, env: &mut dyn Env, write: Writer<'_, T>) -> Result<Val, BindError> {
+    let object = env.object();
+    for (key, value) in values {
+        let value = write(value, env)?;
+        env.set_property(object, &key, value)?;
+    }
+    Ok(object)
 }
 
 /// `ArrayBuffer` input: an owned copy (snapshot at conversion time).
