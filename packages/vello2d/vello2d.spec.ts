@@ -1,23 +1,16 @@
-// 2D renderer for @rnrs/surface (Android): the TypeScript contract. TypeScript owns all
-// application and game state and submits whole frames; Rust (rust/) owns only rendering
-// resources (render thread, Vello raster context, wgpu device and surface) and the latest
-// submitted frame. See docs/surface.md and frame.ts for the frame format.
+// Submit whole frames from TypeScript; Rust owns rasterization and presentation.
 import type { NativeModule, NativeObject } from '@rnrs/runtime/spec';
 
 export interface RendererOptions {
   /** Raster pixels per physical surface pixel, 0.25 to 1. Lower values render a smaller
    *  image and let the GPU scale it up when presenting. */
   resolutionScale: number;
-  /** Lab diagnostics: capacity of a ring of submit and
-   *  present events with monotonic timestamps, read with `drainTimings()`. 0 or absent (the
-   *  default) records and allocates nothing. At most 65536. */
+  /** Optional timing history capacity, up to 65536 events; 0 (default) disables recording. */
   timingRecords?: number;
 }
 
 export interface RendererStats {
-  /** "attached": a platform window is attached; "detached": none (unmounted, background,
-   *  zero size); "closed": after close() or dispose(). A string because the generator does
-   *  not yet support string-literal unions. */
+  /** "attached", "detached" (unmounted, background or zero size), or "closed". */
   state: string;
   /** Attached window in physical pixels, and the display scale (pixels per layout unit). */
   surfaceWidth: number;
@@ -67,29 +60,20 @@ export interface RendererStats {
    *  but still releasing GPU resources). create() fails at the thread limit. */
   renderersOpen: number;
   renderThreadsAlive: number;
-  /** Whether this renderer is closed automatically when its JS runtime is torn down
-   *  (reload). False only for renderers created outside a runtime adapter. */
+  /** Whether runtime teardown automatically closes this renderer. */
   ownedByRuntime: boolean;
 }
 
 export interface Renderer extends NativeObject {
   /** The opaque key for `<SurfaceView surfaceKey={...}>` (@rnrs/surface). */
   surfaceKey(): number;
-  /** Replaces the pending frame (the latest submission wins; at most one frame waits, and
-   *  one is being drawn). The bytes are copied. Returns false, without throwing, only once
-   *  the renderer is closed; while the GPU is recovering or failed it returns true and the
-   *  frame waits. Calls that reach the method after close are contained this way; calls
-   *  through a torn-down runtime adapter or Worklets endpoint still throw before reaching it. Throws only for a frame
-   *  larger than 1 MiB or not a multiple of 4 bytes; malformed commands are counted in
-   *  `framesInvalid` and skipped on the render thread. */
+  /** Copies and replaces the pending frame; returns false if closed.
+   *  Throws for buffers over 1 MiB or not a multiple of 4 bytes. Malformed commands
+   *  are skipped and counted in framesInvalid. */
   submit(frame: ArrayBuffer): boolean;
   stats(): RendererStats;
-  /** Lab diagnostics: the events recorded since the last call (empty unless created with
-   *  `timingRecords`). Little-endian header [magic, version, count, highWater: u32,
-   *  dropped: u64, nowNs: u64 (CLOCK_MONOTONIC), capacity, pad: u32], then `count` records
-   *  [tNs: u64, seq, frame, attachment: u32, kind: u16 (1 submit, 2 present returned,
-   *  3 present call returned any error: skipped, revoked, surface lost, device lost or failed),
-   *  pad: u16]. Only intervals between consecutive `seq` are meaningful. */
+  /** Returns recorded timing events and clears the history; empty when disabled.
+   *  The binary format is documented in rust/src/timing.rs. */
   drainTimings(): ArrayBuffer;
   /** Stops rendering; the render thread releases the window and GPU resources. Idempotent;
    *  never blocks. dispose() also closes. */
@@ -97,7 +81,6 @@ export interface Renderer extends NativeObject {
 }
 
 export interface Vello2DModule extends NativeModule {
-  /** Fails immediately (never waits) when the process already has the maximum number of
-   *  render threads alive, counting closed renderers still releasing GPU resources. */
+  /** Creates a renderer; fails if two render threads are still running or releasing resources. */
   create(options: RendererOptions): Renderer;
 }

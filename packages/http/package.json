@@ -2,7 +2,7 @@
   "name": "@rnrs/example-http",
   "version": "0.4.0",
   "private": true,
-  "description": "HTTP client for React Native (Android and iOS, reqwest on Tokio) and browser Wasm (reqwest over fetch), implemented in Rust. Experimental.",
+  "description": "Async HTTP requests with reqwest on Android, iOS and the browser.",
   "license": "MIT",
   "rustNative": {
     "targets": [

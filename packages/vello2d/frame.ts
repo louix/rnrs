@@ -1,16 +1,5 @@
-// Frame writer for @rnrs/example-vello2d: encodes one frame of drawing commands into a reused
-// buffer, submitted with one `renderer.submit(writer.finish())` call per frame (no call per
-// primitive). Format (little-endian f32, decoded in rust/src/frame.rs):
-//
-//   [0] version 1   [1] n payload values   payload: opcode, operands...
-//   1 clear r g b a | 2 rect x y w h r g b a | 3 circle cx cy radius r g b a
-//   4 roundRect x y w h radius r g b a | 5 line x0 y0 x1 y1 width r g b a
-//
-// Coordinates are layout units (as React Native layout); colours are straight sRGB
-// components 0..1. `finish()` returns a new ArrayBuffer holding exactly the used values (one
-// copy in JS, of the used bytes only), which `submit` copies once more into Rust; the writer's
-// growable working buffer is reused across frames.
-
+// Build a complete frame and pass finish() to renderer.submit(). Coordinates use layout
+// units; colours are sRGB RGBA components from 0 to 1. Format: rust/src/frame.rs.
 export type Color = readonly [r: number, g: number, b: number, a: number];
 
 const MAX_FLOATS = (1 << 20) / 4;
@@ -65,7 +54,7 @@ export class FrameWriter {
     return (this.data.buffer as ArrayBuffer).slice(0, this.used * 4);
   }
 
-  /** Payload values written so far (for tests and diagnostics). */
+  /** Payload values written so far. */
   get length(): number {
     return this.used - HEADER;
   }

@@ -2,7 +2,7 @@
   "name": "@rnrs/example-vello2d",
   "version": "0.4.0",
   "private": true,
-  "description": "2D renderer for @rnrs/surface on Android and iOS: Vello scene raster (vello_cpu) presented through wgpu (Vulkan on Android, Metal on iOS), fed by whole frames from TypeScript. Experimental.",
+  "description": "Draw TypeScript frames with Vello's CPU rasterizer on Android, iOS and the browser. Experimental.",
   "license": "MIT",
   "rustNative": {
     "targets": [

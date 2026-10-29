@@ -1,5 +1,4 @@
-//! Implementation of the BLAKE3 spec (../blake3.spec.ts) over the `blake3` crate. Plain
-//! Rust: no JS, JSI or platform code.
+//! Wrap blake3 with buffer inputs, Native<Hasher> objects and cancellable chunked updates.
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Mutex, MutexGuard};
@@ -16,11 +15,7 @@ const MAX_XOF: f64 = 1_048_576.0;
 #[derive(Default)]
 pub struct Blake3;
 
-/// Incremental state with a busy gate. While an `updateLater` runs, every other operation on
-/// the same hasher (sync or async) fails with [`BUSY`] instead of interleaving with it. The
-/// async update hashes into a private copy of the state and replaces the committed state in
-/// one step only after all its input is hashed, so the committed state always reflects whole
-/// updates, never a prefix.
+/// Keep each async update atomic; reject other operations while it runs.
 pub struct Hasher(Mutex<State>);
 
 struct State {
@@ -95,11 +90,8 @@ impl spec::Hasher for Hasher {
         Ok(())
     }
 
-    /// Takes the busy gate when the operation starts running, hashes into a copy of the
-    /// committed state, and commits the copy only if all of `data` was hashed. An error or
-    /// cancellation observed before the commit leaves the committed state unchanged.
-    /// Cancellation that arrives after the commit (the promise may still reject with
-    /// AbortError) does not roll the update back.
+    /// Stage the update in a copy and commit only after hashing all input.
+    /// Cancellation after the commit cannot undo it.
     async fn update_later(&self, data: Vec<u8>, cancel: CancelToken) -> Result<(), String> {
         let (mut staged, _busy) = {
             let mut state = self.idle()?;

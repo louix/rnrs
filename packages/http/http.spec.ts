@@ -1,6 +1,4 @@
-// HTTP for React Native (Android, iOS) and the browser: the TypeScript contract. The Rust
-// implementation in rust/ uses reqwest: natively on the framework's Tokio runtime with
-// rustls and the bundled webpki root certificates, in the browser over fetch.
+// Async HTTP requests with reqwest on Android, iOS and the browser.
 import type { NativeModule } from '@rnrs/runtime/spec';
 
 export interface Header {
@@ -15,11 +13,9 @@ export interface HttpRequest {
   method?: string;
   headers?: Header[];
   body?: ArrayBuffer;
-  /** Whole-request deadline (connect, headers and body) in ms: an integer from 1 to
-   *  300000; default 30000. */
+  /** Whole-request timeout in ms: 1–300000; default 30000. */
   timeoutMs?: number;
-  /** Largest accepted response body in bytes: an integer from 0 to 67108864; default
-   *  8388608. Bodies are read incrementally and the request fails as soon as more arrives. */
+  /** Response size limit in bytes: 0–67108864; default 8388608 (8 MiB). */
   maxBytes?: number;
 }
 
@@ -32,15 +28,13 @@ export interface HttpResponse {
   body: ArrayBuffer;
 }
 
-/** Process-wide counters (diagnostics and tests). */
+/** Request counters shared across runtimes. */
 export interface HttpDiagnostics {
-  /** Requests being sent or received (counted once the request is checked and the client
-   *  exists, until its future ends). */
+  /** Validated requests currently being sent or received. */
   active: number;
-  /** Requests that reached that point (failures before it are not counted). */
+  /** Total requests started after validation and client setup. */
   started: number;
-  /** Of those, the ones cancelled or dropped (teardown) before producing a result; errors
-   *  such as timeouts are results. */
+  /** Started requests cancelled or dropped before a result; timeouts count as results. */
   droppedEarly: number;
   /** Response bytes currently buffered by active requests. */
   bufferedBytes: number;

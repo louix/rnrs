@@ -2,7 +2,7 @@
   "name": "@rnrs/labs-values",
   "version": "0.4.0",
   "private": true,
-  "description": "Value-conversion fixture module (generator M2/M3). Rust implementation in rust/values.",
+  "description": "Pass records, unions, dictionaries, buffers, JSON and typed errors between TypeScript and Rust.",
   "license": "MIT",
   "rustNative": {
     "targets": [

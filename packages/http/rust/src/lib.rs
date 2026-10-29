@@ -1,12 +1,5 @@
-//! Implementation of the HTTP spec (../http.spec.ts) over reqwest. Plain Rust: natively
-//! reqwest runs on the framework's Tokio runtime (rustls, bundled webpki roots); on Wasm it
-//! is reqwest's fetch backend. No JS, JSI or platform code.
-//!
-//! Every request races three things: the request itself (headers, then the body read chunk
-//! by chunk against `maxBytes`), its deadline, and the operation's cancellation. Whichever
-//! loses is dropped, which drops reqwest's future: natively the connection of an unfinished
-//! response is not returned to the pool; in the browser reqwest's AbortController aborts the
-//! fetch. (What the server observes is checked by the integration tests, not assumed.)
+//! Async reqwest requests with response size limits, timeouts and cancellation.
+//! Native builds use Tokio and rustls; browser builds use Fetch.
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
@@ -22,10 +15,7 @@ pub const MAX_TIMEOUT_MS: f64 = 300_000.0;
 pub const DEFAULT_MAX_BYTES: f64 = 8.0 * 1024.0 * 1024.0;
 pub const MAX_MAX_BYTES: f64 = 64.0 * 1024.0 * 1024.0;
 const METHODS: &[&str] = &["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"];
-/// Headers the transport controls (framing, connection management, routing). Setting them
-/// could desynchronize framing or the connection pool, so they are rejected on every target.
-/// Browsers additionally drop or override their own forbidden headers (Cookie, Origin,
-/// Referer, ...) silently; this list does not try to reproduce that.
+/// Reject headers controlled by the transport. Browsers may restrict additional headers.
 const TRANSPORT_HEADERS: &[&str] = &[
     "host", "content-length", "transfer-encoding", "connection", "keep-alive", "upgrade", "te", "trailer", "expect",
     "proxy-connection", "proxy-authorization", "http2-settings",
@@ -44,8 +34,6 @@ impl Default for Http {
         Http { client: builder.build().map_err(|e| format!("network: cannot create the HTTP client: {}", chain(&e))) }
     }
 }
-
-// ---- diagnostics ---------------------------------------------------------------------
 
 static ACTIVE: AtomicU64 = AtomicU64::new(0);
 static STARTED: AtomicU64 = AtomicU64::new(0);
@@ -89,8 +77,6 @@ pub fn diagnostics() -> HttpDiagnostics {
     }
 }
 
-// ---- validation ----------------------------------------------------------------------
-
 fn integer_in(value: Option<f64>, default: f64, max: f64, min: f64, what: &str) -> Result<f64, String> {
     let v = value.unwrap_or(default);
     if v.is_finite() && v.fract() == 0.0 && (min..=max).contains(&v) {
@@ -110,8 +96,7 @@ struct Plan {
     max_bytes: u64,
 }
 
-/// Validates without copying the body (used on the JS thread before admission); `plan`
-/// then takes the request by value.
+/// Validate borrowed inputs before starting async work; `plan` then takes ownership.
 fn check(request: &HttpRequest) -> Result<Plan, String> {
     let url = reqwest::Url::parse(&request.url).map_err(|e| format!("invalid: url {:?}: {e}", request.url))?;
     if !matches!(url.scheme(), "http" | "https") {
@@ -145,8 +130,6 @@ fn check(request: &HttpRequest) -> Result<Plan, String> {
     })
 }
 
-// ---- errors --------------------------------------------------------------------------
-
 fn chain(error: &dyn std::error::Error) -> String {
     let mut out = error.to_string();
     let mut source = error.source();
@@ -177,8 +160,6 @@ fn classify(error: reqwest::Error) -> String {
     };
     format!("{code}: {}", chain(&error))
 }
-
-// ---- the request ---------------------------------------------------------------------
 
 #[cfg(not(target_arch = "wasm32"))]
 async fn sleep(d: Duration) {

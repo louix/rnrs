@@ -1,28 +1,8 @@
-//! The render thread and the renderer's shared state, independent of the GPU (the GPU side is
-//! a [`Presenter`]; tests use a fake one).
-//!
-//! Invariants (docs/surface.md, "Renderer obligations"):
-//! - `submit` checks `closed` and stores the frame under the inbox lock that `close` takes, so a
-//!   call that finishes after close cannot store anything. While the GPU is recovering or has
-//!   failed, `submit` still returns true and the frame stays pending (latest wins): `false`
-//!   means only "closed".
-//! - At most one frame is pending (last write wins) and one is being drawn.
-//! - Only the render thread owns the presenter (window lease, GPU resources). `close` and
-//!   `Drop` only set a flag and notify; the thread unbinds and drops the presenter itself and
-//!   is never joined from a JS, UI or finalizer thread.
-//! - The window is used only through admitted operations (rnrs-surface's admission protocol):
-//!   the presenter admits acquire and present separately, so a revoked attachment gets no
-//!   new operation. The GPU device is created before a lease is taken, so a detach never waits
-//!   for device creation.
-//! - GPU states: `none` (no device) → `ready`; a failed bind/present or a lost surface or
-//!   device → `recovering` (old resources dropped on this thread first; retried with
-//!   exponential backoff) → `ready` only after a frame is presented again, or after
-//!   [`MAX_RECOVERY_ATTEMPTS`] consecutive failures → `failed` (kept until the next
-//!   attachment or resize). A successful bind alone does not reset the attempt count, so a
-//!   bind-then-fail cycle is bounded too. Errors are kept in `last_error`.
-//!
-//! Locks: the inbox and stats locks are each taken alone; the surface's locks are rnrs-surface's.
-//! No lock is held while calling the presenter, wakers, or dropping frames.
+//! Keeps one pending frame and one being drawn; newer submissions replace pending frames.
+//! Only the render thread owns the presenter, lease and GPU resources.
+//! Create the device before leasing the window, and admit GPU operations through the lease.
+//! Failed presentations retry with bounded backoff; close() wakes the thread to release resources.
+//! Inbox and stats locks are taken separately and released before calling the presenter.
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
@@ -57,9 +37,7 @@ pub struct SurfaceLease<S> {
     pub lease: WindowLease,
 }
 
-/// Why an acquire is refused when the last configure's read-back did not confirm the
-/// drawable timeout (rnrs_surface::layer): the present fails like a bind failure, so the window
-/// is unbound and rebound (reconfigured) under the bounded recovery backoff.
+/// Treat an unconfirmed drawable timeout as a failure so the window is rebound.
 pub const ACQUIRE_REFUSED: &str = "acquire refused: the drawable timeout was not confirmed after configure";
 
 /// One present on a leased window, in the order the admission protocol requires:
@@ -157,7 +135,7 @@ pub struct Shared {
     inbox: Mutex<Inbox>,
     wake: Condvar,
     stats: Mutex<Stats>,
-    /// Lab diagnostics ring (disabled unless created with records).
+    /// Optional timing history.
     events: EventRing,
 }
 
@@ -170,7 +148,7 @@ impl Shared {
         lock(&self.stats).clone()
     }
 
-    /// The diagnostics ring's records since the last drain (empty when disabled).
+    /// Timing events since the last drain; empty when disabled.
     pub fn drain_timings(&self) -> Vec<u8> {
         self.events.drain()
     }

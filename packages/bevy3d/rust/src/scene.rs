@@ -1,25 +1,7 @@
-//! The Bevy side, shared by every platform: a headless Bevy app (no winit, no window, no event
-//! loop) on our device, updated by the render loop (the native render thread, or the browser's
-//! frame callback in `web.rs`). Its camera renders into an offscreen texture we own, registered
-//! as a `ManualTextureView`; the platform presenter blits that texture onto its surface.
-//!
-//! Limits of this example:
-//! - **No file assets.** Bevy's Android file reader needs an activity Bevy owns; here the
-//!   default asset source is replaced by one that fails every read with an error naming this
-//!   limit. The scene uses only in-code meshes and materials and Bevy's embedded shaders.
-//! - No Bevy windows, audio or logging plugin; controls arrive as [`Controls`].
-//! - **Touch** (Android): rnrs-surface's touch records ([`BevyScene::feed_touch`]) become real
-//!   Bevy `TouchInput` messages, so Bevy's own `touch_screen_input_system` maintains the
-//!   `Touches` resource. Positions are logical pixels (physical ÷ scale), as bevy_winit would
-//!   send. `TouchInput::window` is a [`SurfaceTouchTarget`] marker entity, **not** a Bevy
-//!   `Window`: systems that look the window up (picking, UI focus, cursor) are unsupported.
-//! - Single-threaded Bevy (no `multi_threaded`): simulation, extraction and rendering all run
-//!   in `update()` on the render thread.
-//! - **Render errors end rendering.** Bevy logs a render (wgpu validation or out-of-memory) error
-//!   and then asks its `RenderErrorHandler`. Ours ([`on_render_error`]) stops rendering, like
-//!   Bevy's default, and records the error; [`BevyScene::update`] then returns it, so the render
-//!   thread fails the attachment instead of presenting a texture Bevy no longer writes. (Bevy's
-//!   default also requests `AppExit`, which nothing here runs.)
+//! A headless Bevy app with an offscreen camera target, updated by the render loop.
+//! Meshes and materials are created in code; file assets are disabled.
+//! Android surface touches feed Bevy's TouchInput and Touches, using logical pixels.
+//! There is no Bevy Window, so window-dependent input systems are unsupported.
 use std::collections::HashMap;
 use std::path::Path;
 

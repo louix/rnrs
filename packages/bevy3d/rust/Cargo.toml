@@ -2,34 +2,28 @@
 name = "rnrs-bevy3d"
 version = "0.4.0"
 edition = "2021"
-# Bevy 0.20.0's MSRV. Apps bundling this module build their whole Rust bundle with 1.97.1
-# (RUSTUP_TOOLCHAIN=1.97.1); the framework's default toolchain is unchanged.
+# Bevy requires Rust 1.97.1; build the app bundle with this toolchain.
 rust-version = "1.97.1"
-description = "Bounded Bevy example module for @rnrs/example-bevy3d: a Rust-owned Bevy scene rendered offscreen and presented with wgpu on an rnrs-surface (Android: Vulkan; iOS: Metal; browser: WebGPU prototype; see packages/bevy3d/README.md)."
+description = "A Bevy scene rendered offscreen and presented with wgpu through rnrs-surface."
 
 [dependencies]
 rnrs-core = "0.4"
 rnrs-surface = "0.4"
 log = "0.4"
-# Bevy 0.20.0 uses wgpu ^30, the same 30.0.1 the framework's renderers pin. Only the plugins a
-# lit cube needs; no winit (Bevy never sees the window), no log plugin (rnrs-log owns logging),
-# no multi_threaded (one render thread; no pipelined rendering), no file assets. `touch` gives
-# Bevy's TouchInput message and Touches resource, fed from rnrs-surface's touch queue (scene.rs).
+# Enable the plugins for a lit cube and touch input. rnrs supplies the surface and logging.
 bevy = { version = "=0.20.0", default-features = false, features = ["std", "bevy_render", "bevy_core_pipeline", "bevy_pbr", "bevy_mesh", "bevy_camera", "bevy_asset", "touch"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 pollster = "0.4"
 
-# The same pinned wgpu with one backend per target, as vello2d: Metal on iOS, Vulkan on the other
-# native targets (Android; host tests), and the browser's WebGPU on wasm32 (no WebGL).
+# Select a GPU backend for each target: Metal, Vulkan or WebGPU.
 [target.'cfg(target_os = "ios")'.dependencies]
 wgpu = { version = "=30.0.1", default-features = false, features = ["std", "wgsl", "metal"] }
 
 [target.'cfg(not(any(target_os = "ios", target_arch = "wasm32")))'.dependencies]
 wgpu = { version = "=30.0.1", default-features = false, features = ["std", "wgsl", "vulkan"] }
 
-# Browser (web.rs): Bevy's `webgpu` feature selects its WebGPU (not WebGL2) paths. The render
-# loop is the host's requestAnimationFrame on the main thread; no thread is spawned.
+# Browser rendering runs on the main thread through requestAnimationFrame.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 bevy = { version = "=0.20.0", default-features = false, features = ["webgpu"] }
 wgpu = { version = "=30.0.1", default-features = false, features = ["std", "wgsl", "webgpu"] }
@@ -38,8 +32,6 @@ wasm-bindgen = "=0.2.129"
 wasm-bindgen-futures = "=0.4.79"
 js-sys = "=0.3.106"
 
-# bevy_asset depends on bevy_android, whose android-activity refuses to compile without an
-# activity backend. `native-activity` is enabled only to satisfy that; its entry point is never
-# invoked (React Native's activity is not a NativeActivity), see `android_main` in lib.rs.
+# Bevy's Android dependency requires an activity backend. See android_main in lib.rs.
 [target.'cfg(target_os = "android")'.dependencies]
 android-activity = { version = "0.6", features = ["native-activity"] }

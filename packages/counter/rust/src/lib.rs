@@ -1,7 +1,4 @@
-//! The module author's implementation of the Counter spec (packages/counter/counter.spec.ts).
-//! It is ordinary Rust: the generated traits in `rnrs_interface`, `&self` methods with interior
-//! mutability and standard futures. Timers come from the library the target needs (Tokio
-//! natively, browser timers on Wasm). No JS, JSI or platform code.
+//! Mutable counters behind Native<T> handles, with validation and cancellable async methods.
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -62,14 +59,12 @@ impl spec::Counter for BasicCounter {
         Ok(*self.value.lock().unwrap_or_else(|e| e.into_inner()))
     }
 
-    /// Invalid delays are rejected before the operation is admitted.
+    /// validate_* hooks reject invalid inputs before async work starts.
     fn validate_add_later(&self, _delta: &f64, delay_ms: &f64, _uncancellable: &bool) -> Result<(), String> {
         validate_delay(*delay_ms).map(drop)
     }
 
-    /// Waits, then adds. Cooperative unless `uncancellable`: if cancelled while waiting it
-    /// stops without changing the value. The uncancellable form models a non-cooperative
-    /// library call that always applies its side effect.
+    /// Check the token while waiting unless the caller requests an uncancellable addition.
     async fn add_later(&self, delta: f64, delay_ms: f64, uncancellable: bool, cancel: CancelToken) -> Result<f64, String> {
         let delay = validate_delay(delay_ms)?;
         if uncancellable {

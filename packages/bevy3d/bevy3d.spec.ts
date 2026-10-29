@@ -1,9 +1,4 @@
-// Bounded Bevy example for @rnrs/surface (Android; iOS and browser experimental): the TypeScript
-// contract. Rust owns the scene, the simulation and the render loop (a Bevy app rendering one
-// rotating cube into an offscreen texture, blitted and presented on the surface): on its own
-// thread natively, and in the browser in the host's requestAnimationFrame callback. TypeScript
-// only sets a few latest-value controls; no per-frame work happens in app JavaScript.
-// See packages/bevy3d/README.md for scope and limits.
+// A Rust-owned Bevy scene controlled from TypeScript. See README.md for platform limits.
 import type { NativeModule, NativeObject } from '@rnrs/runtime/spec';
 
 export interface SceneStats {
@@ -11,10 +6,8 @@ export interface SceneStats {
   state: string;
   surfaceWidth: number;
   surfaceHeight: number;
-  /** "none" (no device yet), "ready", or "failed": a GPU or surface error ended rendering for
-   *  the current attachment (no retry until the next attachment); see lastError. Browser only:
-   *  "initializing" (asynchronous WebGPU setup) and "warming" (submitting, but Bevy's cube
-   *  pipeline is not created yet). "ready" is not proof of display. */
+  /** "none", "ready" or "failed" (see lastError). Browsers also use "initializing"
+   *  and "warming" while loading shaders. A new attachment retries after failure. */
   gpuState: string;
   /** Bevy updates (simulation + render into the offscreen texture). */
   framesRendered: number;
@@ -32,10 +25,7 @@ export interface SceneStats {
   /** Accepted rotation samples and latest sample applied by a successful Bevy update. */
   inputReceived: number;
   inputApplied: number;
-  /** Native touch input (Android, `<SurfaceView touchInput="rust">`), counted by the Bevy
-   *  adapter since the current Bevy app was created: touches started, ended, canceled (by the
-   *  platform, a reset or a new attachment), resets applied, touches down as fed, and touches
-   *  pressed in Bevy's `Touches` after the last update. Browser and iOS: always 0. */
+  /** Android touch counts since the Bevy app was created. Enable with touchInput="rust". */
   touchesStarted: number;
   touchesEnded: number;
   touchesCanceled: number;
@@ -45,24 +35,20 @@ export interface SceneStats {
   /** Last fed touch position, logical pixels (layout units) from the surface's top-left. */
   lastTouchX: number;
   lastTouchY: number;
-  /** rnrs-surface's queue, since the scene was created: accepted records, moves coalesced,
-   *  overflow resets, and pushes refused (stale attachment, not opted in, capacity) or
-   *  dropped (pointer canceled by a reset or unknown). */
+  /** Surface touch queue counts since the scene was created. */
   touchAccepted: number;
   touchCoalesced: number;
   touchOverflows: number;
   touchRefused: number;
   touchDropped: number;
-  /** Device creation, and Bevy app creation with its warm-up updates (pipeline compilation,
-   *  done before any window is leased), in milliseconds. */
+  /** Device setup and Bevy warm-up time, in milliseconds. */
   deviceInitMs: number;
   firstUpdateMs: number;
   /** Swapchain format, view format, alpha and present mode ("" while not bound). */
   presentation: string;
   lastError: string | null;
-  /** Process-wide: scenes not yet closed, and render threads alive (running, or closed but
-   *  still releasing GPU resources). create() fails at the thread limit. Browser: no threads;
-   *  renderThreadsAlive counts scenes holding WebGPU state, and the limit applies to open scenes. */
+  /** Open scenes and live render threads across runtimes.
+   *  In browsers, renderThreadsAlive counts scenes holding WebGPU state. */
   scenesOpen: number;
   renderThreadsAlive: number;
   ownedByRuntime: boolean;
@@ -78,9 +64,8 @@ export interface Scene extends NativeObject {
   setColor(r: number, g: number, b: number): boolean;
   /** Rotation speed in radians per second, -20 to 20. */
   setSpeed(radiansPerSecond: number): boolean;
-  /** Absolute Y rotation in radians [-1000000, 1000000]. One latest-value slot;
-   * false if closed or the inbox is busy (sample dropped). Never waits for rendering.
-   * Opt-in Android worklet endpoint: allow-list Scene.setRotation and capture this handle. */
+  /** Absolute Y rotation in radians, -1000000 to 1000000. Returns false if closed or busy.
+   *  For Android Worklets, allow-list Scene.setRotation and capture this handle. */
   setRotation(radians: number): boolean;
   stats(): SceneStats;
   /** Stops rendering; the render thread releases the window, Bevy and the GPU. Idempotent;
@@ -89,7 +74,6 @@ export interface Scene extends NativeObject {
 }
 
 export interface Bevy3DModule extends NativeModule {
-  /** Fails immediately (never waits) when the process already has the maximum number of
-   *  render threads alive, counting closed scenes still releasing GPU resources. */
+  /** Creates a scene; fails if two render threads are still running or releasing resources. */
   create(): Scene;
 }

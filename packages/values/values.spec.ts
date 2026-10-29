@@ -1,6 +1,4 @@
-// Value-conversion fixture module: records, strings, arrays, optional and nullable values,
-// discriminated unions, dictionaries (Record<string, T>), JsonValue and declared errors (Throws).
-// Rust implementation: rust/values. Used by the shared value suite on Android and web.
+// Records, unions, dictionaries, buffers, JSON and typed errors passed to Rust.
 import type { JsonValue, NativeModule, NativeObject, Throws } from '@rnrs/runtime/spec';
 import type { Size } from './shared';
 
@@ -43,7 +41,7 @@ export type Event =
   | { type: 'batch'; shapes: Shape[]; label?: string }
   | { type: 'two-words'; note: string | null };
 
-/** A record carrying bytes; `after` is read after `data` (conversion order). */
+/** A record containing an ArrayBuffer. */
 export interface Blob {
   name: string;
   data: ArrayBuffer;
@@ -53,7 +51,6 @@ export interface Blob {
 /** An aliased Promise result is an async method too. */
 export type Later = Promise<number>;
 
-/** Field names that match locals of the generated glue (`object`, `value`). */
 export type Slot = { kind: 'filled'; object: number; value: string } | { kind: 'vacant' };
 
 /** A SQL-style result row: column name -> value. */
@@ -66,8 +63,7 @@ export interface Inventory {
   meta: JsonValue;
 }
 
-/** A declared error: thrown (sync) or rejected (async) as a DomainError with this as `data`.
- *  `detail` with a non-finite number fails its conversion (a framework error instead). */
+/** Thrown as a DomainError with this value in `data`. */
 export type LookupError =
   | { kind: 'notFound'; key: string }
   | { kind: 'invalid'; reason: string; at: number }
@@ -80,7 +76,7 @@ export interface Overflow {
   got: number[];
 }
 
-/** A native object taking records, to check receiver handling around getters. */
+/** A Rust object holding a collection of points. */
 export interface Bag extends NativeObject {
   add(p: Point): number;
   count(): number;
@@ -88,8 +84,7 @@ export interface Bag extends NativeObject {
   at(index: number): Throws<Point, LookupError>;
 }
 
-/** Native-object composition: objects that create, take and hold other native objects, and
- *  handles inside records, unions, arrays and optional or nullable values. */
+/** A named Rust object that can be shared with a Paint. */
 export interface Shader extends NativeObject {
   name(): string;
 }
@@ -103,7 +98,7 @@ export interface Paint extends NativeObject {
 
 export interface Statement extends NativeObject {
   sql(): string;
-  /** A handle to the database that prepared this statement (an object graph cycle). */
+  /** The database that prepared this statement. */
   database(): Database;
 }
 
@@ -133,7 +128,7 @@ export type StatementSlot =
 export interface ValuesModule extends NativeModule {
   echoNumber(x: number): number;
   echoBool(b: boolean): boolean;
-  /** a / b; fails with "division by zero" when b is 0 (a fallible prepared scalar entry). */
+  /** Returns a / b; throws "division by zero" when b is 0. */
   checkedDivide(a: number, b: number): number;
   echoString(s: string): string;
   /** UTF-8 byte length as Rust sees it. */
@@ -144,7 +139,7 @@ export interface ValuesModule extends NativeModule {
   echoStrings(xs: string[]): string[];
   echoPoint(p: Point): Point;
   echoLabeled(l: Labeled): Labeled;
-  /** Proves Rust received each field: label|tags|note|parent|points. */
+  /** Describes the fields as label|tags|note|parent|points. */
   describe(l: Labeled): string;
   maybe(x: number | null): number | null;
   maybeString(s: string | null): string | null;
@@ -168,7 +163,7 @@ export interface ValuesModule extends NativeModule {
   rowKeys(rows: Row[]): string[][];
   echoJson(v: JsonValue): JsonValue;
   echoJsonLater(v: JsonValue, ms: number): Promise<JsonValue>;
-  /** JsonValue::Number(x) as an async result: NaN and infinities fail its conversion. */
+  /** Returns a JSON number; rejects NaN and infinities. */
   jsonNumberLater(x: number): Promise<JsonValue>;
   /** `depth` nested arrays around null. */
   nestedJson(depth: number): JsonValue;
@@ -181,7 +176,6 @@ export interface ValuesModule extends NativeModule {
   /** Sum of all byte lengths, async: the dictionary is owned by the operation. */
   byteTotalLater(b: Record<string, ArrayBuffer>, ms: number): Promise<number>;
   echoSlot(slot: Slot): Slot;
-  /** Parameter names that match locals of the generated glue. */
   mix(env: number, receiver: string, result: boolean): string;
   doubleLater(x: number): Later;
   echoBytes(b: ArrayBuffer): ArrayBuffer;
@@ -217,7 +211,7 @@ export interface ValuesModule extends NativeModule {
   lookupLater(key: string, ms: number): Throws<Promise<number>, LookupError>;
   /** How many times lookup/lookupLater/half ran. */
   lookupCalls(): number;
-  /** x / 2 for even x, invalid otherwise: scalar-shaped, so it takes the generic call. */
+  /** Returns x / 2 for even x; throws an invalid LookupError otherwise. */
   half(x: number): Throws<number, LookupError>;
   /** The sum of `xs`, or Overflow when it exceeds `limit` (a record error). */
   limitedSum(xs: number[], limit: number): Throws<number, Overflow>;

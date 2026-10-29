@@ -2,7 +2,7 @@
   "name": "@rnrs/example-counter",
   "version": "0.4.0",
   "private": true,
-  "description": "Counter example module: TS spec here, Rust implementation in rust/.",
+  "description": "Mutable Rust counter with synchronous and cancellable async methods.",
   "license": "MIT",
   "rustNative": {
     "targets": [

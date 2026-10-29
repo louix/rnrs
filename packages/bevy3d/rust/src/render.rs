@@ -1,20 +1,7 @@
-//! The render thread: owns the GPU device, the Bevy app and the window lease, and runs the
-//! simulation and rendering. JS threads only set controls and read stats.
-//!
-//! Invariants (the surface contract of docs/surface.md, simplified for a prototype):
-//! - Only this thread touches the presenter, the Bevy app and the lease. `close` and `Drop`
-//!   only set a flag and notify; the thread drops everything itself and is never joined.
-//! - The device is created before a lease is taken, so a platform detach never waits for
-//!   device creation. Acquire, present and configure are each admitted through the lease.
-//! - Failure policy (no recovery machinery): a failed device creation, bind, resize, or a
-//!   lost surface or device ends rendering for the current attachment (`gpuState` "failed",
-//!   error kept). Only a new attachment gets one fresh attempt, so nothing retries in a loop.
-//!   A skipped present (timeout, occluded, outdated, revoked) waits [`SKIP_WAIT`] before the
-//!   next frame, so a window that stops presenting does not spin the thread.
-//! - Frames are paced by FIFO presentation while animating; when paused (or detached) the
-//!   thread waits for a control or surface change.
-//!
-//! Locks: the inbox and stats locks are each taken alone; no lock is held while rendering.
+//! Owns the Bevy app, GPU device and window lease on the render thread.
+//! Controls arrive through an inbox; no inbox or stats lock is held while rendering.
+//! Create the device before leasing the window, and admit GPU operations through the lease.
+//! A GPU failure ends rendering until a new attachment; close() wakes the thread to release resources.
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::time::{Duration, Instant};

@@ -1,20 +1,6 @@
-//! The small adapter between Bevy and the surface: our own wgpu device (handed to Bevy), and a
-//! swapchain on the leased window that Bevy never sees. Each frame Bevy renders into an
-//! offscreen texture ([`crate::scene`]); here it is blitted onto the acquired swapchain image
-//! and presented. That blit is one extra full-screen GPU pass per frame (not zero-copy).
-//!
-//! - Acquire, present and configure are each admitted through the lease (rnrs-surface's
-//!   admission protocol), with no lock held during the GPU calls. After a revocation no
-//!   acquire starts and an acquired image is dropped unpresented.
-//! - The wgpu surface holds the lease and is dropped with the [`Target`]; dropping it destroys
-//!   the swapchain (part of the platform's bounded detach wait).
-//! - Colour: Bevy writes sRGB-encoded bytes (its target view is `Rgba8UnormSrgb`); the blit reads
-//!   them through a non-sRGB view and writes a non-sRGB view of the swapchain, so the bytes
-//!   reach the display unchanged, as in vello2d.
-//! - iOS (Metal), with rnrs-surface's iOS contracts exactly as vello2d uses them: the surface is
-//!   made from the lease's `CAMetalLayer` (wgpu's UIKit path needs the main thread), each
-//!   configure runs in `rnrs_surface::ios::configure_in_transaction`, and acquires are refused
-//!   unless its read-back confirmed the drawable timeout.
+//! Presents Bevy's offscreen texture through an rnrs-surface window lease.
+//! Acquire, configure and present each require admission; revoked windows receive no new work.
+//! A fullscreen blit preserves Bevy's sRGB bytes through non-sRGB texture views.
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 

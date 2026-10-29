@@ -2,7 +2,7 @@
   "name": "@rnrs/example-blake3",
   "version": "0.4.0",
   "private": true,
-  "description": "BLAKE3 hashing for React Native (Android) and browser Wasm, implemented in Rust with the blake3 crate. Experimental.",
+  "description": "BLAKE3 hashing with Rust on Android, iOS and the browser.",
   "license": "MIT",
   "rustNative": {
     "targets": [

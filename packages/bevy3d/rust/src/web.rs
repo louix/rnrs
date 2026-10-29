@@ -1,33 +1,7 @@
-//! Browser presentation (wasm32 only): the same interface as the native render thread
-//! (`render.rs`), but there is no thread. The scene is a `WebGpu` producer of rnrs-surface's
-//! browser host; the host's requestAnimationFrame loop calls [`Producer::render_gpu`], which runs
-//! one Bevy update and blits Bevy's offscreen texture into the canvas texture. Rust owns the
-//! simulation (Bevy's world); TypeScript only sets controls. No pixels cross the bridge and there
-//! is no CPU copy or Canvas 2D fallback.
-//!
-//! Lifecycle (as the webgpu-triangle fixture, docs/surface.md "Browser presentation"):
-//! - Every `bind_canvas`, `detach` and `close` advances `generation`. Setup (adapter, device,
-//!   canvas configure, Bevy app) is asynchronous; after each await it continues only if its
-//!   generation is still current, and otherwise destroys the device it created and counts a
-//!   discarded setup. Configure and the first submit happen only for the current generation.
-//! - No RefCell borrow is held across an await, and GPU state is always dropped (which destroys
-//!   the device) after the borrow is released.
-//! - Detach, close and runtime teardown drop the Bevy app and destroy the device at once. A new
-//!   attachment builds a new device and Bevy app (pipelines compile again); the cube's angle is
-//!   carried over.
-//! - Failures (unsupported browser, device request, configure validation, a Bevy render error,
-//!   device loss) are terminal for the attachment: the host reports them once and does not retry.
-//! - Time: Bevy's clock advances by the measured frame delta, clamped to [`MAX_STEP_MS`]. Any
-//!   frame that does not step (paused, a detach, a new attachment) resets the baseline. Hiding
-//!   the tab detaches through the host (visibilitychange), so it resets too; when the browser
-//!   only throttles or stops frames without hiding, the first frame after is clamped instead.
-//!   Either way resuming does not catch up on the time spent paused or hidden.
-//! - Readiness: Bevy loads its shaders asynchronously here, so the first frames show only the
-//!   clear colour. `gpuState` stays "warming" (and the scene keeps stepping, even while paused,
-//!   without advancing the angle) until a frame has been submitted after Bevy's cube pipeline
-//!   was created; only then is it "ready". Neither is proof of display.
-//!
-//! The Bevy update runs on the browser's main thread inside the frame callback.
+//! Runs Bevy and presents its offscreen texture in the browser's frame callback.
+//! Async GPU setup checks the attachment generation after each await to discard stale work.
+//! Detach releases GPU state; a new attachment recreates it and preserves the cube's angle.
+//! Frame deltas are clamped so resuming a hidden tab does not advance through missed time.
 use std::cell::{Cell, RefCell};
 use std::sync::{Arc, Mutex, Weak};
 use std::time::Duration;
@@ -92,8 +66,7 @@ pub fn note_closed() {
     count(|c| c.open.set(c.open.get().saturating_sub(1)));
 }
 
-/// Test diagnostics for the browser fixture: setups started and discarded (stale after an
-/// await), devices created and destroyed, and scenes currently holding GPU state.
+/// Counts GPU setup attempts, discarded setups and device lifetimes.
 #[wasm_bindgen]
 pub fn rnrs_bevy3d_web_diagnostics() -> Vec<f64> {
     COUNTERS.with(|c| {
@@ -357,7 +330,7 @@ async fn setup(weak: Weak<Shared>, generation: u64, instance: wgpu::Instance, su
 
     let extent = shared.state.borrow().extent;
     let caps = surface.get_capabilities(&adapter);
-    // Exactly the browser's preferred format (listed first), as the triangle fixture uses.
+    // Use the browser's preferred format (listed first).
     let format = crate::canvas::preferred_canvas_format(&caps.formats);
     // configure() panics on PostMultiplied/Inherit alpha and non-FIFO present modes on the web.
     let alpha = [wgpu::CompositeAlphaMode::Opaque, wgpu::CompositeAlphaMode::PreMultiplied]

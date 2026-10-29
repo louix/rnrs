@@ -1,5 +1,4 @@
-// Meter module spec: a second, independently shaped module (not a Counter variant).
-// Rust implementation: rust/meter.
+// Native objects passed to and returned from Rust methods.
 import type { NativeModule, NativeObject } from '@rnrs/runtime/spec';
 
 /** A settable reading. */
@@ -21,6 +20,6 @@ export interface MeterModule extends NativeModule {
   combine(a: Gauge, b: Gauge): Gauge;
   settleAfter(value: number, ms: number): Promise<number>;
   gaugeLater(initial: number, ms: number): Promise<Gauge>;
-  /** Rejects (failed) for negative values. */
+  /** Rejects for negative values. */
   checkLater(value: number): Promise<void>;
 }

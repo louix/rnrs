@@ -1,10 +1,6 @@
-//! Lab diagnostics: a bounded ring of submit and present events with monotonic timestamps.
-//! Off unless the renderer is created with
-//! `timingRecords > 0`; disabled, it records and allocates nothing.
-//!
-//! Records carry a sequence number, so a consumer only computes intervals between consecutive
-//! sequence numbers: a gap (records overwritten before a drain) is visible as a jump and in
-//! the dropped count, and no interval is ever claimed across it.
+//! Optional timing history for submit and present events.
+//! Disabled unless timingRecords > 0. Sequence gaps indicate overwritten records;
+//! compute intervals only between consecutive sequence numbers.
 use std::collections::VecDeque;
 use std::sync::Mutex;
 

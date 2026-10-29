@@ -2,7 +2,7 @@
   "name": "@rnrs/labs-meter",
   "version": "0.4.0",
   "private": true,
-  "description": "Meter module: second generator fixture. Rust implementation in rust/meter.",
+  "description": "Pass native Rust objects to module and object methods.",
   "license": "MIT",
   "rustNative": {
     "targets": [

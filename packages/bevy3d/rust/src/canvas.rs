@@ -1,11 +1,4 @@
-//! Browser canvas format choice (used by `web.rs`; compiled everywhere so it is host-tested).
-//!
-//! wgpu 30's WebGPU backend reports `Rgba8Unorm` and `Bgra8Unorm` for every canvas (both are
-//! valid WebGPU canvas formats) and moves `navigator.gpu.getPreferredCanvasFormat()` to the
-//! front. A browser may present only its preferred format efficiently; Firefox 156 on Linux,
-//! given `rgba8unorm` where it prefers `bgra8unorm`, logged that it was disabling its shared
-//! swapchain path. So the scene configures exactly the preferred format (the first one listed),
-//! as the webgpu-triangle fixture does through `get_default_config`, and never picks another.
+//! Choose the browser's preferred canvas format for efficient presentation.
 #![cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 
 /// The browser's preferred canvas format (first in `formats`), if the blit can write it

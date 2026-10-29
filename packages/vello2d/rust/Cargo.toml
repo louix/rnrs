@@ -7,16 +7,12 @@ description = "2D renderer module for @rnrs/example-vello2d: Vello CPU raster pr
 [dependencies]
 rnrs-core = "0.4"
 rnrs-surface = "0.4"
-# Pinned. The surface with this renderer has run on the Pixel 2 XL (Adreno) only; on the
-# Pixel 8a only headless probes ran (results/surface), where GPU Vello (vello 0.11,
-# vello_hybrid 0.2) failed in the Mali driver, so the scene is rasterized by vello_cpu (a
-# provisional choice, not a final backend).
+# Rasterize on the CPU, then upload and present with wgpu.
 vello_cpu = { version = "=0.3.0", default-features = false, features = ["std", "u8_pipeline"] }
 log = "0.4"
 
-# The same pinned wgpu with one backend per native target: Metal on iOS, Vulkan on the other native targets (Android; host tests). macOS is
-# not a supported surface target. wasm32 (web) gets no native wgpu backend here; its renderer
-# path is the web plan's.
+# Native presentation uses Metal on iOS and Vulkan on Android.
+# Browsers use the canvas presenter in web_render.rs.
 [target.'cfg(target_os = "ios")'.dependencies]
 wgpu = { version = "=30.0.1", default-features = false, features = ["std", "wgsl", "metal"] }
 

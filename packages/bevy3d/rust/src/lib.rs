@@ -1,15 +1,5 @@
-//! The module author's implementation of packages/bevy3d/bevy3d.spec.ts: a bounded Bevy example
-//! on an rnrs-surface (Android; iOS simulator; browser WebGPU prototype). Rust owns the scene, its simulation and the render loop on one
-//! render thread ([`render`]; in the browser, the host's frame callback on the main thread, see `web.rs`); TypeScript only sets latest-value controls. No JS, JSI or
-//! platform code: the window comes from rnrs-surface, and Bevy never sees it ([`gpu`]).
-//!
-//! Ownership and teardown (as vello2d): each scene's [`SceneCore`] is registered with the
-//! runtime teardown scope of the adapter generation that created the module, so an RN reload
-//! closes it even if JS or native references survive. Closing only sets flags and notifies; the
-//! render thread drops the window lease, the Bevy app and the device itself, and its
-//! process-wide slot ([`MAX_RENDER_THREADS`]) stays taken until it has exited.
-//!
-//! Panics abort the process (the bundle's `panic = "abort"`), including panics inside Bevy.
+//! A Bevy scene controlled through Native<Scene> handles and displayed with rnrs-surface.
+//! Runtime teardown closes each scene; its render loop releases GPU resources.
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -32,13 +22,12 @@ mod scene;
 use render::Shared;
 use rnrs_interface as spec;
 
-/// Render threads alive at once in the process, each with its own GPU device and Bevy app,
-/// counting closed scenes still releasing their resources. Only one at a time has been run.
+/// Limit GPU devices and Bevy apps, including scenes still releasing resources.
 pub const MAX_RENDER_THREADS: usize = 2;
 
-/// One instance per JS runtime (adapter generation).
+/// One instance per JS runtime.
 pub struct Module {
-    /// The adapter generation's teardown scope; None only when created outside an adapter.
+    /// Register scenes here so runtime teardown closes them.
     scope: Option<TeardownScope>,
 }
 
@@ -200,10 +189,8 @@ impl spec::Scene for Scene {
     }
 }
 
-/// android-activity (pulled in by bevy_asset → bevy_android) is built with `native-activity`
-/// only so that it compiles; its `ANativeActivity_onCreate` export references this symbol.
-/// Nothing calls it: Android invokes that export only for a `NativeActivity` declared in the
-/// manifest, and the React Native app has none. Reaching it is a bug, so it aborts loudly.
+/// Required by Bevy's android-activity dependency. React Native uses its own Activity,
+/// so this entry point must never run.
 #[cfg(target_os = "android")]
 #[no_mangle]
 fn android_main(_app: android_activity::AndroidApp) {

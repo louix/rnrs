@@ -1,18 +1,6 @@
-//! The provisional presenter (docs/surface.md): each frame is rasterized on the render thread
-//! by vello_cpu into a pixmap, uploaded to a wgpu texture and scaled onto the swapchain image
-//! with a blit, then presented (FIFO, so presenting paces to the display).
-//!
-//! - The wgpu device is created by `prepare`, before any window lease is taken, and kept
-//!   across detach/attach. A device-lost callback marks it lost; the render loop then calls
-//!   `reset_device`, which drops every GPU resource here, on the render thread, before a new
-//!   device is created.
-//! - The wgpu surface holds the window lease and is dropped on unbind (destroying the
-//!   swapchain, which can wait for the GPU: part of the platform's bounded detach wait).
-//! - Acquire and present are each admitted through the lease (rnrs-surface's admission
-//!   protocol), with no lock held during the GPU calls.
-//! - Configure errors are captured with an error scope and returned, not only logged.
-//!
-//! Panics abort the process (`panic = "abort"`); input-dependent paths avoid them.
+//! Rasterize with vello_cpu, upload pixels to a wgpu texture and blit to the surface.
+//! Create the device before leasing a window; admit configure, acquire and present separately.
+//! Unbinding drops the swapchain and lease while keeping the device for the next attachment.
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
@@ -26,10 +14,7 @@ use crate::render::{admitted, present_admitted, reconfigure_outdated, PresentErr
 #[cfg(target_os = "ios")]
 const BACKENDS: wgpu::Backends = wgpu::Backends::METAL;
 
-/// Device limits on iOS ([`required_limits_for`] over the adapter's limits); unchanged
-/// elsewhere (`Limits::default()`). The iOS simulator's Metal adapter allows 15 inter-stage
-/// shader variables, below the WebGPU default of 16 that `Limits::default()` requests (found by
-/// C1 S3); the blit and the raster texture need nothing beyond the downlevel defaults.
+/// Use downlevel limits on iOS to support simulator Metal adapters.
 #[cfg(target_os = "ios")]
 fn required_limits(adapter: &wgpu::Adapter) -> Result<wgpu::Limits, String> {
     required_limits_for(&adapter.limits())
@@ -39,14 +24,8 @@ fn required_limits(_adapter: &wgpu::Adapter) -> Result<wgpu::Limits, String> {
     Ok(wgpu::Limits::default())
 }
 
-/// The downlevel defaults, with:
-/// - the adapter's texture dimensions (`using_resolution`): downlevel's 2048 is below a phone
-///   drawable (e.g. 2622 px), and requesting the adapter's own maximum accepts any drawable the
-///   adapter can present, at no cost;
-/// - the adapter's (more permissive) buffer alignments (`using_alignment`).
-///
-/// Validated before any device request: every limit above the adapter's is listed in one error,
-/// and the adapter must take a [`MAX_RASTER`] raster texture. A pure function (host-tested).
+/// Use downlevel limits with the adapter's texture dimensions and buffer alignments.
+/// Check them before requesting a device, including room for a MAX_RASTER texture.
 #[cfg_attr(not(any(test, target_os = "ios")), allow(dead_code))]
 pub(crate) fn required_limits_for(supported: &wgpu::Limits) -> Result<wgpu::Limits, String> {
     let requested = wgpu::Limits::downlevel_defaults().using_resolution(supported.clone()).using_alignment(supported.clone());

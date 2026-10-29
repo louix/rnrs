@@ -1,4 +1,4 @@
-//! Implementation of the Meter spec (packages/meter/meter.spec.ts).
+//! Pass Native<T> handles to Rust methods and return new objects.
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;

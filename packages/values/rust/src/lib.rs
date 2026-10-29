@@ -1,5 +1,4 @@
-//! Implementation of the Values fixture spec (packages/values/values.spec.ts): plain Rust
-//! over the generated records, arrays, strings and options.
+//! Accept and return generated records, unions, collections and native objects.
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -34,7 +33,7 @@ impl spec::Bag for PointBag {
     }
 }
 
-/// Calls of the declared-error fixture methods (each Rust method runs exactly once per call).
+/// Count calls to methods that return typed errors.
 static LOOKUP_CALLS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 fn lookup(key: &str) -> Result<f64, LookupError> {

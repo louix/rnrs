@@ -1,17 +1,6 @@
-//! Implementation of the key-value spec (../kv.spec.ts) over sled. Plain Rust: no JS, JSI or
-//! platform code; the database directory comes from the framework
-//! (`rnrs_core::platform::app_data_dir()`, the app's private storage on Android and iOS).
-//!
-//! - Disk work runs on Tokio's blocking pool (the framework's native executor is Tokio). An
-//!   operation awaits its blocking job to the end, so it stays admitted, and counted against
-//!   the module and executor budgets, until the job is done. Cancellation is not observed by
-//!   writes: a cancelled put may still be applied.
-//! - One sled database per name per process, shared by every handle (a reload's old and new
-//!   runtimes may overlap). sled locks its files, so the registry also serializes opening
-//!   with the final release of the previous instance.
-//! - A handle's last release, and therefore sled's final flush, happens on a dedicated closer
-//!   thread or a blocking-pool thread, never on the JS thread or React Native's invalidation
-//!   thread (where wrappers are finalized or torn down).
+//! Async sled storage in rnrs_core::platform::app_data_dir().
+//! Disk work runs on Tokio's blocking pool; Native<Store> handles share each database.
+//! Explicit flush() or close() persists completed writes. Cancellation cannot undo writes.
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -25,17 +14,14 @@ use rnrs_interface as spec;
 pub use spec::KvDiagnostics;
 
 pub const MAX_KEYS: f64 = 10_000.0;
-/// sled's page cache per open database (its default is 1 GiB, far too much for a phone).
+/// Bound sled's page cache to 16 MiB per database.
 pub const CACHE_BYTES: u64 = 16 * 1024 * 1024;
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-// ---- names and paths -----------------------------------------------------------------
-
-/// 1 to 64 of `[a-z0-9_-]`, starting with a letter or digit: never a path separator, `.`,
-/// or an absolute or parent path.
+/// Restrict names to keep databases inside the app's storage directory.
 pub fn check_name(name: &str) -> Result<(), String> {
     let ok = (1..=64).contains(&name.len())
         && name.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-' || b == b'_')
@@ -51,8 +37,6 @@ fn database_path(name: &str) -> Result<PathBuf, String> {
     check_name(name)?;
     Ok(rnrs_core::platform::app_data_dir()?.join("kv").join(name))
 }
-
-// ---- process-wide registry -----------------------------------------------------------
 
 /// One open sled database, shared by all handles in the process.
 struct Shared {
@@ -153,10 +137,7 @@ async fn open_shared(name: String) -> Result<Arc<Shared>, String> {
         if open_now {
             let (name, path) = (name.clone(), path.clone());
             return blocking(move || {
-                // `flush_every_ms` only takes effect where sled 0.34.7 starts its flusher thread
-                // (Windows, Linux, macOS, BSDs; src/db.rs): on Android and iOS it does nothing,
-                // so data reaches disk at `flush()`, `close()`, the final release, or when sled
-                // writes out a full log buffer. sled's file lock is likewise absent there.
+                // sled has no periodic flusher on Android or iOS; callers must flush explicitly.
                 let opened = std::fs::create_dir_all(path.parent().expect("kv dir"))
                     .map_err(|e| format!("storage: cannot create {}: {e}", path.display()))
                     .and_then(|_| sled::Config::new().path(&path).cache_capacity(CACHE_BYTES).flush_every_ms(Some(500)).open().map_err(sled_error));
@@ -180,8 +161,6 @@ async fn open_shared(name: String) -> Result<Arc<Shared>, String> {
     }
     Err(format!("busy: database {name:?} did not become available within 10 s"))
 }
-
-// ---- the module ----------------------------------------------------------------------
 
 #[derive(Default)]
 pub struct Kv;
@@ -233,8 +212,6 @@ impl spec::KvModule for Kv {
     }
 }
 
-// ---- handles -------------------------------------------------------------------------
-
 /// One handle (JS `Store`). Operations hold the receiver (and so the handle) until done.
 pub struct Store {
     /// Present while the handle accepts operations.
@@ -243,8 +220,7 @@ pub struct Store {
     closing: Mutex<Option<Arc<Shared>>>,
     in_flight: Mutex<usize>,
     idle: tokio::sync::Notify,
-    /// The close outcome, shared by every `close()` call: concurrent and later callers wait
-    /// for and get the same result, including a failure (terminal: the handle stays closed).
+    /// All close() callers share one result, including a flush failure.
     closed: tokio::sync::OnceCell<Result<(), String>>,
 }
 
@@ -358,9 +334,8 @@ impl spec::Store for Store {
 }
 
 impl Store {
-    /// Stops new operations, waits for in-flight ones, flushes, then releases the handle.
-    /// Re-entrant: if an earlier attempt's future was dropped mid-way (executor shutdown),
-    /// the next `close()` continues from the held reference.
+    /// Stop new operations, wait for pending ones, flush and release the handle.
+    /// Keep the closing reference so an interrupted close can resume.
     async fn finish_close(&self) -> Result<(), String> {
         {
             let mut handle = lock(&self.shared);
@@ -393,8 +368,7 @@ impl Store {
     }
 }
 
-/// Test hooks (used by this crate's tests and the framework's adapter tests). Inert unless
-/// called.
+/// Helpers for testing pending operations and flush failures.
 #[doc(hidden)]
 pub mod testing {
     use std::sync::{Condvar, Mutex};

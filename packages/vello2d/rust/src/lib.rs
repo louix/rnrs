@@ -1,17 +1,7 @@
-//! The module author's implementation of packages/vello2d/vello2d.spec.ts: a 2D renderer on
-//! an rnrs-surface. TypeScript owns all state and submits whole frames ([`frame`]); this crate
-//! owns only the render thread, raster context, GPU resources and the latest frame
-//! ([`render`]). No JS, JSI or platform code: the window comes from rnrs-surface.
-//!
-//! Ownership and teardown: each renderer's [`RendererCore`] (its shared render state and its
-//! surface) is registered with the runtime teardown scope of the adapter generation that
-//! created the module, so an RN reload closes it even if JS or native references survive.
-//! Closing (from `close()`, `Drop`, or the teardown hook) only sets flags and notifies: the
-//! render thread releases the window and GPU resources itself, and its process-wide slot
-//! ([`MAX_RENDER_THREADS`]) stays taken until it has exited.
-//!
-//! Panics abort the process (the bundle's `panic = "abort"`): a panic in this renderer or any
-//! module's Rust code is fatal. Input-dependent paths return errors instead.
+//! A 2D renderer displayed with rnrs-surface. TypeScript submits complete frames;
+//! Rust owns rasterization, presentation and the latest pending frame.
+//! Register each RendererCore with the runtime teardown scope so reloads close it.
+//! Closing wakes the render loop, which releases its own window and GPU resources.
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
@@ -35,13 +25,12 @@ mod timing;
 use render::Shared;
 use rnrs_interface as spec;
 
-/// Render threads alive at once in the process (each with its own Vulkan device), counting
-/// closed renderers still releasing their resources.
+/// Limit GPU devices, including renderers still releasing resources.
 pub const MAX_RENDER_THREADS: usize = 4;
 
-/// One instance per JS runtime (adapter generation).
+/// One instance per JS runtime.
 pub struct Module {
-    /// The adapter generation's teardown scope; None only when created outside an adapter.
+    /// Register renderers here so runtime teardown closes them.
     scope: Option<TeardownScope>,
 }
 
